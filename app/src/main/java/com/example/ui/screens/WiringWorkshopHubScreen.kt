@@ -26,6 +26,7 @@ import com.example.ui.components.FullCumulativeCircuitSimulator
 import com.example.ui.theme.*
 import com.example.viewmodel.WiringViewModel
 import id.ns200.cdir7.CdiViewModel
+import id.ns200.cdir7.McuPlatform
 import id.ns200.cdir7.ui.screens.QuickSetupGuideScreen
 import id.ns200.cdir7.ui.theme.CarbonDark
 import id.ns200.cdir7.ui.theme.CardBackground
@@ -44,7 +45,7 @@ enum class WorkshopSubTab(
     STEPS("Langkah Solder", Icons.Default.Build, "18 STEP"),
     PCB_SIM("Simulator PCB", Icons.Default.GridView, "25x30"),
     HARNESS_J1("Soket J1", Icons.Default.Cable, "16 PIN"),
-    WEACT_MCU("Header WeAct", Icons.Default.Memory, "40 PIN"),
+    MCU_PINOUT("Pinout MCU", Icons.Default.Memory, "PINOUT"),
     BOM_LIST("Daftar Belanja", Icons.Default.ShoppingCart, "BOM"),
     PINOUT_LIB("Katalog Part", Icons.Default.Layers, "SPECS"),
     COMMISSION("Komisi CDI", Icons.Default.CheckCircle, "STAGE 0-5")
@@ -60,6 +61,9 @@ fun WiringWorkshopHubScreen(
     val currentStep by wiringViewModel.currentStep.collectAsState()
     val verificationRecords by wiringViewModel.verificationRecords.collectAsState()
     val verificationProgress by wiringViewModel.verificationProgress.collectAsState()
+    val wiringUiState by wiringViewModel.uiState.collectAsState()
+    val activePlatform = wiringUiState.mcuPlatform
+
     val verifiedStepIds = remember(verificationRecords) {
         verificationRecords.filter { it.value.isVerified }.keys
     }
@@ -70,6 +74,88 @@ fun WiringWorkshopHubScreen(
             .fillMaxSize()
             .background(CarbonDark)
     ) {
+        // Platform Selection Header Strip
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, BorderSubtle),
+            color = Color(0xFF0F1722)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "PLATFORM:",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (activePlatform == McuPlatform.STM32WB55) "STM32" else "ESP32",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (activePlatform == McuPlatform.STM32WB55) ElectricCyan else SparkAmber,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // STM32 Toggle
+                    val isStm = activePlatform == McuPlatform.STM32WB55
+                    Surface(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable {
+                                wiringViewModel.setMcuPlatform(McuPlatform.STM32WB55)
+                                cdiViewModel.setMcuPlatform(McuPlatform.STM32WB55)
+                            },
+                        color = if (isStm) ElectricCyan.copy(alpha = 0.25f) else Color.Transparent,
+                        border = BorderStroke(1.dp, if (isStm) ElectricCyan else Color(0xFF263342)),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            text = "STM32",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            color = if (isStm) ElectricCyan else TextMuted,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+
+                    // ESP32 Toggle
+                    val isEsp = activePlatform == McuPlatform.ESP32_WROOM
+                    Surface(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable {
+                                wiringViewModel.setMcuPlatform(McuPlatform.ESP32_WROOM)
+                                cdiViewModel.setMcuPlatform(McuPlatform.ESP32_WROOM)
+                            },
+                        color = if (isEsp) SparkAmber.copy(alpha = 0.25f) else Color.Transparent,
+                        border = BorderStroke(1.dp, if (isEsp) SparkAmber else Color(0xFF263342)),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            text = "ESP32",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            color = if (isEsp) SparkAmber else TextMuted,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+            }
+        }
+
         // Workshop Sub-navigation bar
         Surface(
             modifier = Modifier
@@ -91,7 +177,7 @@ fun WiringWorkshopHubScreen(
                         WorkshopSubTab.STEPS -> ElectricCyan
                         WorkshopSubTab.PCB_SIM -> SensorAmber
                         WorkshopSubTab.HARNESS_J1 -> RacingLime
-                        WorkshopSubTab.WEACT_MCU -> ElectricCyan
+                        WorkshopSubTab.MCU_PINOUT -> if (activePlatform == McuPlatform.ESP32_WROOM) SparkAmber else ElectricCyan
                         WorkshopSubTab.BOM_LIST -> MotecOrange
                         WorkshopSubTab.PINOUT_LIB -> ElectricCyan
                         WorkshopSubTab.COMMISSION -> RacingLime
@@ -133,7 +219,11 @@ fun WiringWorkshopHubScreen(
                                 color = if (isSelected) pillColor.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.3f)
                             ) {
                                 Text(
-                                    text = if (subTab == WorkshopSubTab.STEPS) "${verificationProgress.first}/${verificationProgress.second}" else subTab.badge,
+                                    text = when (subTab) {
+                                        WorkshopSubTab.STEPS -> "${verificationProgress.first}/${verificationProgress.second}"
+                                        WorkshopSubTab.MCU_PINOUT -> if (activePlatform == McuPlatform.STM32WB55) "35 PIN" else "38 PIN"
+                                        else -> subTab.badge
+                                    },
                                     fontSize = 8.sp,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace,
@@ -164,14 +254,15 @@ fun WiringWorkshopHubScreen(
                             allSteps = wiringViewModel.allSteps,
                             verifiedStepIds = verifiedStepIds,
                             onSelectStep = { wiringViewModel.selectStep(it) },
-                            onClose = { activeSubTab = WorkshopSubTab.STEPS }
+                            onClose = { activeSubTab = WorkshopSubTab.STEPS },
+                            platform = activePlatform
                         )
                     }
                 }
                 WorkshopSubTab.HARNESS_J1 -> {
                     HarnessPinsScreen(viewModel = wiringViewModel)
                 }
-                WorkshopSubTab.WEACT_MCU -> {
+                WorkshopSubTab.MCU_PINOUT -> {
                     WeActHeaderScreen(viewModel = wiringViewModel)
                 }
                 WorkshopSubTab.BOM_LIST -> {

@@ -15,6 +15,9 @@ val ElectricCyan = Color(0xFF00E5FF)
 val RaceRedline = Color(0xFFFF1744)
 val RacingLime = Color(0xFF00E676)
 val SensorAmber = Color(0xFFFFD600)
+val SparkAmber = Color(0xFFFF9E0B)
+val SparkAmberMuted = Color(0xFFD97706)
+val SafetyGreen = Color(0xFF00E676)
 val TechPurple = Color(0xFFB388FF)
 
 // Text tokens

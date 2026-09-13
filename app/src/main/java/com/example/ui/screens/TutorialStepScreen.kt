@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.VerificationRecord
 import com.example.model.WiringStep
+import com.example.model.adaptToPlatform
 import com.example.ui.components.FullCumulativeCircuitSimulator
 import com.example.ui.components.StepVerificationDialog
 import com.example.ui.components.StepWiringChecklist
@@ -52,7 +53,10 @@ fun TutorialStepScreen(
   modifier: Modifier = Modifier
 ) {
   val uiState by viewModel.uiState.collectAsState()
-  val currentStep by viewModel.currentStep.collectAsState()
+  val rawStep by viewModel.currentStep.collectAsState()
+  val currentStep = remember(rawStep, uiState.mcuPlatform) {
+    rawStep.adaptToPlatform(uiState.mcuPlatform)
+  }
   val verificationRecords by viewModel.verificationRecords.collectAsState()
   val checkedConnections by viewModel.checkedConnections.collectAsState()
   val verificationProgress by viewModel.verificationProgress.collectAsState()
@@ -66,12 +70,12 @@ fun TutorialStepScreen(
   val isCurrentVerified = currentRecord?.isVerified == true
   val isCurrentUnlocked = viewModel.repository.isStepUnlocked(uiState.selectedStepIndex, viewModel.allSteps.size)
 
-  // Step-specific connections
-  val connections = remember(currentStep.id) {
+  // Step-specific connections dynamically aware of MCU platform
+  val connections = remember(currentStep.id, uiState.mcuPlatform) {
     if (currentStep.pinConnections.isNotEmpty()) {
       currentStep.pinConnections
     } else {
-      generateDefaultConnectionsForStep(currentStep)
+      generateDefaultConnectionsForStep(currentStep, uiState.mcuPlatform)
     }
   }
 
@@ -398,6 +402,7 @@ fun TutorialStepScreen(
             verifiedStepIds = verificationRecords.filter { it.value.isVerified }.keys,
             onSelectStep = { idx -> viewModel.selectStep(idx) },
             onClose = { viewModel.setFullCircuitSimulator(false) },
+            platform = uiState.mcuPlatform,
             modifier = Modifier.fillMaxWidth()
           )
         } else {
@@ -408,6 +413,7 @@ fun TutorialStepScreen(
             onToggleConnection = { stepId, connId ->
               viewModel.toggleConnection(stepId, connId)
             },
+            platform = uiState.mcuPlatform,
             modifier = Modifier.fillMaxWidth()
           )
         }

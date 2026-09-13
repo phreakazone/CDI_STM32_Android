@@ -74,6 +74,9 @@ data class Telemetry(
 ) {
     val armed get() = flags and 0x01 != 0
     val proEnabled get() = flags and 0x02 != 0
+    // Alias dipertahankan agar UI lintas-platform 8.3.1 tidak perlu dirombak.
+    // Pada firmware R8 bit ini berasal dari setup.pro_enabled, bukan jumper.
+    val proJumper get() = proEnabled
     val isProVoltage get() = proEnabled
     val hvEnabled get() = flags and 0x04 != 0
     val calibrated get() = flags and 0x08 != 0
@@ -246,6 +249,13 @@ object CdiProtocol {
             expectedBytes = u32(packet, 8),
             errorCode = u16(packet, 12)
         )
+    }
+
+    /** ESP32 R8 lama mengirim notifikasi OTA ringkas: state,error. */
+    fun legacyEsp32OtaStatus(packet: ByteArray): Pair<FirmwareOtaState, Int>? {
+        if (packet.size != 2) return null
+        val state = FirmwareOtaState.fromCode(packet[0].toInt() and 0xff) ?: return null
+        return state to (packet[1].toInt() and 0xff)
     }
 
     fun telemetry(packet: ByteArray, previous: Telemetry = emptyTelemetry()): Telemetry? {

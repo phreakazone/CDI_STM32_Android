@@ -79,7 +79,7 @@ fun DashboardScreen(viewModel: CdiViewModel) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // R8 PRO target is 345 V; warning threshold is deliberately above the target.
+        // R7.2 hardware/software limit: fault at 300 V.
         if (telemetry.isHvOverLimitWarning) {
             Card(
                 modifier = Modifier
@@ -103,14 +103,14 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "FAULT TEGANGAN TINGGI: >= 360 V!",
+                            text = "FAULT TEGANGAN TINGGI: >= 300 V!",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Black,
                             color = RaceRedline,
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
-                            text = "Matikan mesin/charger, tunggu HV <30 V, lalu periksa feedback ADC PA6/PA7 dan rangkaian clamp sebelum melanjutkan.",
+                            text = "Matikan kontak/kill switch, lepas JP_HV, lalu periksa feedback ADC PA6/PA7 dan rangkaian clamp sebelum melanjutkan.",
                             fontSize = 10.sp,
                             color = TextPrimary,
                             fontFamily = FontFamily.Monospace

@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.sp
 import com.example.model.PcbBoard
 import com.example.model.WiringStep
 import com.example.ui.theme.*
+import id.ns200.cdir7.McuPlatform
+import kotlinx.coroutines.launch
 
 /**
  * FullCumulativeCircuitSimulator:
@@ -48,10 +50,13 @@ fun FullCumulativeCircuitSimulator(
   verifiedStepIds: Set<String>,
   onSelectStep: (Int) -> Unit,
   onClose: () -> Unit,
+  platform: McuPlatform = McuPlatform.STM32WB55,
   modifier: Modifier = Modifier
 ) {
   var showFinal100Percent by remember { mutableStateOf(false) }
   val scrollState = rememberScrollState()
+  val coroutineScope = rememberCoroutineScope()
+  val density = androidx.compose.ui.platform.LocalDensity.current
 
   // Determine active stage based on view mode
   val activeStage = if (showFinal100Percent) 6 else currentStep.stageId
@@ -205,7 +210,123 @@ fun FullCumulativeCircuitSimulator(
         }
       }
 
-      Spacer(modifier = Modifier.height(12.dp))
+      Spacer(modifier = Modifier.height(10.dp))
+
+      // Quick Section Focus Bar & Navigation
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        // 1. Jump to Harness
+        Surface(
+          shape = RoundedCornerShape(8.dp),
+          color = Color(0xFF131B26),
+          border = BorderStroke(1.dp, Color(0xFF2D3E53)),
+          modifier = Modifier
+            .weight(1f)
+            .height(30.dp)
+            .clickable {
+              coroutineScope.launch {
+                scrollState.animateScrollTo(0)
+              }
+            }
+        ) {
+          Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(Icons.Default.Power, contentDescription = null, tint = SparkAmber, modifier = Modifier.size(13.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Soket J1", fontSize = 10.sp, color = SparkAmber, fontWeight = FontWeight.Bold)
+          }
+        }
+
+        // 2. Jump to MCU (Logic PCB)
+        Surface(
+          shape = RoundedCornerShape(8.dp),
+          color = Color(0xFF0F1E29),
+          border = BorderStroke(1.2.dp, ElectricCyan),
+          modifier = Modifier
+            .weight(1.4f)
+            .height(30.dp)
+            .clickable {
+              coroutineScope.launch {
+                // Scroll past harness (130dp + 18dp + 14dp padding ~ 162dp)
+                val targetPx = with(density) { 158.dp.roundToPx() }
+                scrollState.animateScrollTo(targetPx)
+              }
+            }
+        ) {
+          Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(Icons.Default.Memory, contentDescription = null, tint = ElectricCyan, modifier = Modifier.size(13.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+              if (platform == McuPlatform.ESP32_WROOM) "⚡ Fokus MCU (ESP32)" else "⚡ Fokus MCU (STM32)",
+              fontSize = 10.sp,
+              color = ElectricCyan,
+              fontWeight = FontWeight.Black
+            )
+          }
+        }
+
+        // 3. Jump to Power PCB
+        Surface(
+          shape = RoundedCornerShape(8.dp),
+          color = Color(0xFF261214),
+          border = BorderStroke(1.dp, HighVoltageRed),
+          modifier = Modifier
+            .weight(1.1f)
+            .height(30.dp)
+            .clickable {
+              coroutineScope.launch {
+                val targetPx = with(density) { 750.dp.roundToPx() }
+                scrollState.animateScrollTo(targetPx)
+              }
+            }
+        ) {
+          Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(Icons.Default.Bolt, contentDescription = null, tint = HighVoltageRed, modifier = Modifier.size(13.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("PCB 2 (HV)", fontSize = 10.sp, color = HighVoltageRed, fontWeight = FontWeight.Bold)
+          }
+        }
+      }
+
+      Spacer(modifier = Modifier.height(4.dp))
+
+      // Visual Hint Banner
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Text(
+          text = "Geser horizontal ↔ untuk 30 pin header",
+          fontSize = 9.sp,
+          color = TextTertiaryDark,
+          fontFamily = FontFamily.Monospace
+        )
+        Text(
+          text = "Ketuk 'Fokus MCU' untuk ke pin",
+          fontSize = 9.sp,
+          color = ElectricCyan,
+          fontWeight = FontWeight.Bold
+        )
+      }
+
+      Spacer(modifier = Modifier.height(6.dp))
 
       // Big Perfboard Simulation Canvas
       Surface(
@@ -214,7 +335,7 @@ fun FullCumulativeCircuitSimulator(
         border = BorderStroke(1.5.dp, Color(0xFF1E293B)),
         modifier = Modifier
           .fillMaxWidth()
-          .height(380.dp)
+          .height(440.dp)
       ) {
         Box(
           modifier = Modifier
@@ -235,7 +356,8 @@ fun FullCumulativeCircuitSimulator(
             // 2. PCB 1: LOGIC & CONTROL BOARD (7 x 9 cm)
             PcbLogicAssemblySection(
               activeStage = activeStage,
-              pulseAlpha = pulseAlpha
+              pulseAlpha = pulseAlpha,
+              platform = platform
             )
 
             // 3. SAFETY CLEARANCE PHYSICAL GAP (>= 6mm Barrier)
@@ -294,7 +416,7 @@ private fun HarnessAssemblySection(
     border = BorderStroke(1.dp, Color(0xFF2D3E53)),
     modifier = Modifier
       .width(130.dp)
-      .height(350.dp)
+      .height(400.dp)
   ) {
     Column(
       modifier = Modifier
@@ -388,15 +510,17 @@ private fun HarnessAssemblySection(
 @Composable
 private fun PcbLogicAssemblySection(
   activeStage: Int,
-  pulseAlpha: Float
+  pulseAlpha: Float,
+  platform: McuPlatform = McuPlatform.STM32WB55
 ) {
+  val isEsp = platform == McuPlatform.ESP32_WROOM
   Surface(
     shape = RoundedCornerShape(10.dp),
-    color = Color(0xFF0E1A17), // PCB dark green substrate
-    border = BorderStroke(2.dp, Color(0xFF1E4D2B)),
+    color = if (isEsp) Color(0xFF0F141C) else Color(0xFF0E1A17), // Dark slate for ESP32, dark green for STM32
+    border = BorderStroke(2.dp, if (isEsp) SparkAmber.copy(alpha = 0.8f) else Color(0xFF1E4D2B)),
     modifier = Modifier
       .width(550.dp)
-      .height(350.dp)
+      .height(400.dp)
   ) {
     Column(
       modifier = Modifier
@@ -409,20 +533,20 @@ private fun PcbLogicAssemblySection(
         verticalAlignment = Alignment.CenterVertically
       ) {
         Text(
-          text = "PCB 1: LOGIC & CONTROL BOARD (7 x 9 cm)",
+          text = if (isEsp) "PCB 1: LOGIC & CONTROL (ESP32)" else "PCB 1: LOGIC & CONTROL (STM32)",
           fontSize = 10.sp,
           fontWeight = FontWeight.Black,
-          color = SafetyGreen,
+          color = if (isEsp) SparkAmber else SafetyGreen,
           fontFamily = FontFamily.Monospace
         )
         Surface(
           shape = RoundedCornerShape(4.dp),
-          color = Color(0xFF064E3B)
+          color = if (isEsp) SparkAmber.copy(alpha = 0.2f) else Color(0xFF064E3B)
         ) {
           Text(
-            text = "VOLTASE AMAN <= 12V",
+            text = if (isEsp) "ESP32 3.3V • TERISOLASI" else "VOLTASE AMAN <= 12V",
             fontSize = 7.sp,
-            color = Color(0xFFA7F3D0),
+            color = if (isEsp) SparkAmber else Color(0xFFA7F3D0),
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
           )
@@ -431,20 +555,32 @@ private fun PcbLogicAssemblySection(
 
       Spacer(modifier = Modifier.height(8.dp))
 
-      // WeAct Studio STM32WB55CGU6 Board (Stage 1+)
-      RealisticWeActBoard(
-        activePins = when {
-          activeStage >= 5 -> setOf("G", "5V", "3V3", "A0", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "B0", "B1", "B2", "B3", "B4", "B5", "B8", "B9", "A10")
-          activeStage >= 3 -> setOf("G", "5V", "3V3", "A0", "A3", "A4", "A5", "A8", "A9", "B0", "B8")
-          activeStage >= 2 -> setOf("G", "5V", "3V3", "A0", "A3", "A4", "A5", "B0", "B3", "B4", "B5", "B9")
-          else -> setOf("G", "5V", "3V3")
-        },
-        highlightedPin = if (activeStage >= 2) "A0" else "5V"
-      )
+      // MCU Board: Switch dynamically based on selected platform
+      if (isEsp) {
+        RealisticEsp32Board(
+          activePins = when {
+            activeStage >= 5 -> setOf("VIN", "GND", "3V3", "4", "25", "26", "VP", "VN", "34", "18", "19", "16", "17")
+            activeStage >= 3 -> setOf("VIN", "GND", "3V3", "4", "VP", "VN", "34", "18", "19")
+            activeStage >= 2 -> setOf("VIN", "GND", "3V3", "4", "VP", "34", "18")
+            else -> setOf("VIN", "GND", "3V3")
+          },
+          highlightedPin = if (activeStage >= 2) "4" else "VIN"
+        )
+      } else {
+        RealisticWeActBoard(
+          activePins = when {
+            activeStage >= 5 -> setOf("G", "5V", "3V3", "A0", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "B0", "B1", "B2", "B3", "B4", "B5", "B8", "B9", "A10")
+            activeStage >= 3 -> setOf("G", "5V", "3V3", "A0", "A3", "A4", "A5", "A8", "A9", "B0", "B8")
+            activeStage >= 2 -> setOf("G", "5V", "3V3", "A0", "A3", "A4", "A5", "B0", "B3", "B4", "B5", "B9")
+            else -> setOf("G", "5V", "3V3")
+          },
+          highlightedPin = if (activeStage >= 2) "A0" else "5V"
+        )
+      }
 
       Spacer(modifier = Modifier.height(10.dp))
 
-      // Lower Logic Components Row (LM2596, LM339, Protection, MOSFET Strobe)
+      // Lower Logic Components Row (LM2596, LM339/PC817, Protection, MOSFET Strobe)
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -464,29 +600,43 @@ private fun PcbLogicAssemblySection(
           ) {
             Text("LM2596 STEP-DOWN", fontSize = 6.5.sp, color = Color.White, fontWeight = FontWeight.Bold)
             Text("12V IN -> 5.00V OUT", fontSize = 6.sp, color = Color(0xFF90CAF9), fontFamily = FontFamily.Monospace)
-            Text("Catu Daya MCU", fontSize = 5.5.sp, color = SafetyGreen)
+            Text(if (isEsp) "Catu VIN ESP32" else "Catu Daya MCU", fontSize = 5.5.sp, color = SafetyGreen)
           }
         }
 
-        // LM339 Pulser Comparator DIP-14 (Stage 2+)
+        // Pulser Conditioning: LM339 (STM32) vs PC817 / LM393 (ESP32)
         if (activeStage >= 2) {
-          RealisticIcChip(
-            ref = "U2",
-            partNumber = "LM339N",
-            pinCount = 14,
-            activePins = setOf(2, 3, 4, 5, 12),
-            pinLabels = mapOf(2 to "PA0", 3 to "5V", 5 to "Spul", 12 to "GND")
-          )
+          if (isEsp) {
+            RealisticIcChip(
+              ref = "U2",
+              partNumber = "PC817",
+              pinCount = 4,
+              activePins = setOf(1, 2, 3, 4),
+              pinLabels = mapOf(1 to "Spul+", 2 to "GND_M", 3 to "GND", 4 to "GPIO4")
+            )
+          } else {
+            RealisticIcChip(
+              ref = "U2",
+              partNumber = "LM339N",
+              pinCount = 14,
+              activePins = setOf(2, 3, 4, 5, 12),
+              pinLabels = mapOf(2 to "PA0", 3 to "5V", 5 to "Spul", 12 to "GND")
+            )
+          }
         } else {
           // Placeholder ghost outline
-          GhostComponentBox(name = "U2: LM339 (Pulser)", width = 60.dp, height = 74.dp)
+          GhostComponentBox(name = if (isEsp) "U2: PC817 (Pulser)" else "U2: LM339 (Pulser)", width = 60.dp, height = 74.dp)
         }
 
         // Resistors and Diodes conditioning (BAT54S, R_BAT1, R_BAT2)
         if (activeStage >= 2) {
           Column(horizontalAlignment = Alignment.CenterHorizontally) {
             RealisticDiode(ref = "BAT54S", partName = "CLAMP", isGlass = true)
-            RealisticResistor(ref = "R_BAT", valueText = "100k/22k", colorBands = listOf(Color.Red, Color.Red, Color.Black))
+            RealisticResistor(
+              ref = "R_BAT",
+              valueText = if (isEsp) "100k/1k+22k" else "100k/22k",
+              colorBands = listOf(Color.Red, Color.Red, Color.Black)
+            )
           }
         } else {
           GhostComponentBox(name = "Sensor R/D", width = 60.dp, height = 74.dp)
@@ -514,7 +664,7 @@ private fun SafetyClearanceGapSection() {
     border = BorderStroke(1.5.dp, HighVoltageRed),
     modifier = Modifier
       .width(58.dp)
-      .height(350.dp)
+      .height(400.dp)
   ) {
     Column(
       modifier = Modifier
@@ -553,7 +703,7 @@ private fun PcbPowerAssemblySection(
     border = BorderStroke(2.dp, HighVoltageRed),
     modifier = Modifier
       .width(520.dp)
-      .height(350.dp)
+      .height(400.dp)
   ) {
     Column(
       modifier = Modifier

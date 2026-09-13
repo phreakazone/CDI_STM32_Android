@@ -33,6 +33,7 @@ import androidx.core.content.ContextCompat
 import com.example.ui.screens.WiringWorkshopHubScreen
 import com.example.viewmodel.WiringViewModel
 import id.ns200.cdir7.CdiViewModel
+import id.ns200.cdir7.McuPlatform
 import id.ns200.cdir7.ScreenTab
 import id.ns200.cdir7.Telemetry
 import id.ns200.cdir7.ui.screens.*
@@ -101,7 +102,10 @@ fun MainAppScreen(
     val isBleBusy by cdiViewModel.isBleBusy.collectAsState()
     val isBleScanning by cdiViewModel.isBleScanning.collectAsState()
     val telemetry by cdiViewModel.telemetry.collectAsState()
+    val packetRateHz by cdiViewModel.packetRateHz.collectAsState()
     val verificationProgress by wiringViewModel.verificationProgress.collectAsState()
+    val connectedDeviceName by cdiViewModel.connectedDeviceName.collectAsState()
+    val selectedPlatform by cdiViewModel.selectedPlatform.collectAsState()
 
     Scaffold(
         modifier = Modifier
@@ -115,7 +119,9 @@ fun MainAppScreen(
                 isBleBusy = isBleBusy,
                 isBleScanning = isBleScanning,
                 telemetry = telemetry,
+                packetRateHz = packetRateHz,
                 verificationProgress = verificationProgress,
+                connectedDeviceName = connectedDeviceName,
                 onConnectClick = {
                     if (isBleScanning || isBleBusy || isConnected) {
                         cdiViewModel.toggleConnect()
@@ -165,7 +171,9 @@ fun MotorsportTopBar(
     isBleBusy: Boolean,
     isBleScanning: Boolean,
     telemetry: Telemetry,
+    packetRateHz: Int = 0,
     verificationProgress: Pair<Int, Int>,
+    connectedDeviceName: String?,
     onConnectClick: () -> Unit,
     onDemoClick: () -> Unit
 ) {
@@ -179,15 +187,18 @@ fun MotorsportTopBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Title and status dot
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // Title and status dot (Clean, concise, and structured)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         modifier = Modifier
                             .size(10.dp)
@@ -206,7 +217,7 @@ fun MotorsportTopBar(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = "NS200-CDI",
-                                fontSize = 14.sp,
+                                fontSize = 15.sp,
                                 fontWeight = FontWeight.Black,
                                 fontFamily = FontFamily.Monospace,
                                 color = TextPrimary
@@ -217,25 +228,29 @@ fun MotorsportTopBar(
                                 color = MotecOrange.copy(alpha = 0.2f)
                             ) {
                                 Text(
-                                    text = "R8.2",
+                                    text = "R8",
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace,
                                     color = MotecOrange,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                                 )
                             }
                         }
                         Text(
                             text = when {
-                                isConnected -> "ONLINE • BLE GATT"
-                                isSimulation -> "SIMULASI DEMO 20Hz"
-                                isBleScanning -> "MEMINDAI PERANGKAT..."
+                                isConnected -> {
+                                    val dev = if (!connectedDeviceName.isNullOrBlank()) connectedDeviceName else "BLE"
+                                    if (packetRateHz > 0) "ONLINE • $dev • ${packetRateHz}Hz" else "ONLINE • $dev"
+                                }
+                                isSimulation -> "SIMULASI • 50Hz • ${telemetry.rpm} RPM"
+                                isBleScanning -> "MEMINDAI BLE..."
                                 isBleBusy -> "MENGHUBUNGKAN..."
-                                else -> "OFFLINE • STM32WB55"
+                                else -> "OFFLINE • BLE SIAP"
                             },
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.SemiBold,
                             color = when {
                                 isConnected -> RacingLime
                                 isSimulation -> MotecOrange
@@ -246,46 +261,34 @@ fun MotorsportTopBar(
                     }
                 }
 
-                // Action buttons: DEMO and CONNECT
+                // Action buttons: DEMO and CONNECT (Spacious, fixed minimum widths to prevent squeezing)
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Solder Progress Chip
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = ElectricCyan.copy(alpha = 0.15f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, ElectricCyan.copy(alpha = 0.4f))
-                    ) {
-                        Text(
-                            text = "PCB ${verificationProgress.first}/${verificationProgress.second}",
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            color = ElectricCyan,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                        )
-                    }
-
                     // Demo Mode Toggle
                     OutlinedButton(
                         onClick = onDemoClick,
                         shape = RoundedCornerShape(6.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
                             contentColor = if (isSimulation) MotecOrange else TextSecondary
                         ),
-                        modifier = Modifier.testTag("topbar_demo_btn")
+                        modifier = Modifier
+                            .heightIn(min = 36.dp)
+                            .testTag("topbar_demo_btn")
                     ) {
                         Text(
                             text = if (isSimulation) "SIM ON" else "DEMO",
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
 
-                    // BLE Connect Button
+                    // BLE Connect Button (Generous minWidth so KONEK is never cramped)
                     Button(
                         onClick = onConnectClick,
                         colors = ButtonDefaults.buttonColors(
@@ -296,8 +299,11 @@ fun MotorsportTopBar(
                             }
                         ),
                         shape = RoundedCornerShape(6.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                        modifier = Modifier.testTag("topbar_connect_btn")
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                        modifier = Modifier
+                            .defaultMinSize(minWidth = 76.dp)
+                            .heightIn(min = 36.dp)
+                            .testTag("topbar_connect_btn")
                     ) {
                         Text(
                             text = when {
@@ -306,10 +312,12 @@ fun MotorsportTopBar(
                                 isBleBusy -> "BATAL"
                                 else -> "KONEK"
                             },
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Black,
                             color = CarbonDark,
-                            fontFamily = FontFamily.Monospace
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }

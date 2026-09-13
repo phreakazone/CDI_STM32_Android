@@ -6,12 +6,14 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.WiringDataProvider
 import com.example.data.WiringRepository
 import com.example.model.*
+import id.ns200.cdir7.McuPlatform
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 
 enum class AppTab(val title: String, val iconLabel: String) {
   TUTORIAL("Langkah Wiring", "Wiring"),
   HARNESS_J1("Harness J1", "Harness"),
-  WEACT_HEADER("WeAct MCU", "MCU"),
+  WEACT_HEADER("Pinout MCU", "MCU"),
   PINOUT_LIBRARY("Kaki Komponen", "Pinout"),
   BOM_CHECKLIST("Daftar Belanja", "BOM"),
   QUICK_SETUP("Quick Setup", "Setup")
@@ -23,6 +25,8 @@ data class WiringUiState(
   val searchQuery: String = "",
   val selectedHarnessPin: HarnessPin? = null,
   val selectedWeActPin: WeActPin? = null,
+  val selectedEsp32Pin: Esp32Pin? = null,
+  val mcuPlatform: McuPlatform = McuPlatform.STM32WB55,
   val selectedComponentPinout: ComponentPinout? = null,
   val bomFilterSection: String = "SEMUA",
   val showVerificationDialog: Boolean = false,
@@ -34,13 +38,27 @@ data class WiringUiState(
 class WiringViewModel(application: Application) : AndroidViewModel(application) {
   val repository = WiringRepository(application.applicationContext)
 
-  private val _uiState = MutableStateFlow(WiringUiState())
+  private val _uiState = MutableStateFlow(WiringUiState(mcuPlatform = repository.mcuPlatform.value))
   val uiState: StateFlow<WiringUiState> = _uiState.asStateFlow()
 
   val verificationRecords = repository.verificationRecords
   val acquiredBomIds = repository.acquiredBomIds
   val checkedConnections = repository.checkedConnections
   val enforceSequential = repository.enforceSequentialVerification
+  val mcuPlatform: StateFlow<McuPlatform> = repository.mcuPlatform
+
+  init {
+    viewModelScope.launch {
+      repository.mcuPlatform.collect { platform ->
+        _uiState.update { it.copy(mcuPlatform = platform) }
+      }
+    }
+  }
+
+  fun setMcuPlatform(platform: McuPlatform) {
+    repository.setMcuPlatform(platform)
+    _uiState.update { it.copy(mcuPlatform = platform) }
+  }
 
   val allSteps: List<WiringStep> = WiringDataProvider.wiringSteps
 
@@ -113,6 +131,10 @@ class WiringViewModel(application: Application) : AndroidViewModel(application) 
     _uiState.update { it.copy(selectedWeActPin = pin, showPinDetailBottomSheet = pin != null) }
   }
 
+  fun selectEsp32Pin(pin: Esp32Pin?) {
+    _uiState.update { it.copy(selectedEsp32Pin = pin, showPinDetailBottomSheet = pin != null) }
+  }
+
   fun selectComponentPinout(comp: ComponentPinout?) {
     _uiState.update { it.copy(selectedComponentPinout = comp) }
   }
@@ -163,6 +185,6 @@ class WiringViewModel(application: Application) : AndroidViewModel(application) 
   }
 
   fun closePinDetail() {
-    _uiState.update { it.copy(showPinDetailBottomSheet = false, selectedHarnessPin = null, selectedWeActPin = null) }
+    _uiState.update { it.copy(showPinDetailBottomSheet = false, selectedHarnessPin = null, selectedWeActPin = null, selectedEsp32Pin = null) }
   }
 }

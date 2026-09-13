@@ -3,6 +3,7 @@ package com.example.data
 import android.content.Context
 import android.content.SharedPreferences
 import com.example.model.VerificationRecord
+import id.ns200.cdir7.McuPlatform
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,6 +27,9 @@ class WiringRepository(context: Context) {
 
   private val _enforceSequentialVerification = MutableStateFlow<Boolean>(true)
   val enforceSequentialVerification: StateFlow<Boolean> = _enforceSequentialVerification.asStateFlow()
+
+  private val _mcuPlatform = MutableStateFlow<McuPlatform>(McuPlatform.STM32WB55)
+  val mcuPlatform: StateFlow<McuPlatform> = _mcuPlatform.asStateFlow()
 
   init {
     loadPreferences()
@@ -61,6 +65,13 @@ class WiringRepository(context: Context) {
 
     _currentStepId.value = prefs.getString("last_active_step", "step_1_1") ?: "step_1_1"
     _enforceSequentialVerification.value = prefs.getBoolean("enforce_sequential", true)
+    val platformId = prefs.getString("mcu_platform", McuPlatform.STM32WB55.id) ?: McuPlatform.STM32WB55.id
+    _mcuPlatform.value = McuPlatform.fromId(platformId)
+  }
+
+  fun setMcuPlatform(platform: McuPlatform) {
+    _mcuPlatform.value = platform
+    prefs.edit().putString("mcu_platform", platform.id).apply()
   }
 
   fun toggleConnectionChecked(stepId: String, connectionId: String) {

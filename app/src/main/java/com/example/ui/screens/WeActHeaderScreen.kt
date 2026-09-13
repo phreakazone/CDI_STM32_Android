@@ -1,12 +1,22 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,10 +30,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.WiringDataProvider
+import com.example.model.Esp32Pin
 import com.example.model.WeActPin
+import com.example.ui.components.Esp32HeaderVisualizer
 import com.example.ui.components.WeActHeaderVisualizer
 import com.example.ui.theme.*
 import com.example.viewmodel.WiringViewModel
+import id.ns200.cdir7.McuPlatform
 
 @Composable
 fun WeActHeaderScreen(
@@ -31,15 +44,39 @@ fun WeActHeaderScreen(
   modifier: Modifier = Modifier
 ) {
   val uiState by viewModel.uiState.collectAsState()
-  var selectedFilter by remember { mutableStateOf("SEMUA") }
-  val allPins = WiringDataProvider.weActPins
+  val activePlatform = uiState.mcuPlatform
 
-  val filteredPins = remember(selectedFilter) {
+  var selectedFilter by remember { mutableStateOf("SEMUA") }
+  val weActPins = WiringDataProvider.weActPins
+  val esp32Pins = WiringDataProvider.esp32Pins
+  val filterScrollState = rememberScrollState()
+
+  // Unified Filter Logic across both platforms
+  val filteredWeActPins = remember(selectedFilter, weActPins) {
     when (selectedFilter) {
-      "H_TOP" -> allPins.filter { it.header == "H_TOP" }
-      "H_BOTTOM" -> allPins.filter { it.header == "H_BOTTOM" }
-      "KRITIS" -> allPins.filter { it.isCritical || it.warning != null }
-      else -> allPins
+      "PULSER" -> weActPins.filter { it.name == "PA0" }
+      "GATE" -> weActPins.filter { it.name == "PA1" || it.name == "PA2" }
+      "OEM_LEARN" -> weActPins.filter { it.name == "PB3" || it.name == "PB4" }
+      "ADC/SENSOR" -> weActPins.filter { it.name in listOf("PA3", "PA4", "PA5", "PA6", "PA7", "PB0") }
+      "CHARGER" -> weActPins.filter { it.name == "PB8" || it.name == "PA9" }
+      "KRITIS" -> weActPins.filter { it.isCritical || it.warning != null }
+      "H_TOP" -> weActPins.filter { it.header == "H_TOP" }
+      "H_BOTTOM" -> weActPins.filter { it.header == "H_BOTTOM" }
+      else -> weActPins
+    }
+  }
+
+  val filteredEsp32Pins = remember(selectedFilter, esp32Pins) {
+    when (selectedFilter) {
+      "PULSER" -> esp32Pins.filter { it.functionCategory == "PULSER" || it.name.contains("GPIO04") }
+      "GATE" -> esp32Pins.filter { it.functionCategory == "GATE" }
+      "OEM_LEARN" -> esp32Pins.filter { it.functionCategory == "OEM_LEARN" }
+      "ADC/SENSOR" -> esp32Pins.filter { it.functionCategory == "ADC1_SENSOR" }
+      "CHARGER" -> esp32Pins.filter { it.functionCategory == "CHARGER_PWM" }
+      "KRITIS" -> esp32Pins.filter { it.isCritical || it.warning != null }
+      "H_TOP", "KIRI" -> esp32Pins.filter { it.headerSide == "LEFT" }
+      "H_BOTTOM", "KANAN" -> esp32Pins.filter { it.headerSide == "RIGHT" }
+      else -> esp32Pins
     }
   }
 
@@ -47,47 +84,446 @@ fun WeActHeaderScreen(
     modifier = modifier
       .fillMaxSize()
       .background(TechDarkBg)
-      .padding(horizontal = 16.dp),
-    verticalArrangement = Arrangement.spacedBy(14.dp),
-    contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
+      .padding(horizontal = 14.dp),
+    verticalArrangement = Arrangement.spacedBy(10.dp),
+    contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp)
   ) {
+    // 1. Compact Platform Bar (No wasted vertical gap)
     item {
-      WeActHeaderVisualizer(
-        weActPins = allPins,
-        selectedPin = uiState.selectedWeActPin,
-        onSelectPin = { pin ->
-          viewModel.selectWeActPin(pin)
-        }
+      PlatformSwitcherBanner(
+        activePlatform = activePlatform,
+        onSelectPlatform = { viewModel.setMcuPlatform(it) }
       )
     }
 
+    // 2. Hardware-specific Visualizer (Dual Mode: Tabel Pinout vs Fisik Board)
     item {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-      ) {
-        listOf("SEMUA", "H_TOP", "H_BOTTOM", "KRITIS").forEach { filter ->
-          FilterChip(
-            selected = selectedFilter == filter,
-            onClick = { selectedFilter = filter },
-            label = { Text(filter, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace) },
-            colors = FilterChipDefaults.filterChipColors(
-              selectedContainerColor = ElectricCyan,
-              selectedLabelColor = Color.Black,
-              containerColor = TechSurfaceElevated,
-              labelColor = TextPrimaryDark
-            )
+      if (activePlatform == McuPlatform.STM32WB55) {
+        WeActHeaderVisualizer(
+          weActPins = weActPins,
+          selectedPin = uiState.selectedWeActPin,
+          onSelectPin = { pin ->
+            viewModel.selectWeActPin(pin)
+          }
+        )
+      } else {
+        Esp32HeaderVisualizer(
+          esp32Pins = esp32Pins,
+          selectedPin = uiState.selectedEsp32Pin,
+          onSelectPin = { pin ->
+            viewModel.selectEsp32Pin(pin)
+          }
+        )
+      }
+    }
+
+    // 3. Compact Platform Safety Banner
+    item {
+      if (activePlatform == McuPlatform.ESP32_WROOM) {
+        Card(
+          shape = RoundedCornerShape(10.dp),
+          colors = CardDefaults.cardColors(containerColor = HighVoltageRed.copy(alpha = 0.10f)),
+          border = CardDefaults.outlinedCardBorder().copy(
+            brush = Brush.linearGradient(listOf(HighVoltageRed, SparkAmber))
           )
+        ) {
+          Row(
+            modifier = Modifier.padding(10.dp),
+            verticalAlignment = Alignment.Top
+          ) {
+            Icon(
+              imageVector = Icons.Default.Warning,
+              contentDescription = "Peringatan",
+              tint = HighVoltageRed,
+              modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column {
+              Text(
+                text = "PERINGATAN ISOLASI 3.3V ESP32",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
+                color = HighVoltageRed
+              )
+              Spacer(modifier = Modifier.height(2.dp))
+              Text(
+                text = "ESP32 adalah logika 3.3V murni. Pin Pulser (GPIO04) dan Sadapan OEM (GPIO16/17) WAJIB lewat modul optocoupler PC817. Selalu gunakan ADC1 (GPIO32-39) karena ADC2 dinonaktifkan oleh radio BLE saat koneksi telemetri aktif.",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp, lineHeight = 14.sp),
+                color = TextPrimaryDark
+              )
+            }
+          }
+        }
+      } else {
+        Card(
+          shape = RoundedCornerShape(10.dp),
+          colors = CardDefaults.cardColors(containerColor = ElectricCyan.copy(alpha = 0.08f)),
+          border = CardDefaults.outlinedCardBorder().copy(
+            brush = Brush.linearGradient(listOf(ElectricCyan, MotecOrange))
+          )
+        ) {
+          Row(
+            modifier = Modifier.padding(10.dp),
+            verticalAlignment = Alignment.Top
+          ) {
+            Icon(
+              imageVector = Icons.Default.Shield,
+              contentDescription = "STM32 Safety",
+              tint = ElectricCyan,
+              modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column {
+              Text(
+                text = "PANDUAN WEACT STM32WB55 (DUAL-CORE ARM CORTEX)",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = ElectricCyan
+              )
+              Spacer(modifier = Modifier.height(2.dp))
+              Text(
+                text = "Header 35 Pin (15 H_TOP & 20 H_BOTTOM). Pulser hardware timer PA0 (TIM2_CH1), Output Gate Koil PA1/PA2, Suplai daya 5.00V wajib ke pin 5V (H_BOTTOM.2). Dilarang menyambungkan aki 12V langsung ke pin VBAT.",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp, lineHeight = 14.sp),
+                color = TextSecondaryDark
+              )
+            }
+          }
         }
       }
     }
 
-    items(filteredPins, key = { "${it.header}_${it.pinNumber}" }) { pin ->
-      WeActPinCard(
-        pin = pin,
-        isSelected = pin.header == uiState.selectedWeActPin?.header && pin.pinNumber == uiState.selectedWeActPin?.pinNumber,
-        onClick = { viewModel.selectWeActPin(pin) }
+    // 4. Section Header & Filter Chips
+    item {
+      Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+              imageVector = Icons.Default.FilterList,
+              contentDescription = null,
+              tint = if (activePlatform == McuPlatform.STM32WB55) ElectricCyan else SparkAmber,
+              modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+              text = if (activePlatform == McuPlatform.STM32WB55) "SPESIFIKASI PINOUT STM32" else "SPESIFIKASI PINOUT ESP32",
+              style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace),
+              color = TextPrimaryDark
+            )
+          }
+
+          Text(
+            text = "${if (activePlatform == McuPlatform.STM32WB55) filteredWeActPins.size else filteredEsp32Pins.size} Pin Ditampilkan",
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+            color = TextTertiaryDark,
+            fontFamily = FontFamily.Monospace
+          )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Horizontally Scrollable Filter Chips
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(filterScrollState),
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          val filterOptions = if (activePlatform == McuPlatform.STM32WB55) {
+            listOf("SEMUA", "PULSER", "GATE", "OEM_LEARN", "ADC/SENSOR", "CHARGER", "KRITIS", "H_TOP", "H_BOTTOM")
+          } else {
+            listOf("SEMUA", "PULSER", "GATE", "OEM_LEARN", "ADC/SENSOR", "CHARGER", "KRITIS", "KIRI", "KANAN")
+          }
+
+          filterOptions.forEach { filter ->
+            val isSelected = selectedFilter == filter
+            val activeColor = if (activePlatform == McuPlatform.ESP32_WROOM) SparkAmber else ElectricCyan
+
+            Surface(
+              shape = RoundedCornerShape(6.dp),
+              color = if (isSelected) activeColor.copy(alpha = 0.25f) else Color(0xFF131A24),
+              border = BorderStroke(1.dp, if (isSelected) activeColor else OutlineDark),
+              modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .clickable { selectedFilter = filter }
+            ) {
+              Text(
+                text = filter,
+                modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 10.sp,
+                color = if (isSelected) Color.White else TextSecondaryDark
+              )
+            }
+          }
+        }
+      }
+    }
+
+    // 5. Pin Cards List
+    if (activePlatform == McuPlatform.STM32WB55) {
+      items(filteredWeActPins, key = { "${it.header}_${it.pinNumber}" }) { pin ->
+        WeActPinCard(
+          pin = pin,
+          isSelected = pin.header == uiState.selectedWeActPin?.header && pin.pinNumber == uiState.selectedWeActPin?.pinNumber,
+          onClick = { viewModel.selectWeActPin(pin) }
+        )
+      }
+    } else {
+      items(filteredEsp32Pins, key = { "${it.headerSide}_${it.pinNumber}" }) { pin ->
+        Esp32PinCard(
+          pin = pin,
+          isSelected = pin.headerSide == uiState.selectedEsp32Pin?.headerSide && pin.pinNumber == uiState.selectedEsp32Pin?.pinNumber,
+          onClick = { viewModel.selectEsp32Pin(pin) }
+        )
+      }
+    }
+  }
+}
+
+/**
+ * Compact Platform Switcher Header
+ * Menggantikan banner besar sebelumnya sehingga tidak ada gap ruang kosong berlebih.
+ */
+@Composable
+fun PlatformSwitcherBanner(
+  activePlatform: McuPlatform,
+  onSelectPlatform: (McuPlatform) -> Unit
+) {
+  Surface(
+    modifier = Modifier.fillMaxWidth(),
+    shape = RoundedCornerShape(10.dp),
+    color = Color(0xFF0D141F),
+    border = BorderStroke(1.dp, if (activePlatform == McuPlatform.STM32WB55) ElectricCyan.copy(alpha = 0.35f) else SparkAmber.copy(alpha = 0.35f))
+  ) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 10.dp, vertical = 7.dp),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+          imageVector = Icons.Default.Memory,
+          contentDescription = null,
+          tint = if (activePlatform == McuPlatform.STM32WB55) ElectricCyan else SparkAmber,
+          modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+          text = if (activePlatform == McuPlatform.STM32WB55) "PLATFORM: WEACT STM32WB55" else "PLATFORM: ESP32-WROOM-32D",
+          style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
+          color = Color.White,
+          fontFamily = FontFamily.Monospace
+        )
+      }
+
+      // Compact Toggle Buttons
+      Row(
+        modifier = Modifier
+          .background(Color(0xFF080D14), RoundedCornerShape(6.dp))
+          .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(6.dp))
+          .padding(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+      ) {
+        val isStm = activePlatform == McuPlatform.STM32WB55
+        Box(
+          modifier = Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(if (isStm) ElectricCyan.copy(alpha = 0.25f) else Color.Transparent)
+            .clickable { onSelectPlatform(McuPlatform.STM32WB55) }
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+          contentAlignment = Alignment.Center
+        ) {
+          Text(
+            text = "STM32 (35P)",
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, fontWeight = FontWeight.Bold),
+            color = if (isStm) ElectricCyan else TextSecondaryDark,
+            fontFamily = FontFamily.Monospace
+          )
+        }
+
+        val isEsp = activePlatform == McuPlatform.ESP32_WROOM
+        Box(
+          modifier = Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(if (isEsp) SparkAmber.copy(alpha = 0.25f) else Color.Transparent)
+            .clickable { onSelectPlatform(McuPlatform.ESP32_WROOM) }
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+          contentAlignment = Alignment.Center
+        ) {
+          Text(
+            text = "ESP32 (38P)",
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, fontWeight = FontWeight.Bold),
+            color = if (isEsp) SparkAmber else TextSecondaryDark,
+            fontFamily = FontFamily.Monospace
+          )
+        }
+      }
+    }
+  }
+}
+
+@Composable
+fun Esp32PinCard(
+  pin: Esp32Pin,
+  isSelected: Boolean,
+  onClick: () -> Unit
+) {
+  val isCritical = pin.isCritical || pin.warning != null
+
+  Card(
+    shape = RoundedCornerShape(10.dp),
+    colors = CardDefaults.cardColors(
+      containerColor = if (isCritical) Color(0xFF241414) else if (isSelected) Color(0xFF221E14) else TechSurfaceElevated
+    ),
+    border = CardDefaults.outlinedCardBorder().copy(
+      brush = Brush.linearGradient(
+        listOf(
+          if (isCritical) HighVoltageRed else if (isSelected) SparkAmber else OutlineDark,
+          if (isCritical) HighVoltageOrange else if (isSelected) SparkAmberMuted else OutlineDark
+        )
       )
+    ),
+    modifier = Modifier
+      .fillMaxWidth()
+      .clickable { onClick() }
+  ) {
+    Column(modifier = Modifier.padding(10.dp)) {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Surface(
+            shape = RoundedCornerShape(4.dp),
+            color = if (isCritical) HighVoltageRed.copy(alpha = 0.25f) else SparkAmber.copy(alpha = 0.15f),
+            border = BorderStroke(1.dp, if (isCritical) HighVoltageRed else SparkAmber)
+          ) {
+            Text(
+              text = "${pin.headerSide} • Pin ${pin.pinNumber}",
+              modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+              style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+              color = if (isCritical) HighVoltageRed else SparkAmber,
+              fontWeight = FontWeight.Bold,
+              fontFamily = FontFamily.Monospace
+            )
+          }
+
+          Spacer(modifier = Modifier.width(8.dp))
+
+          Text(
+            text = pin.name,
+            style = MaterialTheme.typography.titleSmall,
+            color = TextPrimaryDark,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace
+          )
+        }
+
+        Surface(
+          shape = RoundedCornerShape(4.dp),
+          color = when (pin.direction) {
+            "Input" -> SparkAmber.copy(alpha = 0.15f)
+            "Output" -> RacingLime.copy(alpha = 0.15f)
+            else -> Color(0xFF475569).copy(alpha = 0.2f)
+          }
+        ) {
+          Text(
+            text = pin.direction,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
+            color = when (pin.direction) {
+              "Input" -> SparkAmber
+              "Output" -> RacingLime
+              else -> Color(0xFF94A3B8)
+            },
+            fontWeight = FontWeight.Bold
+          )
+        }
+      }
+
+      Spacer(modifier = Modifier.height(6.dp))
+
+      // Ekuivalen STM32 & Net Tujuan
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .clip(RoundedCornerShape(4.dp))
+          .background(Color(0xFF101622))
+          .padding(6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text(
+            text = "Ekuivalen STM32: ",
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+            color = TextTertiaryDark
+          )
+          Text(
+            text = pin.stmEquivalent,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+            color = ElectricCyan,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace
+          )
+        }
+        Text(
+          text = pin.status,
+          style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
+          color = if (pin.status.contains("AKTIF")) RacingLime else TextTertiaryDark,
+          fontWeight = FontWeight.Bold
+        )
+      }
+
+      Spacer(modifier = Modifier.height(4.dp))
+      Text(
+        text = "Fungsi: ${pin.finalDestination}",
+        style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp, fontWeight = FontWeight.Bold),
+        color = TextPrimaryDark
+      )
+
+      Text(
+        text = "Jalur: ${pin.fullPath}",
+        style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+        color = TextSecondaryDark,
+        fontFamily = FontFamily.Monospace
+      )
+
+      // Warning Box
+      if (pin.warning != null) {
+        Spacer(modifier = Modifier.height(6.dp))
+        Card(
+          shape = RoundedCornerShape(6.dp),
+          colors = CardDefaults.cardColors(containerColor = HighVoltageRed.copy(alpha = 0.15f)),
+          border = BorderStroke(1.dp, HighVoltageRed.copy(alpha = 0.6f)),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Row(
+            modifier = Modifier.padding(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(
+              imageVector = Icons.Default.Warning,
+              contentDescription = null,
+              tint = HighVoltageRed,
+              modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+              text = pin.warning,
+              style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+              color = HighVoltageRed,
+              fontWeight = FontWeight.Medium
+            )
+          }
+        }
+      }
     }
   }
 }
@@ -101,9 +537,9 @@ fun WeActPinCard(
   val isVbatDanger = pin.warning?.contains("DILARANG", ignoreCase = true) == true
 
   Card(
-    shape = RoundedCornerShape(12.dp),
+    shape = RoundedCornerShape(10.dp),
     colors = CardDefaults.cardColors(
-      containerColor = if (isVbatDanger) Color(0xFF2A1010) else if (isSelected) Color(0xFF142436) else TechSurfaceElevated
+      containerColor = if (isVbatDanger) Color(0xFF261010) else if (isSelected) Color(0xFF122030) else TechSurfaceElevated
     ),
     border = CardDefaults.outlinedCardBorder().copy(
       brush = Brush.linearGradient(
@@ -117,7 +553,7 @@ fun WeActPinCard(
       .fillMaxWidth()
       .clickable { onClick() }
   ) {
-    Column(modifier = Modifier.padding(14.dp)) {
+    Column(modifier = Modifier.padding(10.dp)) {
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -125,27 +561,25 @@ fun WeActPinCard(
       ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
           Surface(
-            shape = RoundedCornerShape(6.dp),
+            shape = RoundedCornerShape(4.dp),
             color = if (isVbatDanger) HighVoltageRed.copy(alpha = 0.25f) else ElectricCyan.copy(alpha = 0.15f),
-            border = CardDefaults.outlinedCardBorder().copy(
-              brush = Brush.linearGradient(listOf(if (isVbatDanger) HighVoltageRed else ElectricCyan, ElectricCyan))
-            )
+            border = BorderStroke(1.dp, if (isVbatDanger) HighVoltageRed else ElectricCyan)
           ) {
             Text(
               text = "${pin.header} • Pin ${pin.pinNumber}",
-              modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-              style = MaterialTheme.typography.labelSmall,
+              modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+              style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
               color = if (isVbatDanger) HighVoltageRed else ElectricCyan,
               fontWeight = FontWeight.Bold,
               fontFamily = FontFamily.Monospace
             )
           }
 
-          Spacer(modifier = Modifier.width(10.dp))
+          Spacer(modifier = Modifier.width(8.dp))
 
           Text(
             text = pin.name,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleSmall,
             color = TextPrimaryDark,
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Monospace
@@ -155,8 +589,8 @@ fun WeActPinCard(
         Surface(
           shape = RoundedCornerShape(4.dp),
           color = when (pin.direction) {
-            "INPUT (ANALOG)", "INPUT" -> SparkAmber.copy(alpha = 0.15f)
-            "OUTPUT (PWM)", "OUTPUT" -> SafetyGreen.copy(alpha = 0.15f)
+            "Input", "INPUT", "INPUT (ANALOG)" -> SparkAmber.copy(alpha = 0.15f)
+            "Output", "OUTPUT", "OUTPUT (PWM)" -> SafetyGreen.copy(alpha = 0.15f)
             "POWER" -> HighVoltageRed.copy(alpha = 0.15f)
             "GND" -> GroundStarGold.copy(alpha = 0.15f)
             else -> Color(0xFF475569).copy(alpha = 0.2f)
@@ -165,10 +599,10 @@ fun WeActPinCard(
           Text(
             text = pin.direction,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
             color = when (pin.direction) {
-              "INPUT (ANALOG)", "INPUT" -> SparkAmber
-              "OUTPUT (PWM)", "OUTPUT" -> SafetyGreen
+              "Input", "INPUT", "INPUT (ANALOG)" -> SparkAmber
+              "Output", "OUTPUT", "OUTPUT (PWM)" -> SafetyGreen
               "POWER" -> HighVoltageRed
               "GND" -> GroundStarGold
               else -> Color(0xFF94A3B8)
@@ -178,64 +612,64 @@ fun WeActPinCard(
         }
       }
 
-      Spacer(modifier = Modifier.height(8.dp))
+      Spacer(modifier = Modifier.height(6.dp))
 
-      // Final Destination Net
+      // Status & Fungsi
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .clip(RoundedCornerShape(6.dp))
-          .background(Color(0xFF0C1622))
-          .padding(8.dp),
+          .clip(RoundedCornerShape(4.dp))
+          .background(Color(0xFF101622))
+          .padding(6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
       ) {
         Text(
-          text = "Tujuan Akhir: ",
-          style = MaterialTheme.typography.labelSmall,
-          color = TextTertiaryDark
+          text = "Fungsi: ${pin.finalDestination}",
+          style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, fontWeight = FontWeight.Bold),
+          color = TextPrimaryDark,
+          modifier = Modifier.weight(1f)
         )
         Text(
-          text = pin.finalDestination,
-          style = MaterialTheme.typography.labelSmall,
-          color = ElectricCyan,
-          fontWeight = FontWeight.Bold,
-          fontFamily = FontFamily.Monospace
+          text = pin.status,
+          style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
+          color = if (pin.status.contains("AKTIF")) RacingLime else TextTertiaryDark,
+          fontWeight = FontWeight.Bold
         )
       }
 
-      // Full Connection Path
-      Spacer(modifier = Modifier.height(6.dp))
+      Spacer(modifier = Modifier.height(4.dp))
       Text(
-        text = "Jalur Lengkap: ${pin.fullPath}",
-        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-        color = TextPrimaryDark
+        text = "Jalur Sirkuit: ${pin.fullPath}",
+        style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+        color = TextSecondaryDark,
+        fontFamily = FontFamily.Monospace
       )
 
-      // Warning Box
       if (pin.warning != null) {
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
         Card(
-          shape = RoundedCornerShape(8.dp),
+          shape = RoundedCornerShape(6.dp),
           colors = CardDefaults.cardColors(containerColor = HighVoltageRed.copy(alpha = 0.15f)),
-          border = CardDefaults.outlinedCardBorder().copy(brush = Brush.linearGradient(listOf(HighVoltageRed, HighVoltageOrange))),
+          border = BorderStroke(1.dp, HighVoltageRed.copy(alpha = 0.6f)),
           modifier = Modifier.fillMaxWidth()
         ) {
           Row(
-            modifier = Modifier.padding(8.dp),
+            modifier = Modifier.padding(6.dp),
             verticalAlignment = Alignment.CenterVertically
           ) {
             Icon(
               imageVector = Icons.Default.Warning,
               contentDescription = null,
               tint = HighVoltageRed,
-              modifier = Modifier.size(16.dp)
+              modifier = Modifier.size(14.dp)
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
             Text(
               text = pin.warning,
-              style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+              style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
               color = HighVoltageRed,
-              fontWeight = FontWeight.Bold
+              fontWeight = FontWeight.Medium
             )
           }
         }

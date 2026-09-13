@@ -1,5 +1,6 @@
 package id.ns200.cdir7
 
+import android.annotation.SuppressLint
 import android.app.Application
 import android.bluetooth.BluetoothDevice
 import android.content.Context
@@ -231,6 +232,20 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     val mcuCapabilities: StateFlow<Set<String>> = _mcuCapabilities.asStateFlow()
 
     val otaState: StateFlow<OtaState> = bleClient.otaState
+    val connectedDeviceName: StateFlow<String?> = bleClient.connectedDeviceName
+
+    private val cdiPrefs = context.getSharedPreferences("cdi_r8_prefs", Context.MODE_PRIVATE)
+
+    private val _selectedPlatform = MutableStateFlow(
+        McuPlatform.fromId(cdiPrefs.getString("mcu_platform", McuPlatform.STM32WB55.id))
+    )
+    val selectedPlatform: StateFlow<McuPlatform> = _selectedPlatform.asStateFlow()
+
+    fun setMcuPlatform(platform: McuPlatform) {
+        _selectedPlatform.value = platform
+        cdiPrefs.edit().putString("mcu_platform", platform.id).apply()
+        appendLog("Platform Hardware aktif dialihkan ke: ${platform.displayName} (${platform.architecture})")
+    }
 
     // Maps State - 4 Flash Memory Slots (ECO, STREET, RAIN, PRO) with two flash pages & CRC32
     val mapPresets = listOf(
@@ -267,8 +282,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         MapSlotData(
             slot = 3,
             name = "Slot 4: PRO",
-            description = "Map kompetisi tingkat tinggi 16x8 matrix / 345V PRO. Dipilih melalui konfigurasi FEATURE PRO yang tersimpan. Advance maksimum 36° BTDC.",
-            revLimit = 11000,
+            description = "Map kompetisi tingkat tinggi 16x8 matrix / 345V PRO. Dipilih melalui konfigurasi tersimpan (tanpa jumper fisik JP_PRO). Advance maksimum 36° BTDC.",
+            revLimit = 11500,
             peakAdvance = 36.0f,
             curvePoints = listOf(
                 1500 to 8f, 2500 to 18f, 5000 to 29f, 7500 to 35f, 9500 to 36f, 10800 to 34f, 11800 to 14f
@@ -344,10 +359,10 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     // Console logs
     private val _terminalLogs = MutableStateFlow<List<String>>(
         listOf(
-            "NS200 CDI R8.2 System Initialized.",
+            "NS200 CDI R8 System Initialized.",
             "MoTeC / AIM Telemetry Protocol Engine Ready.",
-            "GATT: 7a8f1000-6c9d-4e40-a45f-0b4b4e533230",
-            "Hardware: STM32WB55 Dual-Core Wireless MCU."
+            "Firmware R8: Dual-Core OEM Learn & Pro 16x8 Engine.",
+            "Hardware Target: ${_selectedPlatform.value.displayName}."
         )
     )
     val terminalLogs: StateFlow<List<String>> = _terminalLogs.asStateFlow()
@@ -461,6 +476,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         appendLog("BLE scan dihentikan.")
     }
 
+    @SuppressLint("MissingPermission")
     fun connectBleDevice(device: BluetoothDevice) {
         _isSimulationMode.value = false
         _isRevving.value = false
@@ -469,8 +485,10 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         simTps = 0f
         engineSound.stop()
         val dName = try {
-            if (bleClient.hasPermissions()) device.name else null
-        } catch (_: Exception) { null } ?: device.address
+            if (bleClient.hasPermissions()) device.name ?: device.address else "perangkat BLE"
+        } catch (_: SecurityException) {
+            "perangkat BLE"
+        }
         appendLog("Menghubungkan langsung ke BLE: $dName")
         bleClient.connectDeviceExplicit(device)
     }
@@ -638,53 +656,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             _customAdvancePoints.value = axis.map { CustomAdvancePoint(it, sample(it)) }
             _selectedMapSlot.value = presetIndex
             appendLog("Preset $presetKey dimuat pada grid firmware ${axis.size} titik")
-            return
         }
-        val points = when (presetKey) {
-            "ECO" -> listOf(
-                CustomAdvancePoint(1500, 5.0f),
-                CustomAdvancePoint(2500, 14.0f),
-                CustomAdvancePoint(4500, 24.0f),
-                CustomAdvancePoint(6500, 30.0f),
-                CustomAdvancePoint(8500, 32.0f),
-                CustomAdvancePoint(9800, 28.0f),
-                CustomAdvancePoint(10500, 20.0f),
-                CustomAdvancePoint(11500, 10.0f)
-            )
-            "STREET" -> listOf(
-                CustomAdvancePoint(1500, 6.0f),
-                CustomAdvancePoint(2500, 16.0f),
-                CustomAdvancePoint(4500, 26.0f),
-                CustomAdvancePoint(6500, 32.0f),
-                CustomAdvancePoint(8500, 34.0f),
-                CustomAdvancePoint(9800, 32.0f),
-                CustomAdvancePoint(10500, 28.0f),
-                CustomAdvancePoint(11500, 14.0f)
-            )
-            "RAIN" -> listOf(
-                CustomAdvancePoint(1500, 5.0f),
-                CustomAdvancePoint(2500, 11.0f),
-                CustomAdvancePoint(4500, 19.0f),
-                CustomAdvancePoint(6500, 25.0f),
-                CustomAdvancePoint(8500, 28.0f),
-                CustomAdvancePoint(9800, 24.0f),
-                CustomAdvancePoint(10500, 18.0f),
-                CustomAdvancePoint(11500, 10.0f)
-            )
-            "PRO" -> listOf(
-                CustomAdvancePoint(1500, 7.0f),
-                CustomAdvancePoint(2500, 17.0f),
-                CustomAdvancePoint(4500, 28.0f),
-                CustomAdvancePoint(6500, 33.0f),
-                CustomAdvancePoint(8500, 36.0f),
-                CustomAdvancePoint(9800, 35.0f),
-                CustomAdvancePoint(10500, 30.0f),
-                CustomAdvancePoint(11500, 14.0f)
-            )
-            else -> return
-        }
-        _customAdvancePoints.value = points
-        appendLog("Preset $presetKey dimuat ke Map Custom")
     }
 
     fun saveCustomMapToMcu(): String? {
@@ -698,20 +670,55 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         }
 
         if (!bleClient.gattReady) return "CDI belum terhubung. Map tidak diklaim tersimpan ke MCU."
-        val pro = _selectedMapSlot.value == 3
-        val points = resampleForFirmware(_customAdvancePoints.value, pro)
-        val pointsPayload = points.joinToString(";") { "${it.rpm}:${(it.advanceDeg * 10).toInt()}" }
-        val tpsRows = if (pro) 8 else 4
-        bleClient.send("FEATURE,PRO,${if (pro) "ON" else "OFF"}")
-        bleClient.send("LOAD,${_selectedMapSlot.value}")
+        val currentPoints = _customAdvancePoints.value
+        val slot = _selectedMapSlot.value
+        val isProSlot = slot == 3
+
+        // Firmware R8 Target Grid Specs:
+        // Slots 0-2 (Standard): 8 RPM points x 4 TPS rows
+        // Slot 3 (PRO): 16 RPM points x 8 TPS rows
+        val targetAxis = if (isProSlot) {
+            listOf(500, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 11000, 11500)
+        } else {
+            listOf(500, 1000, 1500, 2500, 4000, 6000, 8000, 10000)
+        }
+        val tpsRows = if (isProSlot) 8 else 4
+
+        // Deterministic Resampling onto target firmware RPM axis
+        val sortedInput = currentPoints.sortedBy { it.rpm }
+        val resampledAdvanceList = targetAxis.map { targetRpm ->
+            val advance = when {
+                sortedInput.isEmpty() -> 0f
+                targetRpm <= sortedInput.first().rpm -> sortedInput.first().advanceDeg
+                targetRpm >= sortedInput.last().rpm -> sortedInput.last().advanceDeg
+                else -> {
+                    val rightIdx = sortedInput.indexOfFirst { it.rpm >= targetRpm }
+                    if (rightIdx <= 0) sortedInput.first().advanceDeg
+                    else {
+                        val pA = sortedInput[rightIdx - 1]
+                        val pB = sortedInput[rightIdx]
+                        val span = (pB.rpm - pA.rpm).toFloat()
+                        if (span <= 0f) pA.advanceDeg
+                        else pA.advanceDeg + (pB.advanceDeg - pA.advanceDeg) * ((targetRpm - pA.rpm) / span)
+                    }
+                }
+            }
+            advance.coerceIn(0.0f, 36.0f)
+        }
+
+        val pointsPayload = currentPoints.joinToString(";") { "${it.rpm}:${(it.advanceDeg * 10).toInt()}" }
+
+        bleClient.send("FEATURE,PRO,${if (isProSlot) "ON" else "OFF"}")
+        bleClient.send("LOAD,$slot")
         repeat(tpsRows) { tpsIndex ->
-            points.forEachIndexed { rpmIndex, point ->
-                bleClient.send("LIVE,$tpsIndex,$rpmIndex,${(point.advanceDeg * 100f).roundToInt()}")
+            resampledAdvanceList.forEachIndexed { rpmIndex, advanceDeg ->
+                val centiDeg = (advanceDeg * 100f).roundToInt()
+                bleClient.send("LIVE,$tpsIndex,$rpmIndex,$centiDeg")
             }
         }
-        bleClient.send("SAVE,${_selectedMapSlot.value}")
+        bleClient.send("SAVE,$slot")
         bleClient.send("GET,META")
-        appendLog("BLE Queue R8: FEATURE PRO ${if (pro) "ON" else "OFF"} -> LOAD -> ${tpsRows * points.size} sel LIVE -> SAVE -> readback")
+        appendLog("BLE Queue R8: FEATURE PRO ${if (isProSlot) "ON" else "OFF"} -> LOAD -> ${tpsRows * targetAxis.size} sel LIVE -> SAVE -> readback")
 
         context.getSharedPreferences("cdi_r7_prefs", Context.MODE_PRIVATE).edit()
             .putString("custom_map_points", pointsPayload)
@@ -812,6 +819,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             bleClient.send("LOAD,$slot")
             bleClient.send("LIMIT,${_limiterType.value},$rpm,$band")
             bleClient.send("SAVE,$slot")
+            bleClient.send("GET,MODE")
             appendLog("BLE Sync R8: FEATURE PRO ${if (slot == 3) "ON" else "OFF"} -> LOAD,$slot -> LIMIT,${_limiterType.value},$rpm,$band -> SAVE,$slot")
         } else if (_isSimulationMode.value) {
             appendLog("Sync Kurva Map $slot (Limiter: $rpm RPM, Band: $band RPM) Disimpan Lokal.")
@@ -825,29 +833,6 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             .apply()
 
         Toast.makeText(context, "Kurva Map ${slot + 1} & Rev-Limiter ($rpm RPM) Tersinkronisasi!", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun resampleForFirmware(source: List<CustomAdvancePoint>, pro: Boolean): List<CustomAdvancePoint> {
-        val axis = if (pro) {
-            listOf(500, 750, 1000, 1500, 2000, 2500, 3000, 4000,
-                5000, 6000, 7000, 8000, 9000, 10000, 11000, 11500)
-        } else {
-            listOf(500, 1000, 1500, 2500, 4000, 6000, 8000, 10000)
-        }
-        val sorted = source.sortedBy { it.rpm }
-        if (sorted.isEmpty()) return axis.map { CustomAdvancePoint(it, 0f) }
-        fun sample(rpm: Int): Float {
-            if (rpm <= sorted.first().rpm) return sorted.first().advanceDeg
-            if (rpm >= sorted.last().rpm) return sorted.last().advanceDeg
-            val right = sorted.indexOfFirst { it.rpm >= rpm }
-            val a = sorted[right - 1]
-            val b = sorted[right]
-            val ratio = (rpm - a.rpm).toFloat() / (b.rpm - a.rpm).toFloat()
-            return a.advanceDeg + (b.advanceDeg - a.advanceDeg) * ratio
-        }
-        return axis.map { rpm ->
-            CustomAdvancePoint(rpm, ((sample(rpm).coerceIn(0f, 36f) * 10f).roundToInt() / 10f))
-        }
     }
 
     fun setSoundPreset(preset: EngineSound.Preset) {
@@ -1012,7 +997,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 "RPM masih ${t.rpm}. Matikan mesin; tahap awal hanya diperiksa saat RPM 0."
             )
             t.hvCenter >= 30 || t.hvSide >= 30 -> failQuickSetupPreflight(
-                "HV belum aman: CENTER ${t.hvCenter} V, SIDE ${t.hvSide} V. Matikan mesin/charger dan tunggu bleeder menurunkan HV <30 V."
+                "HV belum aman: CENTER ${t.hvCenter} V, SIDE ${t.hvSide} V. Lepas JP_HV dan tunggu <30 V."
             )
             else -> {
                 preflightTimeoutJob?.cancel()
@@ -1349,8 +1334,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     fun startOemLearn() {
         if (!requireMcuOrDemo("start OEM Learn")) return
         val t = _telemetry.value
-        if (t.rpm != 0 || t.hvCenter >= 30 || t.hvSide >= 30) {
-            Toast.makeText(context, "START ditolak: mesin RPM 0 dan HV <30 V", Toast.LENGTH_LONG).show()
+        if (bleClient.gattReady && (t.rpm != 0 || t.hvCenter >= 30 || t.hvSide >= 30)) {
+            Toast.makeText(context, "Firmware R8 mensyaratkan RPM 0 dan HV <30 V saat mulai OEM Learn", Toast.LENGTH_LONG).show()
             return
         }
         if (bleClient.gattReady) {
@@ -1371,12 +1356,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     fun stopOemLearn() {
         if (!requireMcuOrDemo("stop OEM Learn")) return
         val t = _telemetry.value
-        if (t.rpm != 0 || t.hvCenter >= 30 || t.hvSide >= 30) {
-            Toast.makeText(context, "STOP/SAVE ditolak: matikan mesin, pertahankan catu logika, tunggu HV <30 V", Toast.LENGTH_LONG).show()
-            return
-        }
-        if (_oemCenterPulses.value < 20) {
-            Toast.makeText(context, "Belum cukup: minimal 20 pulsa OEM valid", Toast.LENGTH_LONG).show()
+        if (bleClient.gattReady && (t.rpm != 0 || t.hvCenter >= 30 || t.hvSide >= 30)) {
+            Toast.makeText(context, "Firmware R8 mensyaratkan RPM 0 dan HV <30 V saat menyimpan OEM Learn", Toast.LENGTH_LONG).show()
             return
         }
         if (bleClient.gattReady) {
@@ -1439,6 +1420,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             appendLog("OTA Ditolak: $safetyErr")
             return
         }
+
         if ("OTA_STAGE" !in _mcuCapabilities.value) {
             Toast.makeText(context, "Firmware tidak melaporkan capability OTA_STAGE", Toast.LENGTH_LONG).show()
             return
@@ -1446,9 +1428,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
         if (bleClient.gattReady) {
             appendLog("Memulai OTA BLE untuk file: $fileName (${bytes.size} byte)")
-            bleClient.startOta(bytes)
+            bleClient.startOta(bytes, _selectedPlatform.value)
         } else {
-            Toast.makeText(context, "OTA hanya tersedia saat BLE STM32 R8 terhubung", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "OTA hanya tersedia saat BLE CDI R8 terhubung", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1620,9 +1602,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         ) != null
 
         _telemetryRxMessage.value = if (valid) {
-            "RX AKTIF • #${_telemetryPacketCount.value}"
+            "AKTIF • frame #${_telemetryPacketCount.value} dari Telemetry 1001"
         } else {
-            "RX DITOLAK • CRC/format (${bytes.size} B)"
+            "FRAME DITOLAK • panjang/versi/header/CRC tidak valid (${bytes.size} byte)"
         }
 
         rxSamples.addLast(RxSample(now, valid))
@@ -1682,6 +1664,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     hvSide = f[4].toIntOrNull() ?: _telemetry.value.hvSide,
                     slot = slot
                 )
+                f[8].toIntOrNull()?.let { _isProVoltageConfigured.value = it == 1 }
                 preflightStatusOk = true
                 updateQuickSetupPreflightProgress()
             }
@@ -1689,17 +1672,21 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 _limiterType.value = if (f[3].toIntOrNull() == 1) "HARD" else "SOFT"
                 _softRevLimiterRpm.value = f[4].toIntOrNull()?.coerceIn(3000, 11500) ?: _softRevLimiterRpm.value
                 _softBandRpm.value = f[5].toIntOrNull()?.coerceIn(100, 1000) ?: _softBandRpm.value
+                _targetHvVoltage.value = f[6].toIntOrNull()
+                    ?.coerceIn(CdiProtocol.VOLTAGE_FIRST_START, CdiProtocol.VOLTAGE_PRO)
+                    ?: _targetHvVoltage.value
                 val rpmCount = f[8].toIntOrNull() ?: 0
                 val tpsCount = f[9].toIntOrNull() ?: 0
-                _targetHvVoltage.value = f[6].toIntOrNull() ?: _targetHvVoltage.value
                 if (rpmCount in listOf(8, 16) && tpsCount in listOf(4, 8)) requestMapReadback(rpmCount, tpsCount)
             }
-            "MODE" -> CdiProtocol.firmwareMode(value)?.let { mode ->
-                _firmwareMode.value = mode.mode
-                _isOemUnpluggedConfirmed.value = mode.diyUnplugged
-                _isProVoltageConfigured.value = mode.proEnabled
-                _targetHvVoltage.value = if (mode.proEnabled) CdiProtocol.VOLTAGE_PRO else CdiProtocol.VOLTAGE_NORMAL
-                appendLog("MODE sync: ${mode.mode.code}, OEM unplugged=${mode.diyUnplugged}, PRO=${mode.proEnabled}")
+            "MODE" -> CdiProtocol.firmwareMode(value)?.let { status ->
+                _firmwareMode.value = status.mode
+                _isOemUnpluggedConfirmed.value = status.diyUnplugged
+                _isProVoltageConfigured.value = status.proEnabled
+                if (status.mode != FirmwareRunMode.OEM_LEARN) {
+                    _isOemLearning.value = false
+                    oemLearnPollJob?.cancel()
+                }
             }
             "CELL" -> if (f.size >= 4) {
                 val ti = f[1].toIntOrNull(); val ri = f[2].toIntOrNull(); val cdeg = f[3].toIntOrNull()
@@ -1800,13 +1787,13 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 preflightSetupOk = true
                 updateQuickSetupPreflightProgress()
             }
-            "LEARN" -> CdiProtocol.oemLearnStatus(value)?.let { learn ->
-                _isOemLearning.value = learn.state == OemLearnState.ACTIVE
-                _oemLearnCoverage.value = learn.coveragePercent
-                _oemCenterPulses.value = learn.acceptedPulses
-                _oemRejectedPulses.value = learn.rejectedPulses
-                _oemSideSamples.value = learn.sideSamples
-                _sideOffsetCdeg.value = learn.sideOffsetCdeg
+            "LEARN" -> CdiProtocol.oemLearnStatus(value)?.let { status ->
+                _isOemLearning.value = status.state == OemLearnState.ACTIVE
+                _oemLearnCoverage.value = status.coveragePercent
+                _oemCenterPulses.value = status.acceptedPulses
+                _oemRejectedPulses.value = status.rejectedPulses
+                _oemSideSamples.value = status.sideSamples
+                _sideOffsetCdeg.value = status.sideOffsetCdeg
                 if (_isOemLearning.value) startOemLearnPolling() else oemLearnPollJob?.cancel()
             }
             "ACK" -> {
@@ -1847,7 +1834,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                         oemLearnPollJob?.cancel()
                         bleClient.send("GET,LEARN")
                     }
-                    operation == "LEARN_SAVED_CENTER" || operation == "LEARN_SAVED_CENTER_SIDE" -> {
+                    operation == "LEARN_SAVED_CENTER" ||
+                        operation == "LEARN_SAVED_CENTER_SIDE" -> {
                         _isOemLearning.value = false
                         oemLearnPollJob?.cancel()
                         bleClient.send("GET,LEARN")
@@ -1857,10 +1845,16 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     operation == "PRO_ON" -> {
                         _isProVoltageConfigured.value = true
                         _targetHvVoltage.value = CdiProtocol.VOLTAGE_PRO
+                        bleClient.send("GET,MODE")
+                        bleClient.send("GET,META")
+                        bleClient.send("GET,STATUS")
                     }
                     operation == "PRO_OFF" -> {
                         _isProVoltageConfigured.value = false
                         _targetHvVoltage.value = CdiProtocol.VOLTAGE_NORMAL
+                        bleClient.send("GET,MODE")
+                        bleClient.send("GET,META")
+                        bleClient.send("GET,STATUS")
                     }
                     operation in setupChangingOperations -> {
                         if (operation == "SETUP_RESET") {
@@ -2054,8 +2048,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     override fun onCleared() {
         super.onCleared()
-        oemLearnPollJob?.cancel()
         simulationJob?.cancel()
+        oemLearnPollJob?.cancel()
         bleClient.release()
         engineSound.release()
     }

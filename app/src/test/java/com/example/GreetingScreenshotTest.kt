@@ -15,9 +15,7 @@ import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-// Keep screenshot tests deterministic on the latest widely available
-// Robolectric preinstrumented SDK while the app itself still compiles for 36.1.
-@Config(qualifiers = RobolectricDeviceQualifiers.Pixel8, sdk = [35])
+@Config(qualifiers = RobolectricDeviceQualifiers.Pixel8, sdk = [36])
 class GreetingScreenshotTest {
 
   @get:Rule val composeTestRule = createComposeRule()
@@ -26,7 +24,7 @@ class GreetingScreenshotTest {
   fun app_preview_screenshot() {
     composeTestRule.setContent {
       CdiR7Theme {
-        Text("NS200 CDI R8.2")
+        Text("NS200 CDI R7.2")
       }
     }
 

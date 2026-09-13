@@ -1,6 +1,6 @@
 {
-  "name": "NS200 CDI R8.2",
-  "description": "Aplikasi Android offline untuk kontrol CDI Programmable Pulsar NS200 Firmware STM32 R8: OEM Learn, Manual/DIY, First Start, OTA, telemetry, empat map, audio, dan panduan wiring.",
+  "name": "NS200 CDI R8",
+  "description": "Aplikasi kontrol CDI Programmable Pulsar NS200 Firmware R8: Alur OEM Learn, Kontrol Mode DIY/Manual, Otomatis First Start & Ready, Pengunggah APP.bin BLE OTA, Dashboard balap MoTeC, Kurva Pengapian 4 Slot, dan Bengkel Wiring.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

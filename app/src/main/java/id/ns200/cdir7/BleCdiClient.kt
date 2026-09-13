@@ -104,6 +104,9 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
     private val _otaState = MutableStateFlow<OtaState>(OtaState.Idle)
     val otaState: StateFlow<OtaState> = _otaState.asStateFlow()
 
+    private val _connectedDeviceName = MutableStateFlow<String?>(null)
+    val connectedDeviceName: StateFlow<String?> = _connectedDeviceName.asStateFlow()
+
     private var otaDataBuffer: ByteArray? = null
     private var otaChunkIndex = 0
     private var otaTotalChunks = 0
@@ -114,6 +117,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
     private var otaCommitSent = false
     private var otaJob: Runnable? = null
     private var negotiatedMtu = 23
+    private var otaPlatform = McuPlatform.STM32WB55
 
     var gattReady = false
         private set
@@ -338,8 +342,14 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             gattReady = true
             _busy.value = false
             retryCount = 0
+            val deviceName = try {
+                lastDevice?.name
+            } catch (_: SecurityException) {
+                null
+            } ?: "NS200-CDI-R7"
+            _connectedDeviceName.value = deviceName
             send("PING")
-            listener.onState("Connected • STM32 R8 • PHY 1M", true)
+            listener.onState("Connected • $deviceName • PHY 1M", true)
             return
         }
 
@@ -383,13 +393,25 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             }
         } else if (uuid == otaStatusUuid) {
             val status = CdiProtocol.otaStatus(bytes)
-            if (status == null) {
-                listener.onResponse("ERR,OTA_STATUS_CRC_OR_LENGTH_${bytes.size}")
-            } else {
-                listener.onResponse(
-                    "OTA,${status.state.code},${status.receivedBytes},${status.expectedBytes},${status.errorCode}"
-                )
-                handleOtaStatus(status)
+            val legacy = CdiProtocol.legacyEsp32OtaStatus(bytes)
+            when {
+                status != null -> {
+                    listener.onResponse(
+                        "OTA,${status.state.code},${status.receivedBytes},${status.expectedBytes},${status.errorCode}"
+                    )
+                    handleOtaStatus(status)
+                }
+                legacy != null -> {
+                    val (state, error) = legacy
+                    listener.onResponse("OTA_STATUS_ESP32,${state.code},$error")
+                    if (state == FirmwareOtaState.ERROR) {
+                        otaAwaitingStatus = false
+                        _otaState.value = OtaState.Error("ESP32 menolak OTA (kode $error)")
+                    }
+                    // Paket ESP32 2-byte tidak memuat offset. GET,OTA yang sudah
+                    // dijadwalkan menjadi sumber kebenaran progress byte.
+                }
+                else -> listener.onResponse("ERR,OTA_STATUS_CRC_OR_LENGTH_${bytes.size}")
             }
         } else if (uuid == responseUuid) {
             responseBuffer.append(bytes.toString(Charsets.US_ASCII))
@@ -579,6 +601,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         subscriptionsStarted = false
         gattReady = false
         negotiatedMtu = 23
+        _connectedDeviceName.value = null
         responseBuffer.clear()
         activeCommand = null
         commands.clear()
@@ -608,7 +631,11 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
      * Karakteristik Data: ...1004 (chunk sequential maks 208 byte)
      * Karakteristik Status: ...1005 (notifikasi / status flash)
      */
-    fun startOta(data: ByteArray, imageVersion: Long = CdiProtocol.OTA_IMAGE_VERSION): Boolean {
+    fun startOta(
+        data: ByteArray,
+        platform: McuPlatform = McuPlatform.STM32WB55,
+        imageVersion: Long = CdiProtocol.OTA_IMAGE_VERSION
+    ): Boolean {
         if (data.size !in CdiProtocol.OTA_MIN_IMAGE_SIZE..CdiProtocol.OTA_MAX_IMAGE_SIZE) {
             _otaState.value = OtaState.Error(
                 "Ukuran APP.bin harus ${CdiProtocol.OTA_MIN_IMAGE_SIZE}..${CdiProtocol.OTA_MAX_IMAGE_SIZE} byte"
@@ -623,10 +650,12 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         otaAwaitingStatus = false
         otaCommitSent = false
         otaDataBuffer = data
+        otaPlatform = platform
         val crc32Val = CdiProtocol.crc32(data)
+        val attPayload = negotiatedMtu - if (platform == McuPlatform.STM32WB55) 10 else 3
         otaChunkPayloadSize = minOf(
             CdiProtocol.OTA_CHUNK_MAX_SIZE,
-            (((negotiatedMtu - 10).coerceAtLeast(8)) / 8) * 8
+            (attPayload.coerceAtLeast(8) / 8) * 8
         )
         otaTotalChunks = (data.size + otaChunkPayloadSize - 1) / otaChunkPayloadSize
         otaChunkIndex = 0
@@ -663,11 +692,17 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         val start = otaBytesAcknowledged
         val end = minOf(start + otaChunkPayloadSize, buf.size)
         val chunk = buf.copyOfRange(start, end)
-        val packet = try {
-            CdiProtocol.otaDataPacket(start, chunk)
-        } catch (e: IllegalArgumentException) {
-            _otaState.value = OtaState.Error(e.message ?: "Format chunk OTA tidak valid")
-            return
+        val packet = if (otaPlatform == McuPlatform.STM32WB55) {
+            try {
+                CdiProtocol.otaDataPacket(start, chunk)
+            } catch (e: IllegalArgumentException) {
+                _otaState.value = OtaState.Error(e.message ?: "Format chunk OTA tidak valid")
+                return
+            }
+        } else {
+            // Port ESP32 R8 meneruskan payload karakteristik 1004 langsung ke
+            // cdi_r8_ota_write(received,...), tanpa header offset/CRC16 STM32.
+            chunk
         }
         val owner = gatt
         val char = otaDataChar
@@ -740,7 +775,9 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             FirmwareOtaState.READY -> {
                 otaAwaitingStatus = false
                 otaDataBuffer = null
-                _otaState.value = OtaState.Success("APP.bin terverifikasi; STM32 akan boot ke firmware baru")
+                _otaState.value = OtaState.Success(
+                    "APP.bin terverifikasi; ${otaPlatform.shortName} akan boot ke firmware baru"
+                )
             }
             FirmwareOtaState.ERROR -> Unit
         }
@@ -754,7 +791,9 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             }
             body == "ACK,OTA_READY_REBOOT" -> {
                 otaDataBuffer = null
-                _otaState.value = OtaState.Success("OTA R8 selesai; menunggu reboot STM32")
+                _otaState.value = OtaState.Success(
+                    "OTA R8 selesai; menunggu reboot ${otaPlatform.shortName}"
+                )
             }
             body == "ACK,OTA_ABORT" -> {
                 otaDataBuffer = null

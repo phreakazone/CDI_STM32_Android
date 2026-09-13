@@ -72,7 +72,7 @@ fun RealisticWeActBoard(
     shadowElevation = 6.dp,
     modifier = modifier
       .width(520.dp)
-      .height(175.dp)
+      .height(200.dp)
   ) {
     Box(modifier = Modifier.fillMaxSize()) {
       // Background PCB silkscreen & antenna copper area
@@ -208,96 +208,97 @@ fun RealisticWeActBoard(
         )
       }
 
-      // Silk Screen Text Overlays
-      Column(
+      // CENTER SILK LABELS (NRST, BOOT0, DEBUG, STM32WB55 - Middle band)
+      Row(
         modifier = Modifier
-          .fillMaxSize()
-          .padding(start = 48.dp, end = 68.dp, top = 2.dp, bottom = 2.dp),
-        verticalArrangement = Arrangement.SpaceBetween
+          .fillMaxWidth()
+          .align(Alignment.Center)
+          .padding(start = 54.dp, end = 74.dp),
+        verticalAlignment = Alignment.CenterVertically
       ) {
-        // TOP HEADER PINS (15 Pins)
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          topPins.forEachIndexed { index, pinName ->
-            val pinId = "H_TOP.${index + 1}"
-            val isActive = activePins.contains(pinName) || activePins.contains(pinId)
-            val isHighlighted = highlightedPin == pinName || highlightedPin == pinId
+        Text(
+          text = "WeAct\nStudio",
+          style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp, lineHeight = 10.sp),
+          color = Color(0xFF81C784),
+          fontFamily = FontFamily.Monospace,
+          fontWeight = FontWeight.Bold,
+          modifier = Modifier.width(44.dp)
+        )
 
-            WeActPadPin(
-              pinName = pinName,
-              pinIndex = index + 1,
-              isActive = isActive,
-              isHighlighted = isHighlighted,
-              pulseAlpha = if (isActive || isHighlighted) pulseAlpha else 1f,
-              onClick = { onPinClick?.invoke(pinId) }
-            )
-          }
+        Spacer(modifier = Modifier.width(18.dp))
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+          Text("NRST", fontSize = 6.5.sp, color = Color(0xFFECEFF1), fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+          Spacer(modifier = Modifier.height(20.dp))
+          Text("BOOT0", fontSize = 6.5.sp, color = Color(0xFFECEFF1), fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
         }
 
-        // MIDDLE SILK LABELS (NRST, BOOT0, DEBUG, STM32WB55)
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp),
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          Text(
-            text = "WeAct\nStudio",
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
-            color = Color(0xFF81C784),
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.width(44.dp)
+        Spacer(modifier = Modifier.width(18.dp))
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+          Text("DEBUG", fontSize = 6.5.sp, color = Color(0xFFFFD54F), fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+          Text("3V3\nDIO\nCLK\nG", fontSize = 5.5.sp, lineHeight = 8.sp, color = Color(0xFFB0BEC5), fontFamily = FontFamily.Monospace)
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+          Text("STM32WB55", fontSize = 8.sp, color = Color.White, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
+          Text("BLE 5.4 / 64MHz", fontSize = 6.sp, color = Color(0xFF90CAF9), fontFamily = FontFamily.Monospace)
+        }
+      }
+
+      // TOP HEADER PINS (15 Pins - Docked securely to TopStart)
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .align(Alignment.TopStart)
+          .padding(start = 48.dp, end = 68.dp, top = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top
+      ) {
+        topPins.forEachIndexed { index, pinName ->
+          val pinId = "H_TOP.${index + 1}"
+          val isActive = activePins.contains(pinName) || activePins.contains(pinId)
+          val isHighlighted = highlightedPin == pinName || highlightedPin == pinId
+
+          WeActPadPin(
+            pinName = pinName,
+            pinIndex = index + 1,
+            isActive = isActive,
+            isHighlighted = isHighlighted,
+            pulseAlpha = if (isActive || isHighlighted) pulseAlpha else 1f,
+            isTopPin = true,
+            onClick = { onPinClick?.invoke(pinId) }
           )
-
-          Spacer(modifier = Modifier.width(18.dp))
-
-          Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("NRST", fontSize = 7.sp, color = Color(0xFFECEFF1), fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-            Spacer(modifier = Modifier.height(28.dp))
-            Text("BOOT0", fontSize = 7.sp, color = Color(0xFFECEFF1), fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-          }
-
-          Spacer(modifier = Modifier.width(18.dp))
-
-          Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("DEBUG", fontSize = 7.sp, color = Color(0xFFFFD54F), fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-            Text("3V3\nDIO\nCLK\nG", fontSize = 6.sp, lineHeight = 9.sp, color = Color(0xFFB0BEC5), fontFamily = FontFamily.Monospace)
-          }
-
-          Spacer(modifier = Modifier.weight(1f))
-
-          Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("STM32WB55", fontSize = 8.sp, color = Color.White, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
-            Text("BLE 5.4 / 64MHz", fontSize = 6.sp, color = Color(0xFF90CAF9), fontFamily = FontFamily.Monospace)
-          }
         }
+      }
 
-        // BOTTOM HEADER PINS (20 Pins)
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          bottomPins.forEachIndexed { index, pinName ->
-            val pinId = "H_BOTTOM.${index + 1}"
-            val isActive = activePins.contains(pinName) || activePins.contains(pinId)
-            val isHighlighted = highlightedPin == pinName || highlightedPin == pinId
-            val isDanger = pinName == "VB" // VBAT 12V danger
+      // BOTTOM HEADER PINS (20 Pins - Docked securely to BottomStart)
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .align(Alignment.BottomStart)
+          .padding(start = 48.dp, end = 68.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Bottom
+      ) {
+        bottomPins.forEachIndexed { index, pinName ->
+          val pinId = "H_BOTTOM.${index + 1}"
+          val isActive = activePins.contains(pinName) || activePins.contains(pinId)
+          val isHighlighted = highlightedPin == pinName || highlightedPin == pinId
+          val isDanger = pinName == "VB" // VBAT 12V danger
 
-            WeActPadPin(
-              pinName = pinName,
-              pinIndex = index + 1,
-              isActive = isActive,
-              isHighlighted = isHighlighted,
-              isDanger = isDanger,
-              pulseAlpha = if (isActive || isHighlighted) pulseAlpha else 1f,
-              onClick = { onPinClick?.invoke(pinId) }
-            )
-          }
+          WeActPadPin(
+            pinName = pinName,
+            pinIndex = index + 1,
+            isActive = isActive,
+            isHighlighted = isHighlighted,
+            isDanger = isDanger,
+            pulseAlpha = if (isActive || isHighlighted) pulseAlpha else 1f,
+            isTopPin = false,
+            onClick = { onPinClick?.invoke(pinId) }
+          )
         }
       }
 
@@ -324,6 +325,7 @@ private fun WeActPadPin(
   isHighlighted: Boolean,
   isDanger: Boolean = false,
   pulseAlpha: Float = 1f,
+  isTopPin: Boolean = true,
   onClick: () -> Unit
 ) {
   val goldRing = Color(0xFFFFD54F)
@@ -340,39 +342,347 @@ private fun WeActPadPin(
       .clickable(onClick = onClick)
       .padding(horizontal = 0.5.dp)
   ) {
-    Text(
-      text = pinName,
-      fontSize = 7.sp,
-      fontWeight = if (isActive || isHighlighted || isDanger) FontWeight.Black else FontWeight.Bold,
-      fontFamily = FontFamily.Monospace,
-      color = when {
-        isDanger -> HighVoltageRed
-        isHighlighted -> ElectricCyan
-        isActive -> SafetyGreen
-        else -> Color(0xFFCFD8DC)
-      }
-    )
-
-    // Through-hole gold pad
-    Box(
-      contentAlignment = Alignment.Center,
-      modifier = Modifier
-        .size(13.dp)
-        .background(
-          if (isActive || isHighlighted) activeColor.copy(alpha = 0.25f * pulseAlpha) else Color.Transparent,
-          CircleShape
-        )
-        .border(
-          width = if (isActive || isHighlighted) 2.dp else 1.2.dp,
-          color = activeColor.copy(alpha = if (isActive || isHighlighted) pulseAlpha else 0.9f),
-          shape = CircleShape
-        )
-    ) {
-      // Inner drill hole
+    if (isTopPin) {
+      // 1. Through-hole gold pad (closest to top outer edge)
       Box(
+        contentAlignment = Alignment.Center,
         modifier = Modifier
-          .size(4.5.dp)
-          .background(Color(0xFF0A0F0D), CircleShape)
+          .size(13.dp)
+          .background(
+            if (isActive || isHighlighted) activeColor.copy(alpha = 0.25f * pulseAlpha) else Color.Transparent,
+            CircleShape
+          )
+          .border(
+            width = if (isActive || isHighlighted) 2.dp else 1.2.dp,
+            color = activeColor.copy(alpha = if (isActive || isHighlighted) pulseAlpha else 0.9f),
+            shape = CircleShape
+          )
+      ) {
+        Box(
+          modifier = Modifier
+            .size(4.5.dp)
+            .background(Color(0xFF0A0F0D), CircleShape)
+        )
+      }
+
+      Spacer(modifier = Modifier.height(2.dp))
+
+      // 2. Silkscreen Pin Name (facing inward towards center of board)
+      Text(
+        text = pinName,
+        fontSize = 7.sp,
+        lineHeight = 9.sp,
+        maxLines = 1,
+        fontWeight = if (isActive || isHighlighted || isDanger) FontWeight.Black else FontWeight.Bold,
+        fontFamily = FontFamily.Monospace,
+        color = when {
+          isDanger -> HighVoltageRed
+          isHighlighted -> ElectricCyan
+          isActive -> SafetyGreen
+          else -> Color(0xFFCFD8DC)
+        }
+      )
+    } else {
+      // 1. Silkscreen Pin Name (facing inward towards center of board)
+      Text(
+        text = pinName,
+        fontSize = 7.sp,
+        lineHeight = 9.sp,
+        maxLines = 1,
+        fontWeight = if (isActive || isHighlighted || isDanger) FontWeight.Black else FontWeight.Bold,
+        fontFamily = FontFamily.Monospace,
+        color = when {
+          isDanger -> HighVoltageRed
+          isHighlighted -> ElectricCyan
+          isActive -> SafetyGreen
+          else -> Color(0xFFCFD8DC)
+        }
+      )
+
+      Spacer(modifier = Modifier.height(2.dp))
+
+      // 2. Through-hole gold pad (closest to bottom outer edge)
+      Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+          .size(13.dp)
+          .background(
+            if (isActive || isHighlighted) activeColor.copy(alpha = 0.25f * pulseAlpha) else Color.Transparent,
+            CircleShape
+          )
+          .border(
+            width = if (isActive || isHighlighted) 2.dp else 1.2.dp,
+            color = activeColor.copy(alpha = if (isActive || isHighlighted) pulseAlpha else 0.9f),
+            shape = CircleShape
+          )
+      ) {
+        Box(
+          modifier = Modifier
+            .size(4.5.dp)
+            .background(Color(0xFF0A0F0D), CircleShape)
+        )
+      }
+    }
+  }
+}
+
+/**
+ * RealisticEsp32Board:
+ * Ultra-realistic rendering of the ESP32-WROOM-32 DevKit V1 board.
+ * Matches dimensions (520dp x 175dp) of RealisticWeActBoard for seamless visual switching.
+ * Includes:
+ * - Micro-USB / USB-C interface & CP2102/CH340 chip
+ * - Metal shielding can with ESP-WROOM-32 silkscreen
+ * - PCB Inverted-F meander antenna on the right
+ * - Tactile buttons for EN and BOOT (GPIO0)
+ * - 30-pin dual-row headers with authentic GPIO labeling
+ */
+@Composable
+fun RealisticEsp32Board(
+  modifier: Modifier = Modifier,
+  activePins: Set<String> = emptySet(),
+  highlightedPin: String? = null,
+  onPinClick: ((String) -> Unit)? = null
+) {
+  // Top Row (Left Header on DevKitC V4): 19 pins
+  val topPins = listOf("3V3", "EN", "VP", "VN", "34", "35", "32", "33", "25", "26", "27", "14", "12", "GND", "13", "D2", "D3", "CMD", "5V")
+  // Bottom Row (Right Header on DevKitC V4): 19 pins
+  val bottomPins = listOf("GND", "23", "22", "TX", "RX", "21", "GND", "19", "18", "5", "17", "16", "4", "0", "2", "15", "D1", "D0", "CLK")
+
+  val pulseAnim = rememberInfiniteTransition(label = "pulseEsp")
+  val pulseAlpha by pulseAnim.animateFloat(
+    initialValue = 0.4f,
+    targetValue = 1.0f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(900, easing = FastOutSlowInEasing),
+      repeatMode = RepeatMode.Reverse
+    ),
+    label = "glowEsp"
+  )
+
+  Surface(
+    shape = RoundedCornerShape(10.dp),
+    color = Color(0xFF0B1015), // ESP32 dark matte black PCB
+    border = CardDefaults.outlinedCardBorder().copy(
+      brush = Brush.linearGradient(listOf(SparkAmber.copy(alpha = 0.6f), Color(0xFF1E293B)))
+    ),
+    shadowElevation = 6.dp,
+    modifier = modifier
+      .width(580.dp)
+      .height(200.dp)
+  ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+      // Background PCB silkscreen & Metal RF Can
+      Canvas(modifier = Modifier.fillMaxSize()) {
+        val w = size.width
+        val h = size.height
+
+        // 1. Micro-USB Port on Left
+        drawRoundRect(
+          color = Color(0xFFB0BEC5),
+          topLeft = Offset(0f, h * 0.32f),
+          size = androidx.compose.ui.geometry.Size(36f, h * 0.36f),
+          cornerRadius = androidx.compose.ui.geometry.CornerRadius(5f, 5f)
+        )
+        drawRoundRect(
+          color = Color(0xFF263238),
+          topLeft = Offset(6f, h * 0.38f),
+          size = androidx.compose.ui.geometry.Size(24f, h * 0.24f),
+          cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f, 3f)
+        )
+
+        // 2. PCB Inverted-F Meander Antenna on Far Right
+        val antLeft = w - 60f
+        drawRect(
+          color = Color(0xFF1A1208), // Exposed dark substrate
+          topLeft = Offset(antLeft, 0f),
+          size = androidx.compose.ui.geometry.Size(60f, h)
+        )
+        // Copper track
+        val copperColor = Color(0xFFFFB74D)
+        val path = Path().apply {
+          moveTo(antLeft + 8f, h * 0.18f)
+          lineTo(antLeft + 22f, h * 0.18f)
+          lineTo(antLeft + 22f, h * 0.82f)
+          lineTo(antLeft + 34f, h * 0.82f)
+          lineTo(antLeft + 34f, h * 0.24f)
+          lineTo(antLeft + 46f, h * 0.24f)
+          lineTo(antLeft + 46f, h * 0.76f)
+        }
+        drawPath(path, copperColor, style = Stroke(width = 3.5f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+
+        // 3. Central Metal Shielding Can (ESP-WROOM-32)
+        val canLeft = w * 0.44f
+        val canTop = h * 0.27f
+        val canWidth = w * 0.34f
+        val canHeight = h * 0.46f
+
+        // Metal RF shield (Brushed aluminum)
+        drawRoundRect(
+          color = Color(0xFF37474F),
+          topLeft = Offset(canLeft, canTop),
+          size = androidx.compose.ui.geometry.Size(canWidth, canHeight),
+          cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f, 4f)
+        )
+        drawRoundRect(
+          color = Color(0xFF78909C),
+          topLeft = Offset(canLeft + 3f, canTop + 3f),
+          size = androidx.compose.ui.geometry.Size(canWidth - 6f, canHeight - 6f),
+          cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f, 3f)
+        )
+        drawRoundRect(
+          color = Color(0xFF263238),
+          topLeft = Offset(canLeft + 6f, canTop + 6f),
+          size = androidx.compose.ui.geometry.Size(canWidth - 12f, canHeight - 12f),
+          cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f, 2f)
+        )
+
+        // 4. Buttons (EN on top-left, BOOT on bottom-left)
+        val btnX = w * 0.22f
+        // EN Button (Top)
+        drawRoundRect(
+          color = Color(0xFFCFD8DC),
+          topLeft = Offset(btnX - 10f, h * 0.32f),
+          size = androidx.compose.ui.geometry.Size(20f, 18f),
+          cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f, 2f)
+        )
+        drawCircle(Color(0xFF37474F), radius = 5f, center = Offset(btnX, h * 0.32f + 9f))
+
+        // BOOT Button (Bottom)
+        drawRoundRect(
+          color = Color(0xFFCFD8DC),
+          topLeft = Offset(btnX - 10f, h * 0.54f),
+          size = androidx.compose.ui.geometry.Size(20f, 18f),
+          cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f, 2f)
+        )
+        drawCircle(Color(0xFF37474F), radius = 5f, center = Offset(btnX, h * 0.54f + 9f))
+
+        // 5. USB-to-UART Bridge Chip (CP2102)
+        val cpX = w * 0.33f
+        val cpY = h * 0.42f
+        drawRoundRect(
+          color = Color(0xFF1E293B),
+          topLeft = Offset(cpX, cpY),
+          size = androidx.compose.ui.geometry.Size(28f, 28f),
+          cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f, 2f)
+        )
+      }
+
+      // CENTER SILK LABELS (EN, BOOT, CP2102, ESP-WROOM-32 - strictly middle band)
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .align(Alignment.Center)
+          .padding(start = 50.dp, end = 70.dp),
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+          Text("EN", fontSize = 6.5.sp, color = Color(0xFFECEFF1), fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+          Spacer(modifier = Modifier.height(20.dp))
+          Text("BOOT", fontSize = 6.5.sp, color = Color(0xFFECEFF1), fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+        }
+
+        Spacer(modifier = Modifier.width(36.dp))
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+          Text("UART", fontSize = 6.5.sp, color = SparkAmber, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+          Text("CP2102", fontSize = 6.sp, color = Color(0xFF90A4AE), fontFamily = FontFamily.Monospace)
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+          Text("ESP-WROOM-32", fontSize = 8.sp, color = Color.White, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
+          Text("240MHz • BLE 4.2", fontSize = 6.sp, color = SparkAmber, fontFamily = FontFamily.Monospace)
+          Text("3.3V Logic (ADC1)", fontSize = 5.5.sp, color = Color(0xFF81C784), fontFamily = FontFamily.Monospace)
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+      }
+
+      // TOP HEADER PINS (15 Pins - Docked securely to TopStart)
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .align(Alignment.TopStart)
+          .padding(start = 44.dp, end = 64.dp, top = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top
+      ) {
+        topPins.forEachIndexed { index, pinName ->
+          val pinId = "LEFT.${index + 1}"
+          val isMatch = activePins.contains(pinName) ||
+              activePins.contains("GPIO$pinName") ||
+              activePins.contains(pinId) ||
+              (pinName == "VP" && (activePins.contains("36") || activePins.contains("GPIO36"))) ||
+              (pinName == "VN" && (activePins.contains("39") || activePins.contains("GPIO39")))
+          val isHigh = highlightedPin == pinName ||
+              highlightedPin == "GPIO$pinName" ||
+              highlightedPin == pinId ||
+              (pinName == "VP" && (highlightedPin == "36" || highlightedPin == "GPIO36"))
+          val isDanger = pinName in listOf("25", "26", "35", "32")
+
+          WeActPadPin(
+            pinName = pinName,
+            pinIndex = index + 1,
+            isActive = isMatch,
+            isHighlighted = isHigh,
+            isDanger = isDanger,
+            pulseAlpha = if (isMatch || isHigh) pulseAlpha else 1f,
+            isTopPin = true,
+            onClick = { onPinClick?.invoke(pinId) }
+          )
+        }
+      }
+
+      // BOTTOM HEADER PINS (15 Pins - Docked securely to BottomStart)
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .align(Alignment.BottomStart)
+          .padding(start = 44.dp, end = 64.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Bottom
+      ) {
+        bottomPins.forEachIndexed { index, pinName ->
+          val pinId = "RIGHT.${index + 1}"
+          val isMatch = activePins.contains(pinName) ||
+              activePins.contains("GPIO$pinName") ||
+              activePins.contains(pinId) ||
+              (pinName == "4" && (activePins.contains("GPIO4") || activePins.contains("PULSER"))) ||
+              (pinName == "16" && (activePins.contains("GPIO16") || activePins.contains("OEM_CTR"))) ||
+              (pinName == "17" && (activePins.contains("GPIO17") || activePins.contains("OEM_SIDE"))) ||
+              (pinName == "18" && (activePins.contains("GPIO18") || activePins.contains("CHARGER_A"))) ||
+              (pinName == "19" && (activePins.contains("GPIO19") || activePins.contains("CHARGER_B")))
+          val isHigh = highlightedPin == pinName ||
+              highlightedPin == "GPIO$pinName" ||
+              highlightedPin == pinId ||
+              (pinName == "4" && highlightedPin == "GPIO4")
+          val isDanger = pinName in listOf("VIN", "4", "16", "17")
+
+          WeActPadPin(
+            pinName = pinName,
+            pinIndex = index + 1,
+            isActive = isMatch,
+            isHighlighted = isHigh,
+            isDanger = isDanger,
+            pulseAlpha = if (isMatch || isHigh) pulseAlpha else 1f,
+            isTopPin = false,
+            onClick = { onPinClick?.invoke(pinId) }
+          )
+        }
+      }
+
+      // Antenna label on far right
+      Text(
+        text = "BLE\nANT",
+        style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, lineHeight = 10.sp),
+        color = Color(0xFFFFB74D),
+        fontWeight = FontWeight.Black,
+        fontFamily = FontFamily.Monospace,
+        modifier = Modifier
+          .align(Alignment.CenterEnd)
+          .padding(end = 4.dp)
       )
     }
   }
