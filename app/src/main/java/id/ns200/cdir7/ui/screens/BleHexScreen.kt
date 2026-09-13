@@ -755,17 +755,21 @@ fun BleHexScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Field Decoder Legend
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        LegendChip("0-2: Magic (15 CD 03)", ElectricCyan)
-                        LegendChip("3: 0 CORE / 1 DIAG", RacingLime)
-                        LegendChip("4-5: Seq ${telemetry.sequence}", MotecOrange)
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        LegendChip("CORE: RPM/TPS/ADV/BAT/HV", TechPurple)
-                        LegendChip("DIAG: Temp/Flags/Fault/TDC", ElectricCyan)
-                        LegendChip("18-19: CRC16 OK", RacingLime)
-                    }
+                @OptIn(ExperimentalLayoutApi::class)
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    LegendChip("0-2: Magic (15 CD 03)", ElectricCyan)
+                    LegendChip("3: Type (0:CORE / 1:DIAG)", RacingLime)
+                    LegendChip("4-5: Seq ${telemetry.sequence}", MotecOrange)
+                    LegendChip(
+                        if (rawPacket.getOrNull(3)?.toInt() == 1) "6-17 DIAG: Suhu/Flags/Fault/TDC"
+                        else "6-17 CORE: RPM/TPS/ADV/BAT/HV",
+                        TechPurple
+                    )
+                    LegendChip("18-19: CRC16 OK", RacingLime)
                 }
             }
         }
@@ -909,14 +913,27 @@ private fun GattSpecRow(label: String, value: String) {
 
 @Composable
 private fun LegendChip(text: String, color: Color) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .background(SurfacePanel, RoundedCornerShape(6.dp))
+            .border(1.dp, BorderSubtle, RoundedCornerShape(6.dp))
+            .padding(horizontal = 7.dp, vertical = 3.dp)
+    ) {
         Box(
             modifier = Modifier
                 .size(6.dp)
                 .clip(CircleShape)
                 .background(color)
         )
-        Spacer(modifier = Modifier.width(4.dp))
-        Text(text, fontSize = 9.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
+        Spacer(modifier = Modifier.width(5.dp))
+        Text(
+            text = text,
+            fontSize = 9.5.sp,
+            color = TextSecondary,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1
+        )
     }
 }
