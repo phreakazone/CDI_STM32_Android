@@ -15,7 +15,9 @@ import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-// Keep screenshot rendering on the latest Robolectric SDK available in CI.\n// This does not change the application compileSdk or targetSdk.\n@Config(qualifiers = RobolectricDeviceQualifiers.Pixel8, sdk = [35])
+// Keep screenshot rendering on the latest Robolectric SDK available in CI.
+// This does not change the application compileSdk or targetSdk.
+@Config(qualifiers = RobolectricDeviceQualifiers.Pixel8, sdk = [35])
 class GreetingScreenshotTest {
 
   @get:Rule val composeTestRule = createComposeRule()
