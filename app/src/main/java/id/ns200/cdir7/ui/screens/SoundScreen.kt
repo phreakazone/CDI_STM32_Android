@@ -44,6 +44,7 @@ fun SoundScreen(viewModel: CdiViewModel) {
     val telemetry by viewModel.telemetry.collectAsState()
     val isRevving by viewModel.isRevving.collectAsState()
     val demoThrottleSlider by viewModel.demoThrottleSlider.collectAsState()
+    val demoEngineRunning by viewModel.demoEngineRunning.collectAsState()
     val scrollState = rememberScrollState()
 
     var selectedCategoryFilter by remember { mutableStateOf("SEMUA") }
@@ -210,7 +211,9 @@ fun SoundScreen(viewModel: CdiViewModel) {
 
         // LIVE AUDIO ENGINE TEST BENCH WITH INTERACTIVE THROTTLE / RPM SLIDER
         val isBleMotorRunning = viewModel.bleClient.gattReady && telemetry.rpm > 100
-        val activeTestSlider = if (isBleMotorRunning) (telemetry.rpm / 12000f).coerceIn(0f, 1f) else demoThrottleSlider
+        var soundUserDragFraction by remember { mutableStateOf<Float?>(null) }
+        val soundActualFraction = (telemetry.rpm.toFloat() / 12000f).coerceIn(0f, 1f)
+        val activeTestSlider = soundUserDragFraction ?: soundActualFraction
 
         Card(
             modifier = Modifier
@@ -259,6 +262,7 @@ fun SoundScreen(viewModel: CdiViewModel) {
                                 isBleMotorRunning -> "LIVE MOTOR • ${telemetry.rpm} RPM"
                                 isRevving -> "BLIP GAS AKTIF!"
                                 demoThrottleSlider > 0.01f -> "HOLD ${(demoThrottleSlider * 100).toInt()}% • ${telemetry.rpm} RPM"
+                                !demoEngineRunning || telemetry.rpm <= 50 -> "MESIN MATI • 0 RPM"
                                 else -> "IDLE • ${telemetry.rpm} RPM"
                             },
                             fontSize = 10.sp,
@@ -267,10 +271,41 @@ fun SoundScreen(viewModel: CdiViewModel) {
                                 isBleMotorRunning -> RacingLime
                                 isRevving -> RaceRedline
                                 demoThrottleSlider > 0.01f -> MotecOrange
+                                !demoEngineRunning || telemetry.rpm <= 50 -> SensorAmber
                                 else -> ElectricCyan
                             },
                             fontFamily = FontFamily.Monospace
                         )
+                    }
+                }
+
+                if (!isBleMotorRunning && (!demoEngineRunning || telemetry.rpm <= 50)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(SurfacePanel)
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Mesin sedang mati (0 RPM)",
+                            fontSize = 10.sp,
+                            color = SensorAmber,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Button(
+                            onClick = { viewModel.simulateStartEngine() },
+                            colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 3.dp),
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, null, tint = CarbonDark, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("STARTER", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                        }
                     }
                 }
 
@@ -314,13 +349,17 @@ fun SoundScreen(viewModel: CdiViewModel) {
                     }
                 }
 
-                // Interactive RPM Throttle Slider (Holds RPM for Demo & Follows Live Motor in BLE)
+                // Interactive RPM Throttle Slider (Follows Live RPM & allows manual drag)
                 Slider(
                     value = activeTestSlider,
                     onValueChange = { newVal ->
                         if (!isBleMotorRunning) {
-                            viewModel.setDemoThrottle(newVal)
+                            soundUserDragFraction = newVal
+                            viewModel.setDemoRpmDirect(newVal * 12000f)
                         }
+                    },
+                    onValueChangeFinished = {
+                        soundUserDragFraction = null
                     },
                     valueRange = 0f..1f,
                     colors = SliderDefaults.colors(

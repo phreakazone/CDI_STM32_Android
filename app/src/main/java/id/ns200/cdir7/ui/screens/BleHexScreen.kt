@@ -131,13 +131,20 @@ fun BleHexScreen(
             colors = CardDefaults.cardColors(containerColor = CardBackground),
             shape = RoundedCornerShape(14.dp)
         ) {
-            Column(modifier = Modifier.padding(14.dp)) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Header Row: Status Indicator & Link Quality Badge
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
                         Box(
                             modifier = Modifier
                                 .size(10.dp)
@@ -145,71 +152,120 @@ fun BleHexScreen(
                                 .background(linkQuality.color)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (isConnected) {
-                                if (telemetryPacketCount < 2L) "BLE ONLINE • TELEMETRY MENUNGGU"
-                                else "BLE ONLINE • $packetRate Hz • ${linkQuality.label}"
-                            } else "BLE OFFLINE",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            color = linkQuality.color
-                        )
+                        Column {
+                            Text(
+                                text = if (isConnected) {
+                                    if (isSimulation) "MODE SIMULASI CDI R8"
+                                    else if (telemetryPacketCount < 2L) "BLE CONNECTED • STANDBY"
+                                    else "BLE CONNECTED • ${packetRate} Hz"
+                                } else "BLE OFFLINE / TERPUTUS",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                color = linkQuality.color,
+                                maxLines = 1
+                            )
+                            Text(
+                                text = connectionStatus,
+                                fontSize = 10.sp,
+                                color = TextSecondary,
+                                fontFamily = FontFamily.Monospace,
+                                maxLines = 1
+                            )
+                        }
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        // Demo / Simulation mode toggle button
-                        OutlinedButton(
-                            onClick = { viewModel.toggleSimulation() },
-                            shape = RoundedCornerShape(6.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = if (isSimulation) MotecOrange else TextSecondary
-                            )
-                        ) {
-                            Text(
-                                text = if (isSimulation) "SIMULASI ON" else "DEMO MODE",
-                                fontSize = 10.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        // Connect / Disconnect button
-                        Button(
-                            onClick = {
-                                if (!isConnected && !viewModel.hasBlePermissions() && onRequestPermissions != null) {
-                                    onRequestPermissions()
-                                } else {
-                                    viewModel.toggleConnect()
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isConnected) RaceRedline else RacingLime
-                            ),
-                            shape = RoundedCornerShape(6.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = when { isConnected -> "DISCONNECT"; isBusy -> "CANCEL"; else -> "CONNECT" },
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = CarbonDark,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = linkQuality.color.copy(alpha = 0.15f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, linkQuality.color.copy(alpha = 0.5f))
+                    ) {
+                        Text(
+                            text = if (isSimulation) "SIMULASI" else linkQuality.label,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            color = linkQuality.color,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = connectionStatus,
-                    fontSize = 11.sp,
-                    color = TextPrimary,
-                    fontFamily = FontFamily.Monospace
-                )
+                // Dedicated Action Buttons Row (Full width, balanced 50/50 weights - never squeezed!)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Demo / Simulation mode toggle button
+                    OutlinedButton(
+                        onClick = { viewModel.toggleSimulation() },
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = if (isSimulation) MotecOrange else TextSecondary
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(38.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isSimulation) Icons.Default.PlayCircle else Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = if (isSimulation) MotecOrange else TextSecondary
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (isSimulation) "SIMULASI: ON" else "SIMULASI: OFF",
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                    // Connect / Disconnect button
+                    Button(
+                        onClick = {
+                            if (!isConnected && !viewModel.hasBlePermissions() && onRequestPermissions != null) {
+                                onRequestPermissions()
+                            } else {
+                                viewModel.toggleConnect()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isConnected) RaceRedline else RacingLime
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(38.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isConnected) Icons.Default.BluetoothDisabled else Icons.Default.Bluetooth,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = CarbonDark
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = when {
+                                isConnected -> "PUTUS BLE"
+                                isBusy -> "BATALKAN"
+                                else -> "HUBUNGKAN"
+                            },
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CarbonDark,
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
 
                 // GATT Specs
                 Column(
@@ -217,15 +273,15 @@ fun BleHexScreen(
                         .fillMaxWidth()
                         .background(SurfacePanel, RoundedCornerShape(8.dp))
                         .padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     GattSpecRow("SERVICE UUID", "7a8f1000-6c9d-4e40-a45f-0b4b4e533230")
-                    GattSpecRow("TELEMETRY CHAR", "7a8f1001-... (${telemetryPacketCount} frame • ${packetRate} Hz • v3 20 Bytes)")
-                    GattSpecRow("COMMAND CHAR", "7a8f1002-... (Write + ACK queue: $pending)")
+                    GattSpecRow("TELEMETRY CHAR", "7a8f1001-... (${telemetryPacketCount} frame • ${packetRate} Hz • v3 20B)")
+                    GattSpecRow("COMMAND CHAR", "7a8f1002-... (Antrean ACK: $pending)")
                     GattSpecRow("RESPONSE CHAR", "7a8f1003-... (Notify ASCII Stream)")
                     GattSpecRow(
                         "CRC16 INTEGRITY",
-                        if (telemetryPacketCount == 0L) "BELUM ADA FRAME UNTUK DIPERIKSA"
+                        if (telemetryPacketCount == 0L) "BELUM ADA FRAME"
                         else "%.1f%% VALID (%s)".format(crcPercent, linkQuality.label)
                     )
                     GattSpecRow("TELEMETRY RX", telemetryRxMessage)
@@ -824,11 +880,30 @@ fun BleHexScreen(
 @Composable
 private fun GattSpecRow(label: String, value: String) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 1.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top
     ) {
-        Text(label, fontSize = 10.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
-        Text(value, fontSize = 10.sp, color = TextPrimary, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            color = TextMuted,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(0.36f)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = value,
+            fontSize = 10.sp,
+            color = TextPrimary,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.weight(0.64f),
+            textAlign = androidx.compose.ui.text.style.TextAlign.End
+        )
     }
 }
 

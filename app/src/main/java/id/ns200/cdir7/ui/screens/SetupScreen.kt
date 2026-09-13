@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -450,6 +451,8 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: M
                 FirmwareRunMode.OEM_LEARN -> {
                     val centerLabel = if (selectedPlatform == McuPlatform.STM32WB55) "PB3" else "GPIO16"
                     val sideLabel = if (selectedPlatform == McuPlatform.STM32WB55) "PB4" else "GPIO17"
+                    val platformName = selectedPlatform.displayName
+                    val flashSaved by viewModel.flashSaved.collectAsState()
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -466,18 +469,35 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: M
                         )
                         Text(
                             if (selectedPlatform == McuPlatform.STM32WB55) {
-                                "STM32 membaca sinyal pengapian CDI OEM secara pasif melalui PB3 (Center) & PB4 (Side). Mesin hidup menggunakan CDI OEM."
+                                "STM32 membaca sinyal pengapian CDI OEM secara pasif melalui PB3 (Center) & PB4 (Side). Mesin hidup menggunakan CDI OEM bawaan pabrik."
                             } else {
-                                "ESP32 membaca sinyal pengapian CDI OEM secara pasif melalui GPIO16 (Center) & GPIO17 (Side) via optocoupler PC817. Mesin hidup menggunakan CDI OEM."
+                                "ESP32 membaca sinyal pengapian CDI OEM secara pasif melalui GPIO16 (Center) & GPIO17 (Side) via optocoupler PC817. Mesin hidup menggunakan CDI OEM bawaan pabrik."
                             },
                             color = TextSecondary,
                             fontSize = 9.sp,
                             lineHeight = 13.sp,
                             fontFamily = FontFamily.Monospace
                         )
+
+                        // 5 Langkah Praktis OEM Learn
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(CarbonDark, RoundedCornerShape(4.dp))
+                                .padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text("URUTAN KERJA OEM LEARN (PALING MUDAH & CEPAT):", color = SensorAmber, fontSize = 8.5.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                            Text("1. Colok CDI OEM asli ke motor. Pasang sadapan PC817 ke Koil Center ($centerLabel) & Side ($sideLabel).", color = TextPrimary, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
+                            Text("2. Hidupkan motor pakai CDI OEM. Klik [MULAI LEARN], geber gas perlahan s.d 8.000 RPM agar data kurva terekam.", color = TextPrimary, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
+                            Text("3. Klik [SIMPAN & STOP] untuk mengunci kurva ke flash $platformName. Matikan mesin motor.", color = TextPrimary, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
+                            Text("4. Lepaskan modul PC817 dari harness. Cabut soket motor dari CDI OEM lalu colokkan ke CDI DIY $platformName.", color = TextPrimary, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
+                            Text("5. Klik [LEPAS PC817 & MASUK FIRST START] di bawah untuk beralih ke CDI DIY mandiri & siap jalan!", color = RacingLime, fontSize = 8.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                        }
+
                         CompactStatusRow("PULSA OEM CENTER ($centerLabel)", "$oemCenterPulses pulsa", oemCenterPulses > 0)
                         CompactStatusRow("SAMPEL OEM SIDE ($sideLabel)", "$oemSideSamples sampel", oemSideSamples > 0)
-                        CompactStatusRow("STATUS BELAJAR", if (isOemLearning) "SEDANG MEREKAM..." else "SIAP", isOemLearning)
+                        CompactStatusRow("STATUS BELAJAR", if (isOemLearning) "SEDANG MEREKAM DARI CDI OEM..." else if (flashSaved) "TERSIMPAN KE FLASH $platformName" else "SIAP", isOemLearning || flashSaved)
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -505,6 +525,21 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: M
                             }
                         }
 
+                        // Tombol Transisi Langsung setelah simpan data OEM
+                        if (flashSaved || oemCenterPulses >= 5) {
+                            Button(
+                                enabled = !pending,
+                                onClick = viewModel::confirmOemUnplugged,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Icon(Icons.Default.CheckCircle, null, tint = CarbonDark, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("LEPAS PC817 & MASUK FIRST START AMAN", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
                         // PANDUAN VISUAL WIRING & RANGKAIAN PENGAMAN SUNTIK KOIL & DAYA
                         Spacer(modifier = Modifier.height(4.dp))
                         OemLearnSafetyWiringGuide(selectedPlatform = selectedPlatform)
@@ -527,7 +562,7 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: M
                         )
                         Text(
                             if (isOemUnpluggedConfirmed) {
-                                "Soket CDI OEM terkonfirmasi dilepas. CDI STM32 bekerja secara mandiri mengontrol pengapian."
+                                "Soket CDI OEM terkonfirmasi dilepas. CDI ${selectedPlatform.displayName} bekerja secara mandiri mengontrol pengapian."
                             } else {
                                 "PERHATIAN KESELAMATAN: Mode DIY hanya aktif setelah CDI OEM dicabut dari harness (OEM_UNPLUGGED). Tidak ada takeover otomatis."
                             },
@@ -821,9 +856,11 @@ private fun TpsStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: Mc
 private fun FirstStartStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: McuPlatform) {
     val pending by viewModel.setupCommandPending.collectAsState()
     val firstStartHv by viewModel.firstStartHv.collectAsState()
+    val demoEngineRunning by viewModel.demoEngineRunning.collectAsState()
+    val isBleConnected = viewModel.bleClient.gattReady
     val ranLongEnough = t.firstStartSeconds >= 3
     val stoppedAndSafe = t.rpm == 0 && t.hvCenter < 30 && t.hvSide < 30
-    val canSaveReady = ranLongEnough && stoppedAndSafe && !pending
+    val canSaveReady = (ranLongEnough && stoppedAndSafe && !pending) || (!isBleConnected && ranLongEnough && t.rpm == 0)
 
     StageBody {
         StageCard(
@@ -832,9 +869,9 @@ private fun FirstStartStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatf
         ) {
             CompactStatusRow("TARGET TEGANGAN", "$firstStartHv V", firstStartHv <= 220)
             CompactStatusRow("DURASI STABIL", "${t.firstStartSeconds} / 3 detik", ranLongEnough)
-            CompactStatusRow("STATUS OTOMATIS R8", if (ranLongEnough) "TERPENUHI (≥3s) • OTOMATIS READY SAAT MATI" else "MENUNGGU STABIL (${t.firstStartSeconds}/3s)", ranLongEnough)
-            CompactStatusRow("RPM SEKARANG", "${t.rpm}", t.rpm == 0)
-            CompactStatusRow("HV CENTER / SIDE", "${t.hvCenter} / ${t.hvSide} V", stoppedAndSafe)
+            CompactStatusRow("STATUS OTOMATIS R8", if (ranLongEnough) "TERPENUHI (≥3s) • SIAP READY SAAT MESIN MATI" else "MENUNGGU STABIL (${t.firstStartSeconds}/3s)", ranLongEnough)
+            CompactStatusRow("RPM MESIN", "${t.rpm} RPM", if (ranLongEnough) t.rpm == 0 else t.rpm in 1000..3500)
+            CompactStatusRow("HV CENTER / SIDE", "${t.hvCenter} / ${t.hvSide} V", stoppedAndSafe || (!demoEngineRunning && t.hvCenter < 30))
 
             McuPinGuidance(
                 selectedPlatform = selectedPlatform,
@@ -849,31 +886,162 @@ private fun FirstStartStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatf
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
                 shape = RoundedCornerShape(8.dp)
-            ) { PendingButtonText(pending, "SIAPKAN FIRST START") }
+            ) { PendingButtonText(pending, "AKTIFKAN MODE FIRST START (220V)") }
+        }
+
+        // KONTROL SIMULASI KHUSUS DEMO (JIKA TIDAK TERHUBUNG KE MOTOR ASLI)
+        if (!isBleConnected) {
+            StageCard(
+                title = "SIMULATOR MESIN (ALUR KONDISI NYATA)",
+                subtitle = "Gunakan tombol ini untuk mensimulasikan proses First Start nyata: hidupkan mesin hingga idle stabil 3 detik, lalu matikan mesin (kunci kontak OFF) sebelum konfirmasi status READY."
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        enabled = !demoEngineRunning,
+                        onClick = viewModel::simulateStartEngine,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.PlayArrow, null, tint = CarbonDark, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("1. HIDUPKAN MESIN", color = CarbonDark, fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        enabled = demoEngineRunning || t.rpm > 0,
+                        onClick = viewModel::simulateStopEngine,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = RaceRedline),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.Stop, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("2. MATIKAN (RPM 0)", color = Color.White, fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                val statusText = when {
+                    demoEngineRunning && !ranLongEnough -> "Mesin hidup idle ~1.420 RPM. Menunggu durasi stabil 3 detik... (${t.firstStartSeconds}/3s)"
+                    demoEngineRunning && ranLongEnough -> "Sempurna! Mesin telah hidup stabil >= 3 detik. Sekarang klik tombol [2. MATIKAN (RPM 0)]."
+                    !demoEngineRunning && ranLongEnough && t.rpm == 0 -> "Mesin sudah mati (0 RPM) & HV aman ter-discharge. Syarat terpenuhi! Silakan pilih SIMPAN READY di bawah."
+                    else -> "Mesin dalam kondisi mati (0 RPM). Klik [1. HIDUPKAN MESIN] untuk memulai pengetesan."
+                }
+
+                Text(
+                    text = statusText,
+                    color = if (ranLongEnough && t.rpm == 0) RacingLime else SensorAmber,
+                    fontSize = 9.sp,
+                    lineHeight = 12.5.sp,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(CarbonDark, RoundedCornerShape(4.dp))
+                        .padding(8.dp)
+                )
+            }
+        }
+
+        // PENJELASAN KONDISI NYATA: READY CENTER SAJA VS TIGA BUSI
+        StageCard(
+            title = "PENJELASAN: APA ITU 'READY CENTER SAJA'?",
+            subtitle = "Pulsar 200NS memiliki 3 busi (DTS-i: 1 Center + 2 Side). Pahami perbedaan mode pengapian ini di dunia nyata:"
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(SurfacePanel, RoundedCornerShape(6.dp))
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "• MENGAPA FIRST START HANYA CENTER?",
+                    color = MotecOrange,
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+                Text(
+                    text = "Saat CDI rakitan baru pertama dipasang di motor, pengapian hanya memakai busi tengah (Center) pada tegangan aman 220V dan sudut advance ≤10°. Ini menjamin mesin hidup halus tanpa risiko knocking atau benturan timing antara busi tengah dan samping.",
+                    color = TextPrimary,
+                    fontSize = 8.5.sp,
+                    lineHeight = 11.5.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+
+                Text(
+                    text = "• APA ITU 'READY CENTER SAJA'?",
+                    color = ElectricCyan,
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+                Text(
+                    text = "CDI berstatus aktif siap jalan, namun HANYA memicu koil Center (J1.12). Koil Side (J1.6) dinonaktifkan.\n" +
+                            "- Dipakai untuk uji jalan awal (road test) memastikan mesin tidak brebet.\n" +
+                            "- Mode proteksi darurat jika ada masalah pada SCR2 koil samping.\n" +
+                            "- Motor tetap hidup normal bertenaga seperti motor 1 busi pada umumnya.",
+                    color = TextPrimary,
+                    fontSize = 8.5.sp,
+                    lineHeight = 11.5.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+
+                Text(
+                    text = "• APA ITU 'READY TIGA BUSI (TRIPLE SPARK)'?",
+                    color = RacingLime,
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+                Text(
+                    text = "CDI mengaktifkan seluruh 3 busi (Center + kedua Side) dengan mapping timing DTS-i optimal Pulsar 200NS untuk efisiensi bensin dan akselerasi puncak di RPM menengah-tinggi.",
+                    color = TextPrimary,
+                    fontSize = 8.5.sp,
+                    lineHeight = 11.5.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
         }
 
         StageCard(
-            title = "STATUS READY R8 (OTOMATIS / MANUAL)",
+            title = "KONFIRMASI STATUS READY",
             subtitle = if (!ranLongEnough) {
-                "Hidupkan mesin pada idle selama 3 detik. Firmware R8 akan otomatis mengunci kalibrasi aman."
-            } else if (!stoppedAndSafe) {
-                "Mesin telah stabil 3 detik! Matikan mesin (RPM 0 & HV <30 V) untuk transisi otomatis ke READY."
+                "Hidupkan mesin pada idle selama 3 detik. Firmware R8 akan merekam kestabilan pengapian."
+            } else if (t.rpm > 0) {
+                "Mesin telah stabil 3 detik! Matikan mesin (RPM 0 & HV <30V) untuk mengunci status READY."
             } else {
-                "Syarat terpenuhi. Sistem otomatis beralih ke READY (atau Anda dapat menekan simpan manual di bawah)."
+                "Syarat terpenuhi. Pilih mode READY yang diinginkan di bawah untuk menyimpan ke flash:"
             }
         ) {
             Button(
                 enabled = canSaveReady,
                 onClick = viewModel::confirmReadyCenterOnly,
                 modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("SIMPAN READY • CENTER SAJA (MODE UJI ROAD TEST)", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
+
+            Button(
+                enabled = canSaveReady,
+                onClick = { viewModel.confirmReadyTripleSpark(0) },
+                modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
                 shape = RoundedCornerShape(8.dp)
-            ) { Text("SIMPAN READY • CENTER SAJA", color = CarbonDark, fontWeight = FontWeight.Bold) }
+            ) {
+                Text("SIMPAN READY • TIGA BUSI (TRIPLE SPARK DTS-I)", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
+
             Text(
-                "Di Firmware R8: Setelah stabil 3 detik, saat mesin berhenti atau boot berikutnya CDI otomatis berstatus READY.",
+                "Di Firmware R8: Setelah stabil 3 detik dan mesin dimatikan, konfigurasi READY dikunci permanen ke flash internal ${selectedPlatform.displayName}.",
                 color = TextMuted,
-                fontSize = 9.sp,
-                lineHeight = 12.sp,
+                fontSize = 8.5.sp,
+                lineHeight = 11.5.sp,
                 fontFamily = FontFamily.Monospace
             )
         }
@@ -899,6 +1067,20 @@ private fun ReadyStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: 
                 stmPin = "Center: PA1 (H_BOTTOM.10) | Side: PA2 (H_BOTTOM.11)",
                 espPin = "Center: GPIO25 (Kiri.9 Pin 9) | Side: GPIO26 (Kiri.10 Pin 10)"
             )
+
+            Button(
+                onClick = {
+                    viewModel.simulateStartEngine()
+                    viewModel.setTab(ScreenTab.TACHO)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Icon(Icons.Default.Speed, null, tint = CarbonDark)
+                Spacer(Modifier.width(7.dp))
+                Text("BUKA DASHBOARD TACHO (MESIN HIDUP)", color = CarbonDark, fontWeight = FontWeight.Bold)
+            }
 
             Button(
                 onClick = { viewModel.setTab(ScreenTab.MAPS) },

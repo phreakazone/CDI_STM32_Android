@@ -60,6 +60,47 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     private val _isSimulationMode = MutableStateFlow(false)
     val isSimulationMode: StateFlow<Boolean> = _isSimulationMode.asStateFlow()
 
+    private val _demoEngineRunning = MutableStateFlow(false)
+    val demoEngineRunning: StateFlow<Boolean> = _demoEngineRunning.asStateFlow()
+
+    fun simulateStartEngine() {
+        _demoEngineRunning.value = true
+        _isRevving.value = false
+        _demoThrottleSlider.value = 0f
+        simTps = 0.02f
+        simRpm = 1420f
+        appendLog("Demo: Starter ditekan -> Mesin hidup idle ~1.420 RPM")
+        Toast.makeText(context, "Starter ON: Mesin hidup stasioner ~1.420 RPM", Toast.LENGTH_SHORT).show()
+    }
+
+    fun simulateStopEngine() {
+        _demoEngineRunning.value = false
+        _isRevving.value = false
+        _demoThrottleSlider.value = 0f
+        simRpm = 0f
+        simTps = 0f
+        engineSound.stop()
+        val currentT = _telemetry.value
+        _telemetry.value = currentT.copy(
+            rpm = 0,
+            tps = 0,
+            hvCenter = 0,
+            hvSide = 0,
+            outputFlags = 0,
+            limiter = 0
+        )
+        appendLog("Demo: Kunci kontak OFF / Mesin dimatikan -> RPM 0, Kapasitor HV discharge aman ke 0V")
+        Toast.makeText(context, "Engine OFF: Mesin mati (0 RPM), HV 0V", Toast.LENGTH_SHORT).show()
+    }
+
+    fun toggleEngineStartStop() {
+        if (_demoEngineRunning.value) {
+            simulateStopEngine()
+        } else {
+            simulateStartEngine()
+        }
+    }
+
     val discoveredBleDevices: StateFlow<List<DiscoveredBleDevice>> = bleClient.discoveredDevices
     val isBleScanning: StateFlow<Boolean> = bleClient.isScanning
     val isBleBusy: StateFlow<Boolean> = bleClient.isBusy
@@ -499,11 +540,34 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             if (bleClient.gattReady || bleClient.isBusy.value) bleClient.disconnect()
             _connectionStatus.value = "SIMULASI AKTIF • Telemetry 20Hz (MoTeC Mode)"
             _isConnected.value = true
-            appendLog("Demo simulation mode activated.")
+            // Default simulasi: Mesin hidup stasioner idle ~1.420 RPM layaknya motor hidup normal
+            _demoEngineRunning.value = true
+            _isRevving.value = false
+            _demoThrottleSlider.value = 0f
+            simRpm = 1420f
+            simTps = 0.02f
+            appendLog("Demo simulation mode activated (Mesin: Hidup Idle ~1.420 RPM).")
+            Toast.makeText(context, "Mode Simulasi Aktif: Mesin Hidup Idle ~1.420 RPM", Toast.LENGTH_SHORT).show()
         } else {
+            _demoEngineRunning.value = false
+            _isRevving.value = false
+            _demoThrottleSlider.value = 0f
+            simRpm = 0f
+            simTps = 0f
+            engineSound.stop()
+            val currentT = _telemetry.value
+            _telemetry.value = currentT.copy(
+                rpm = 0,
+                tps = 0,
+                hvCenter = 0,
+                hvSide = 0,
+                outputFlags = 0,
+                limiter = 0
+            )
             _connectionStatus.value = "SIMULASI NONAKTIF • Menunggu Hardware CDI"
             _isConnected.value = false
             appendLog("Demo simulation mode stopped.")
+            Toast.makeText(context, "Mode Simulasi Nonaktif", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -520,6 +584,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             _isConnected.value = true
             _connectionStatus.value = "SIMULASI AKTIF • Throttle Blip"
         }
+        // Pastikan mesin menyala saat tuas gas diputar
+        _demoEngineRunning.value = true
+
         blipJob?.cancel()
         blipJob = viewModelScope.launch(Dispatchers.Default) {
             _isRevving.value = true
@@ -535,7 +602,6 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 val ratio = i.toFloat() / attackTicks
                 val tpsVal = 0.85f * ratio
                 simTps = tpsVal
-                _demoThrottleSlider.value = tpsVal
                 simRpm = startRpm + (peakBlipRpm - startRpm) * (ratio * ratio)
                 delay(24)
             }
@@ -543,15 +609,14 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             // Fase 2: Puncak raungan gas sejenak (Peak hold: ~90ms)
             delay(90)
 
-            // Fase 3: Tuas gas dilepas kembali ke nol
-            simTps = 0f
-            _demoThrottleSlider.value = 0f
+            // Fase 3: Tuas gas dilepas kembali ke posisi idle (jangan sentuh slider manual user)
+            simTps = 0.02f
             _isRevving.value = false
 
             // Fase 4: Deselerasi RPM meluruh bertahap sesuai inersia kruk as (Decay: ~360ms)
             val decayTicks = 12
             val currentPeak = simRpm
-            val idleTarget = if (_isSimulationMode.value) 1420f else 0f
+            val idleTarget = if (_demoEngineRunning.value) 1420f else 0f
             for (i in 1..decayTicks) {
                 val progress = i.toFloat() / decayTicks
                 val factor = 1.0f - (1.0f - progress).let { it * it }
@@ -559,7 +624,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 delay(30)
             }
             simRpm = idleTarget
-            appendLog("BLIP selesai: Tuas gas kembali idle.")
+            appendLog("BLIP selesai: RPM kembali stabil ke idle (~${idleTarget.toInt()} RPM).")
         }
     }
 
@@ -567,6 +632,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (pressed) {
             blipJob?.cancel()
             _isRevving.value = true
+            // Hidupkan mesin jika sedang mati
+            _demoEngineRunning.value = true
             if (bleClient.gattReady) {
                 appendLog("Hold To Rev hanya audio/simulasi; pengapian nyata tidak diperintah")
             } else if (!_isConnected.value) {
@@ -578,9 +645,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         } else {
             _isRevving.value = false
             if (_demoThrottleSlider.value <= 0.01f) {
-                simTps = 0f
+                simTps = if (_demoEngineRunning.value) 0.02f else 0f
             }
-            appendLog("Hold To Rev dilepas")
+            appendLog("Hold To Rev dilepas -> RPM meluruh ke idle")
         }
     }
 
@@ -588,6 +655,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         val v = value.coerceIn(0f, 1f)
         _demoThrottleSlider.value = v
         if (v > 0.01f) {
+            _demoEngineRunning.value = true
             if (!bleClient.gattReady && !_isSimulationMode.value) {
                 _isSimulationMode.value = true
                 _isConnected.value = true
@@ -597,33 +665,39 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     }
 
     fun setDemoRpmDirect(targetRpm: Float) {
+        _demoEngineRunning.value = true
         val maxTarget = _softRevLimiterRpm.value.toFloat().coerceAtLeast(10000f)
         val fraction = ((targetRpm - 1420f) / (maxTarget - 1420f)).coerceIn(0f, 1f)
         setDemoThrottle(fraction)
     }
 
     fun resetDemoThrottle() {
+        _isRevving.value = false
         _demoThrottleSlider.value = 0f
-        simTps = 0f
-        if (_isSimulationMode.value) {
-            simRpm = 1420f
-        }
+        _demoEngineRunning.value = true
+        simTps = 0.02f
+        simRpm = 1420f
+        appendLog("Throttle di-reset ke IDLE (1.420 RPM)")
     }
 
     fun resetVirtualEngine() {
         _isRevving.value = false
         _demoThrottleSlider.value = 0f
-        simTps = 0f
-        simRpm = if (_isSimulationMode.value) 1420f else 0f
+        _demoEngineRunning.value = true
+        simTps = 0.02f
+        simRpm = 1420f
         engineSound.stop()
         val currentT = _telemetry.value
         _telemetry.value = currentT.copy(
-            rpm = simRpm.toInt(),
-            tps = 0,
+            rpm = 1420,
+            tps = 20,
+            hvCenter = if (_isProVoltageConfigured.value) 345 else 285,
+            hvSide = if (_isProVoltageConfigured.value) 345 else 285,
+            outputFlags = 0x03,
             limiter = 0
         )
-        appendLog("Virtual Engine di-reset ke ${simRpm.toInt()} RPM (Idle/Nol).")
-        Toast.makeText(context, "Engine Reset: RPM & Audio kembali normal", Toast.LENGTH_SHORT).show()
+        appendLog("Virtual Engine di-reset: Mesin hidup idle ~1.420 RPM.")
+        Toast.makeText(context, "Engine Reset: Mesin hidup idle ~1.420 RPM", Toast.LENGTH_SHORT).show()
     }
 
     fun updateCustomAdvancePoint(index: Int, newAdvance: Float) {
@@ -898,11 +972,11 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun advanceSetupStage(targetStageCode: Int) {
         val target = SetupStage.entries.find { it.code == targetStageCode } ?: return
-        if (!_isSimulationMode.value) {
+        if (bleClient.gattReady && !_isSimulationMode.value) {
             appendLog("Tahap MCU hanya berubah setelah perintah setup terkait mendapat ACK; target: ${target.label}")
             return
         }
-        appendLog("Simulasi: tahap lokal berubah ke ${target.label}")
+        appendLog("Demo: tahap lokal berubah ke ${target.label}")
         _quickSetupPage.value = target.code
         _quickSetupUnlockedStage.value = maxOf(_quickSetupUnlockedStage.value, target.code)
 
@@ -1251,54 +1325,70 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     fun confirmReadyCenterOnly() {
         if (!requireMcuOrDemo("READY CENTER")) return
         val t = _telemetry.value
-        if (t.hvCenter >= 30 || t.hvSide >= 30) {
-            Toast.makeText(context, "PERINGATAN: Pastikan HV < 30V sebelum simpan!", Toast.LENGTH_LONG).show()
-            return
-        }
         if (bleClient.gattReady) {
+            if (t.hvCenter >= 30 || t.hvSide >= 30) {
+                Toast.makeText(context, "PERINGATAN: Pastikan HV < 30V sebelum simpan!", Toast.LENGTH_LONG).show()
+                return
+            }
             markSetupCommandPending()
             bleClient.send("SETUP,READY,CENTER")
             appendLog("BLE Send: SETUP,READY,CENTER (Mode Siap Jalan - Koil CENTER)")
         } else {
-            appendLog("Setup Selesai: READY - CENTER Saja. Disimpan Permanen di Flash")
+            if (t.rpm > 0) {
+                Toast.makeText(context, "Matikan mesin terlebih dahulu (RPM 0)!", Toast.LENGTH_SHORT).show()
+                return
+            }
+            _demoEngineRunning.value = true
+            simRpm = 1420f
+            simTps = 0.02f
+            appendLog("Setup Selesai: READY - CENTER Saja. Disimpan Permanen di Flash. Mesin menyala idle ~1.420 RPM siap test ride!")
             advanceSetupStage(SetupStage.READY.code)
         }
-        Toast.makeText(context, if (bleClient.gattReady) "READY CENTER masuk antrean; tunggu ACK" else "READY CENTER aktif di Demo", Toast.LENGTH_LONG).show()
+        Toast.makeText(context, if (bleClient.gattReady) "READY CENTER masuk antrean; tunggu ACK" else "READY CENTER aktif di Demo (Mesin Idle 1.420 RPM)", Toast.LENGTH_LONG).show()
     }
 
     fun confirmReadyTripleSpark(sideOffsetCdeg: Int = 0) {
         if (!requireMcuOrDemo("READY tiga busi")) return
         val t = _telemetry.value
-        if (t.hvCenter >= 30 || t.hvSide >= 30) {
-            Toast.makeText(context, "PERINGATAN: Pastikan HV < 30V sebelum simpan!", Toast.LENGTH_LONG).show()
-            return
-        }
         if (bleClient.gattReady) {
+            if (t.hvCenter >= 30 || t.hvSide >= 30) {
+                Toast.makeText(context, "PERINGATAN: Pastikan HV < 30V sebelum simpan!", Toast.LENGTH_LONG).show()
+                return
+            }
             markSetupCommandPending()
             bleClient.send("SETUP,READY,THREE,$sideOffsetCdeg")
             appendLog("BLE Send: SETUP,READY,THREE,$sideOffsetCdeg (Mode Triple Spark Terkalibrasi)")
         } else {
-            appendLog("Setup Selesai: READY - 3 Busi (Triple Spark). Offset SIDE: ${sideOffsetCdeg/100f}°")
+            if (t.rpm > 0) {
+                Toast.makeText(context, "Matikan mesin terlebih dahulu (RPM 0)!", Toast.LENGTH_SHORT).show()
+                return
+            }
+            _demoEngineRunning.value = true
+            simRpm = 1420f
+            simTps = 0.02f
+            appendLog("Setup Selesai: READY - 3 Busi (Triple Spark DTS-i). Offset SIDE: ${sideOffsetCdeg/100f}°. Mesin menyala idle ~1.420 RPM siap test ride!")
             advanceSetupStage(SetupStage.READY.code)
         }
-        Toast.makeText(context, if (bleClient.gattReady) "READY tiga busi masuk antrean; tunggu ACK" else "READY tiga busi aktif di Demo", Toast.LENGTH_LONG).show()
+        Toast.makeText(context, if (bleClient.gattReady) "READY tiga busi masuk antrean; tunggu ACK" else "READY tiga busi aktif di Demo (Mesin Idle 1.420 RPM)", Toast.LENGTH_LONG).show()
     }
 
     // --- R8 Mode & Flow Controls ---
     fun setFirmwareMode(mode: FirmwareRunMode) {
         if (!requireMcuOrDemo("ganti mode")) return
+        val (cPin, sPin) = if (selectedPlatform.value == McuPlatform.STM32WB55) Pair("PB3", "PB4") else Pair("GPIO16", "GPIO17")
+        val mcuName = selectedPlatform.value.displayName
         when (mode) {
             FirmwareRunMode.OEM_LEARN -> {
                 if (bleClient.gattReady) {
                     markSetupCommandPending()
                     bleClient.send("MODE,OEM_LEARN")
                     bleClient.send("GET,MODE")
-                    appendLog("BLE Send: MODE,OEM_LEARN")
+                    appendLog("BLE Send: MODE,OEM_LEARN ($cPin/$sPin)")
                 } else {
                     _firmwareMode.value = mode
-                    appendLog("Mode: OEM_LEARN aktif di Demo")
+                    appendLog("Mode: OEM_LEARN aktif di Demo ($cPin/$sPin pada $mcuName)")
                 }
-                Toast.makeText(context, "Mode OEM LEARN Aktif (baca CDI OEM via PB3/PB4)", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Mode OEM LEARN Aktif (baca CDI OEM via $cPin/$sPin pada $mcuName)", Toast.LENGTH_SHORT).show()
             }
             FirmwareRunMode.MANUAL -> {
                 if (bleClient.gattReady) {
@@ -1308,7 +1398,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     appendLog("BLE Send: MODE,MANUAL")
                 } else {
                     _firmwareMode.value = mode
-                    appendLog("Mode: MANUAL aktif di Demo")
+                    appendLog("Mode: MANUAL aktif di Demo ($mcuName)")
                 }
                 Toast.makeText(context, "Mode MANUAL Aktif (Strobo/TDC darurat)", Toast.LENGTH_SHORT).show()
             }
@@ -1324,7 +1414,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     appendLog("BLE Send: MODE,DIY,OEM_UNPLUGGED")
                 } else {
                     _firmwareMode.value = mode
-                    appendLog("Mode: DIY aktif di Demo (OEM terlepas)")
+                    appendLog("Mode: DIY aktif di Demo (OEM terlepas, $mcuName mandiri)")
                 }
                 Toast.makeText(context, "Mode DIY Aktif (CDI mandiri)", Toast.LENGTH_SHORT).show()
             }
@@ -1334,6 +1424,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     fun startOemLearn() {
         if (!requireMcuOrDemo("start OEM Learn")) return
         val t = _telemetry.value
+        val (cPin, sPin) = if (selectedPlatform.value == McuPlatform.STM32WB55) Pair("PB3", "PB4") else Pair("GPIO16", "GPIO17")
+        val mcuName = selectedPlatform.value.displayName
         if (bleClient.gattReady && (t.rpm != 0 || t.hvCenter >= 30 || t.hvSide >= 30)) {
             Toast.makeText(context, "Firmware R8 mensyaratkan RPM 0 dan HV <30 V saat mulai OEM Learn", Toast.LENGTH_LONG).show()
             return
@@ -1344,18 +1436,20 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             bleClient.send("LEARN,START")
             bleClient.send("GET,MODE")
             bleClient.send("GET,LEARN")
-            appendLog("BLE Send: MODE,OEM_LEARN & LEARN,START")
+            appendLog("BLE Send: MODE,OEM_LEARN & LEARN,START ($cPin/$sPin)")
         } else {
             _isOemLearning.value = true
             _firmwareMode.value = FirmwareRunMode.OEM_LEARN
-            appendLog("OEM Learn Dimulai: membaca pulsa PB3/PB4...")
+            _demoEngineRunning.value = true // Mesin hidup via CDI OEM menghasilkan pulsa ke optocoupler
+            appendLog("OEM Learn Dimulai: membaca pulsa $cPin/$sPin ($mcuName)...")
         }
-        Toast.makeText(context, "OEM Learn Dimulai: Hidupkan mesin dengan CDI OEM", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "OEM Learn Dimulai: Hidupkan mesin dengan CDI OEM ($cPin/$sPin)", Toast.LENGTH_SHORT).show()
     }
 
     fun stopOemLearn() {
         if (!requireMcuOrDemo("stop OEM Learn")) return
         val t = _telemetry.value
+        val mcuName = selectedPlatform.value.displayName
         if (bleClient.gattReady && (t.rpm != 0 || t.hvCenter >= 30 || t.hvSide >= 30)) {
             Toast.makeText(context, "Firmware R8 mensyaratkan RPM 0 dan HV <30 V saat menyimpan OEM Learn", Toast.LENGTH_LONG).show()
             return
@@ -1364,12 +1458,15 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             markSetupCommandPending()
             bleClient.send("LEARN,STOP")
             bleClient.send("GET,LEARN")
-            appendLog("BLE Send: LEARN,STOP")
+            appendLog("BLE Send: LEARN,STOP (Simpan Map OEM ke Flash $mcuName)")
         } else {
             _isOemLearning.value = false
-            appendLog("OEM Learn Dihentikan: timing tersimpan di STM32.")
+            _flashSaved.value = true
+            _demoEngineRunning.value = false // Matikan mesin setelah rekaman selesai
+            simRpm = 0f
+            appendLog("OEM Learn Dihentikan: timing Center & Side tersimpan di flash $mcuName.")
         }
-        Toast.makeText(context, "OEM Learn Selesai: Matikan mesin & cabut soket CDI OEM", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "OEM Learn Selesai: Matikan mesin & cabut modul PC817 serta soket CDI OEM", Toast.LENGTH_LONG).show()
     }
 
     fun confirmOemUnplugged() {
@@ -1825,22 +1922,37 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
                 when {
                     operation == "MODE" -> bleClient.send("GET,MODE")
-                    operation == "LEARN_STARTED_PASSIVE" -> {
+                    operation == "LEARN_STARTED_PASSIVE" || operation == "LEARN_START" -> {
                         _isOemLearning.value = true
+                        _firmwareMode.value = FirmwareRunMode.OEM_LEARN
                         startOemLearnPolling()
                     }
-                    operation == "LEARN_ABORTED" -> {
+                    operation == "LEARN_ABORTED" || operation == "LEARN_STOP" -> {
                         _isOemLearning.value = false
                         oemLearnPollJob?.cancel()
                         bleClient.send("GET,LEARN")
                     }
-                    operation == "LEARN_SAVED_CENTER" ||
-                        operation == "LEARN_SAVED_CENTER_SIDE" -> {
+                    operation == "LEARN_SAVED" ||
+                        operation == "LEARN_SAVED_CENTER" ||
+                        operation == "LEARN_SAVED_CENTER_SIDE" ||
+                        operation == "OEM_MAP_SAVED" ||
+                        operation == "OEM_MAP_LOCK" -> {
                         _isOemLearning.value = false
+                        _flashSaved.value = true
                         oemLearnPollJob?.cancel()
                         bleClient.send("GET,LEARN")
                         bleClient.send("GET,SETUP")
                         bleClient.send("GET,META")
+                        bleClient.send("GET,STATUS")
+                        Toast.makeText(context, "Map OEM Tersimpan Permanen di Flash!", Toast.LENGTH_SHORT).show()
+                    }
+                    operation == "OEM_UNPLUGGED" || operation == "MODE_DIY" -> {
+                        _isOemUnpluggedConfirmed.value = true
+                        _firmwareMode.value = FirmwareRunMode.DIY
+                        bleClient.send("GET,MODE")
+                        bleClient.send("GET,SETUP")
+                        advanceSetupStage(SetupStage.FIRST_START.code)
+                        Toast.makeText(context, "Soket OEM Dilepas • Mode DIY Mandiri Aktif", Toast.LENGTH_SHORT).show()
                     }
                     operation == "PRO_ON" -> {
                         _isProVoltageConfigured.value = true
@@ -1927,12 +2039,12 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 // If real motorcycle engine is running (RPM > 100 on BLE), prioritize real telemetry.
                 // Otherwise (engine off, test bench, or simulation), simulate based on slider/revving.
                 val realEngineRunning = realBleReady && _telemetry.value.rpm > 100
-                val shouldSimulate = !realEngineRunning && (isSim || revving || slider > 0.01f || simRpm > 50f || simTps > 0.01f)
+                val demoStarterOn = _demoEngineRunning.value
+                val shouldSimulate = !realEngineRunning && (isSim || demoStarterOn || revving || slider > 0.01f || simRpm > 50f || simTps > 0.01f)
                 if (shouldSimulate) {
                     // Update simulated throttle & RPM
                     if (revving) {
                         simTps = (simTps + 0.20f).coerceAtMost(1.0f)
-                        _demoThrottleSlider.value = simTps
                         val targetRpm = _softRevLimiterRpm.value + 800f
                         simRpm += (targetRpm - simRpm) * 0.22f
                         if (simRpm >= _softRevLimiterRpm.value) {
@@ -1950,18 +2062,21 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                             val flutter = ((sin(seq * 1.5) * 350f)).toFloat()
                             simRpm = (_softRevLimiterRpm.value - 150f) + flutter
                         }
-                    } else {
-                        // Quick snap decay on release
-                        simTps = (simTps - 0.25f).coerceAtLeast(0.0f)
-                        _demoThrottleSlider.value = simTps
-                        val idleTarget = if (isSim) (1420f + (sin(seq * 0.2) * 40f).toFloat()) else 0f
+                    } else if (demoStarterOn) {
+                        // Engine running at idle: throttle decays smoothly to idle position (0.02f)
+                        simTps += (0.02f - simTps) * 0.25f
+                        val idleTarget = 1420f + (sin(seq * 0.2) * 40f).toFloat()
                         simRpm += (idleTarget - simRpm) * 0.25f
                         if (kotlin.math.abs(simRpm - idleTarget) < 25f) {
                             simRpm = idleTarget
                         }
+                    } else {
+                        // Engine stopped: throttle decays, RPM snaps to 0
+                        simTps = (simTps - 0.25f).coerceAtLeast(0.0f)
+                        simRpm = (simRpm - 250f).coerceAtLeast(0f)
                     }
 
-                    if (!isSim && !revving && slider <= 0.01f && simRpm <= 30f) {
+                    if (!demoStarterOn && !revving && slider <= 0.01f && simRpm <= 30f) {
                         simRpm = 0f
                         simTps = 0f
                         engineSound.stop()
@@ -2008,24 +2123,41 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     }
 
                     seq = (seq + 1) and 0xFFFF
-                    val targetHv = if (_isProVoltageConfigured.value) 345 else 285
+                    val isRunning = simRpm > 50f
+                    val targetHv = if (_telemetry.value.setupStage == SetupStage.FIRST_START.code) {
+                        CdiProtocol.VOLTAGE_FIRST_START // 220V for First Start
+                    } else if (_isProVoltageConfigured.value) {
+                        345
+                    } else {
+                        285
+                    }
+                    val currentHvCenter = if (isRunning) {
+                        targetHv + (sin(seq * 0.3) * 4).toInt()
+                    } else {
+                        0 // Fully discharged safely when engine is stopped!
+                    }
+                    val currentHvSide = if (isRunning && _telemetry.value.setupStage != SetupStage.FIRST_START.code) {
+                        targetHv + (sin(seq * 0.25) * 5).toInt()
+                    } else {
+                        0 // Side coil off during FIRST_START or when stopped
+                    }
                     val simTelemetry = Telemetry(
                         sequence = seq,
                         rpm = simRpm.toInt().coerceIn(0, 13000),
                         tps = (simTps * 1000).toInt(),
                         advanceCdeg = (finalAdvance * 100).toInt(),
-                        batteryCv = 1380 + (sin(seq * 0.1) * 20).toInt(),
-                        hvCenter = targetHv + (sin(seq * 0.3) * 4).toInt(),
-                        hvSide = targetHv + (sin(seq * 0.25) * 5).toInt(),
+                        batteryCv = if (isRunning) 1380 + (sin(seq * 0.1) * 20).toInt() else 1260,
+                        hvCenter = currentHvCenter,
+                        hvSide = currentHvSide,
                         tempCdeg = 8200 + (simTps * 500).toInt(),
                         slot = _selectedMapSlot.value,
                         limiter = limiterState,
                         flags = 0x21 or (if (_flashSaved.value) 0x08 else 0x00),
                         faults = 0,
                         setupStage = _telemetry.value.setupStage,
-                        outputFlags = 0x03 or (if (_strobeActive.value) 0x04 else 0x00),
+                        outputFlags = (if (currentHvCenter > 0) 0x01 else 0x00) or (if (currentHvSide > 0) 0x02 else 0x00) or (if (_strobeActive.value) 0x04 else 0x00),
                         triggerCdeg = candidateTriggerCdeg(_pulserOffsetDeg.value),
-                        pickupQuality = 99,
+                        pickupQuality = if (isRunning) 99 else 0,
                         firstStartSeconds = fsSeconds
                     )
 

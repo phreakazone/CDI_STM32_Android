@@ -12,7 +12,7 @@ enum class SetupStage(val code: Int, val label: String, val desc: String) {
 }
 
 enum class FirmwareRunMode(val code: String, val label: String, val desc: String) {
-    OEM_LEARN("OEM_LEARN", "OEM LEARN", "Membaca timing CDI OEM secara pasif melalui PB3/PB4"),
+    OEM_LEARN("OEM_LEARN", "OEM LEARN", "Membaca timing CDI OEM secara pasif via optocoupler (PB3/PB4 STM32 atau GPIO16/17 ESP32)"),
     MANUAL("MANUAL", "MANUAL", "Setup darurat strobo/TDC saat CDI OEM mati"),
     DIY("DIY", "DIY INDEPENDENT", "Operasi mandiri penuh setelah CDI OEM dicabut fisik");
 
@@ -184,28 +184,46 @@ object CdiProtocol {
 
     fun firmwareMode(body: String): FirmwareModeStatus? {
         val fields = body.split(',')
-        if (fields.size != 5 || fields[0] != "MODE") return null
-        val mode = FirmwareRunMode.fromFirmwareCode(fields[1].toIntOrNull() ?: return null)
-            ?: return null
+        if (fields.size < 2 || fields[0] != "MODE") return null
+        val mode = when (fields[1].trim().uppercase()) {
+            "0", "MANUAL" -> FirmwareRunMode.MANUAL
+            "1", "OEM_LEARN", "LEARN" -> FirmwareRunMode.OEM_LEARN
+            "2", "DIY" -> FirmwareRunMode.DIY
+            else -> fields[1].toIntOrNull()?.let { FirmwareRunMode.fromFirmwareCode(it) }
+        } ?: return null
+        val unplugged = if (fields.size >= 3) (fields[2].trim().toIntOrNull() == 1 || fields[2].trim().equals("OEM_UNPLUGGED", true) || fields[2].trim().equals("TRUE", true)) else false
+        val pro = if (fields.size >= 4) (fields[3].trim().toIntOrNull() == 1 || fields[3].trim().equals("PRO_ON", true) || fields[3].trim().equals("TRUE", true)) else false
+        val proven = if (fields.size >= 5) (fields[4].trim().toIntOrNull() == 1 || fields[4].trim().equals("TRUE", true)) else false
         return FirmwareModeStatus(
             mode = mode,
-            diyUnplugged = fields[2].toIntOrNull() == 1,
-            proEnabled = fields[3].toIntOrNull() == 1,
-            firstStartProven = fields[4].toIntOrNull() == 1
+            diyUnplugged = unplugged,
+            proEnabled = pro,
+            firstStartProven = proven
         )
     }
 
     fun oemLearnStatus(body: String): OemLearnStatus? {
         val fields = body.split(',')
-        if (fields.size != 7 || fields[0] != "LEARN") return null
-        val state = OemLearnState.fromCode(fields[1].toIntOrNull() ?: return null) ?: return null
+        if (fields.size < 2 || fields[0] != "LEARN") return null
+        val state = when (fields[1].trim().uppercase()) {
+            "0", "IDLE" -> OemLearnState.IDLE
+            "1", "ACTIVE" -> OemLearnState.ACTIVE
+            "2", "COMPLETE" -> OemLearnState.COMPLETE
+            "3", "ERROR" -> OemLearnState.ERROR
+            else -> fields[1].toIntOrNull()?.let { OemLearnState.fromCode(it) } ?: OemLearnState.IDLE
+        }
+        val coveragePercent = fields.getOrNull(2)?.trim()?.toIntOrNull()?.coerceIn(0, 100) ?: 0
+        val acceptedPulses = fields.getOrNull(3)?.trim()?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+        val rejectedPulses = fields.getOrNull(4)?.trim()?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+        val sideSamples = fields.getOrNull(5)?.trim()?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+        val sideOffsetCdeg = fields.getOrNull(6)?.trim()?.toIntOrNull()?.coerceIn(-3000, 3000) ?: 0
         return OemLearnStatus(
             state = state,
-            coveragePercent = (fields[2].toIntOrNull() ?: return null).coerceIn(0, 100),
-            acceptedPulses = (fields[3].toIntOrNull() ?: return null).coerceAtLeast(0),
-            rejectedPulses = (fields[4].toIntOrNull() ?: return null).coerceAtLeast(0),
-            sideSamples = (fields[5].toIntOrNull() ?: return null).coerceAtLeast(0),
-            sideOffsetCdeg = (fields[6].toIntOrNull() ?: return null).coerceIn(-3000, 3000)
+            coveragePercent = coveragePercent,
+            acceptedPulses = acceptedPulses,
+            rejectedPulses = rejectedPulses,
+            sideSamples = sideSamples,
+            sideOffsetCdeg = sideOffsetCdeg
         )
     }
 

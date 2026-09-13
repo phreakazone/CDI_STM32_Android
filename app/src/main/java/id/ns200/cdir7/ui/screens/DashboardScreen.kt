@@ -2,6 +2,7 @@ package id.ns200.cdir7.ui.screens
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -34,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.ns200.cdir7.CdiViewModel
 import id.ns200.cdir7.FirmwareRunMode
+import id.ns200.cdir7.McuPlatform
 import id.ns200.cdir7.ui.theme.*
 import kotlin.math.*
 
@@ -43,6 +45,7 @@ fun DashboardScreen(viewModel: CdiViewModel) {
     val isRevving by viewModel.isRevving.collectAsState()
     val revLimit by viewModel.softRevLimiterRpm.collectAsState()
     val demoThrottleSlider by viewModel.demoThrottleSlider.collectAsState()
+    val demoEngineRunning by viewModel.demoEngineRunning.collectAsState()
     val isConnected by viewModel.isConnected.collectAsState()
     val connectionStatus by viewModel.connectionStatus.collectAsState()
     val packetRate by viewModel.packetRateHz.collectAsState()
@@ -51,12 +54,17 @@ fun DashboardScreen(viewModel: CdiViewModel) {
     val fwMode by viewModel.firmwareMode.collectAsState()
     val targetHv by viewModel.targetHvVoltage.collectAsState()
     val isPro by viewModel.isProVoltageConfigured.collectAsState()
+    val selectedPlatform by viewModel.selectedPlatform.collectAsState()
     val scrollState = rememberScrollState()
 
     val currentRpm = telemetry.rpm
     val isAtLimiter = telemetry.limiter > 0 || currentRpm >= revLimit
     val isBleConnected = viewModel.bleClient.gattReady && currentRpm > 100
-    val displaySliderValue = if (isBleConnected) (currentRpm.toFloat() / revLimit.toFloat()).coerceIn(0f, 1f) else demoThrottleSlider
+
+    // Slider tacho interaktif: mengikuti RPM aktual secara dinamis (live BLE maupun simulasi demo)
+    var userDragFraction by remember { mutableStateOf<Float?>(null) }
+    val actualRpmFraction = (currentRpm.toFloat() / revLimit.toFloat()).coerceIn(0f, 1f)
+    val displaySliderValue = userDragFraction ?: actualRpmFraction
 
     // Limiter warning pulse animation
     val infiniteTransition = rememberInfiniteTransition(label = "limiter_pulse")
@@ -508,6 +516,87 @@ fun DashboardScreen(viewModel: CdiViewModel) {
             }
         }
 
+        // ENGINE RUN / STOP STATUS & STARTER PANEL (DEMO / SIMULATION MODE)
+        if (!isBleConnected) {
+            val isEngineOn = demoEngineRunning && currentRpm > 50
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(
+                        1.5.dp,
+                        if (isEngineOn) RacingLime.copy(alpha = 0.6f) else SensorAmber,
+                        RoundedCornerShape(14.dp)
+                    ),
+                colors = CardDefaults.cardColors(containerColor = CardBackground),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(12.dp)
+                                .clip(CircleShape)
+                                .background(if (isEngineOn) RacingLime else RaceRedline)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = if (isEngineOn) "MESIN MENYALA • IDLE $currentRpm RPM" else "MESIN MATI • 0 RPM",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isEngineOn) RacingLime else SensorAmber,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            Text(
+                                text = if (isEngineOn) "Pengapian koil aktif. Putar gas atau gunakan slider." else "Kunci kontak OFF / HV 0V. Tekan starter untuk hidupkan.",
+                                fontSize = 9.5.sp,
+                                color = TextSecondary,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    if (!isEngineOn) {
+                        Button(
+                            onClick = { viewModel.simulateStartEngine() },
+                            colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.testTag("dashboard_engine_starter_btn")
+                        ) {
+                            Icon(Icons.Default.PlayArrow, null, tint = CarbonDark, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("STARTER", color = CarbonDark, fontSize = 11.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { viewModel.simulateStopEngine() },
+                            border = BorderStroke(1.dp, RaceRedline),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = RaceRedline),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.testTag("dashboard_engine_stop_btn")
+                        ) {
+                            Icon(Icons.Default.Stop, null, tint = RaceRedline, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("STOP MESIN", color = RaceRedline, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                        }
+                    }
+                }
+            }
+        }
+
         // INTERACTIVE THROTTLE / RPM SLIDER (HOLDS RPM IN DEMO, FOLLOWS REAL MOTORCYCLE IN BLE)
         Card(
             modifier = Modifier
@@ -527,7 +616,10 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f, fill = false)
+                    ) {
                         Icon(
                             imageVector = if (isBleConnected) Icons.Default.Speed else Icons.Default.Tune,
                             contentDescription = "Throttle Slider",
@@ -536,11 +628,12 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (isBleConnected) "SLIDER REAL TIME (IKUTI RPM MOTOR)" else "SLIDER TACHO (TAHAN RPM DEMO)",
-                            fontSize = 12.sp,
+                            text = if (isBleConnected) "SLIDER REAL TIME (LIVE MOTOR)" else "SLIDER TACHO (IKUTI RPM)",
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
-                            color = if (isBleConnected) RacingLime else MotecOrange
+                            color = if (isBleConnected) RacingLime else MotecOrange,
+                            maxLines = 1
                         )
                     }
 
@@ -553,14 +646,54 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                         Text(
                             text = when {
                                 isBleConnected -> "LIVE CDI • $currentRpm RPM"
-                                demoThrottleSlider > 0.01f -> "TAHAN • ${(demoThrottleSlider * 100).toInt()}% ($currentRpm RPM)"
+                                isRevving -> "BLIP GAS • $currentRpm RPM"
+                                userDragFraction != null -> "GAS ${(userDragFraction!! * 100).toInt()}% • $currentRpm RPM"
+                                demoThrottleSlider > 0.01f -> "TAHAN ${(actualRpmFraction * 100).toInt()}% • $currentRpm RPM"
+                                !demoEngineRunning || currentRpm <= 50 -> "MESIN MATI • 0 RPM"
                                 else -> "IDLE • $currentRpm RPM"
                             },
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Black,
                             fontFamily = FontFamily.Monospace,
-                            color = if (isBleConnected) RacingLime else ElectricCyan
+                            color = when {
+                                isBleConnected -> RacingLime
+                                isRevving -> RaceRedline
+                                userDragFraction != null -> MotecOrange
+                                demoThrottleSlider > 0.01f -> MotecOrange
+                                !demoEngineRunning || currentRpm <= 50 -> SensorAmber
+                                else -> ElectricCyan
+                            }
                         )
+                    }
+                }
+
+                if (!isBleConnected && (!demoEngineRunning || currentRpm <= 50)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(SurfacePanel)
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Mesin simulasi mati (0 RPM)",
+                            fontSize = 10.sp,
+                            color = SensorAmber,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Button(
+                            onClick = { viewModel.simulateStartEngine() },
+                            colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 3.dp),
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, null, tint = CarbonDark, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("STARTER", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                        }
                     }
                 }
 
@@ -569,8 +702,12 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                     value = displaySliderValue,
                     onValueChange = { newVal ->
                         if (!isBleConnected) {
-                            viewModel.setDemoThrottle(newVal)
+                            userDragFraction = newVal
+                            viewModel.setDemoRpmDirect(newVal * revLimit)
                         }
+                    },
+                    onValueChangeFinished = {
+                        userDragFraction = null
                     },
                     valueRange = 0f..1f,
                     colors = SliderDefaults.colors(
@@ -810,12 +947,14 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                         4 -> MotecOrange
                         else -> SensorAmber
                     })
-                    TechDataRow("MODE FIRMWARE", "${fwMode.name} (${if (fwMode == FirmwareRunMode.DIY) "MANDIRI" else if (fwMode == FirmwareRunMode.OEM_LEARN) "BACA OEM PB3/PB4" else "MANUAL"})", ElectricCyan)
+                    val oemPinsLabel = if (selectedPlatform == McuPlatform.STM32WB55) "BACA OEM PB3/PB4" else "BACA OEM GPIO16/17"
+                    val fanPinLabel = if (selectedPlatform == McuPlatform.STM32WB55) "ACTIVE (PB5 LOW)" else "ACTIVE (GPIO13 LOW)"
+                    TechDataRow("MODE FIRMWARE", "${fwMode.name} (${if (fwMode == FirmwareRunMode.DIY) "MANDIRI" else if (fwMode == FirmwareRunMode.OEM_LEARN) oemPinsLabel else "MANUAL"})", ElectricCyan)
                     TechDataRow("TARGET TEGANGAN HV", "$targetHv V (${if (isPro) "PRO 345V" else "NORMAL 285V"})", RacingLime)
                     TechDataRow("OUTPUT COILS", "CENTER: ${if (telemetry.centerEnabled) "ON" else "OFF"} | SIDE: ${if (telemetry.sideEnabled) "ON" else "OFF"}", RacingLime)
                     TechDataRow("PULSER QUALITY", "${telemetry.pickupQuality} / 100 (PPR=1 Gate=80µs)", if (telemetry.pickupQuality >= 10) RacingLime else RaceRedline)
                     TechDataRow("TRIGGER TIMING", "%.1f° BTDC".format(telemetry.triggerCdeg / 100f), ElectricCyan)
-                    TechDataRow("FAN RELAY (J1.7)", if (telemetry.fanEnabled) "ACTIVE (PB5 LOW)" else "OFF (HIGH)", if (telemetry.fanEnabled) SensorAmber else TextMuted)
+                    TechDataRow("FAN RELAY (J1.7)", if (telemetry.fanEnabled) fanPinLabel else "OFF (HIGH)", if (telemetry.fanEnabled) SensorAmber else TextMuted)
                     TechDataRow("FAULT BITS", if (telemetry.faults == 0) "0x0000 (NO FAULT)" else "0x%04X".format(telemetry.faults), if (telemetry.faults == 0) RacingLime else RaceRedline)
                 }
             }
