@@ -9,7 +9,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+// Robolectric Android 36 is not available on every CI runner; this test only\n// validates resources, so SDK 35 is sufficient while the app still targets 36.1.\n@Config(sdk = [35])
 class ExampleRobolectricTest {
 
   @Test
