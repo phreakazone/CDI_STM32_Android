@@ -938,18 +938,18 @@ private fun StepSpecificRealisticLayout(
           RealisticEsp32Board(
             activePins = when (step.id) {
               "step_2_1" -> setOf("33", "GND", "VIN") // VBAT via GPIO33
-              "step_2_2" -> setOf("4", "GND", "3V3")  // Pulser Input GPIO4 via Opto
-              "step_2_3" -> setOf("VP", "34", "3V3", "GND") // TPS ADC1_CH0 GPIO36(VP)
-              "step_2_4" -> setOf("VN", "GND") // Temp ADC1_CH3 GPIO39(VN)
+              "step_2_2" -> setOf("16", "17", "GND", "3V3") // OEM Center/Side taps
+              "step_2_3" -> setOf("VN", "GND") // Temp ADC1_CH3 GPIO39(VN)
+              "step_2_4" -> setOf("VP", "34", "3V3", "GND") // TPS + TPS reference
               "step_2_6" -> setOf("13", "GND") // Fan relay GPIO13
               "step_2_7" -> setOf("27", "GND") // Strobe timing GPIO27
               else -> setOf("VIN", "GND", "3V3")
             },
             highlightedPin = when (step.id) {
               "step_2_1" -> "33"
-              "step_2_2" -> "4"
-              "step_2_3" -> "VP"
-              "step_2_4" -> "VN"
+              "step_2_2" -> "16"
+              "step_2_3" -> "VN"
+              "step_2_4" -> "VP"
               "step_2_6" -> "13"
               "step_2_7" -> "27"
               else -> null
@@ -978,11 +978,11 @@ private fun StepSpecificRealisticLayout(
           "step_2_2" -> {
             if (isEsp) {
               RealisticIcChip(
-                ref = "U2_OPTO",
+                ref = "2x OPTO",
                 partNumber = "PC817",
                 pinCount = 4,
                 activePins = setOf(1, 2, 3, 4),
-                pinLabels = mapOf(1 to "Spul+", 2 to "GND_M", 3 to "GND", 4 to "GPIO4")
+                pinLabels = mapOf(1 to "OEM C", 2 to "OEM S", 3 to "GPIO16", 4 to "GPIO17")
               )
             }
           }
@@ -1004,7 +1004,7 @@ private fun StepSpecificRealisticLayout(
           pinCount = 14,
           activePins = setOf(2, 3, 4, 5, 12),
           pinLabels = mapOf(
-            2 to "OUT1 (PA0)",
+            2 to if (isEsp) "OUT1 (GPIO4)" else "OUT1 (PA0)",
             3 to "VCC (5V)",
             4 to "IN1- (~2V)",
             5 to "IN1+ (Pulser)",
@@ -1027,8 +1027,8 @@ private fun StepSpecificRealisticLayout(
               modifier = Modifier.padding(4.dp)
             ) {
               Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("JUMPER JP_HV", fontSize = 9.sp, color = SparkAmber, fontWeight = FontWeight.Bold)
-                Text("Saklar Servis Fisik", fontSize = 7.sp, color = TextSecondaryDark)
+                Text("SW_SERVICE", fontSize = 9.sp, color = SparkAmber, fontWeight = FontWeight.Bold)
+                Text("Isolator Servis Opsional", fontSize = 7.sp, color = TextSecondaryDark)
               }
             }
           }
@@ -1042,9 +1042,9 @@ private fun StepSpecificRealisticLayout(
               pinCount = 8,
               activePins = setOf(2, 3, 4, 5, 6, 7),
               pinLabels = mapOf(
-                2 to "INA (PA9)",
+                2 to if (isEsp) "INA (GPIO18)" else "INA (PA9)",
                 3 to "GND",
-                4 to "INB (PB8)",
+                4 to if (isEsp) "INB (GPIO19)" else "INB (PB8)",
                 5 to "OUTB",
                 6 to "VDD (12V)",
                 7 to "OUTA"
@@ -1116,9 +1116,9 @@ fun generateDefaultConnectionsForStep(step: WiringStep, platform: McuPlatform = 
         PinConnection("conn_4", "Modul LM2596 OUT+ (5.00V)", "Rel +5V_LOGIC PCB (Catu VIN ESP32)", 0xFF00E5FF, "Kabel Merah AWG 22", "Pastikan terukur tepat 5.00V sebelum ke ESP32")
       )
       "step_1_4" -> listOf(
-        PinConnection("conn_1", "Rel +5V_LOGIC", "ESP32 Pin VIN (5V In)", 0xFF00E5FF, "Kabel AWG 22", "Solder ke pin VIN ESP32 (Sisi Kanan Pin 1)"),
-        PinConnection("conn_2", "GND_STAR", "ESP32 Pin GND (Kiri Pin 14)", 0xFF00E676, "Kabel AWG 22", "Ground utama MCU baris kiri"),
-        PinConnection("conn_3", "GND_STAR", "ESP32 Pin GND (Kanan Pin 2)", 0xFF00E676, "Kabel AWG 22", "Ground sekunder MCU baris kanan"),
+        PinConnection("conn_1", "Rel +5V_LOGIC", "ESP32 VIN (LEFT.19)", 0xFF00E5FF, "Kabel AWG 22", "Catu 5V ke pin VIN baris kiri"),
+        PinConnection("conn_2", "GND_STAR", "ESP32 GND (LEFT.14)", 0xFF00E676, "Kabel AWG 22", "Ground utama MCU baris kiri"),
+        PinConnection("conn_3", "GND_STAR", "ESP32 GND (RIGHT.1)", 0xFF00E676, "Kabel AWG 22", "Ground sekunder MCU baris kanan"),
         PinConnection("conn_4", "ESP32 Pin 3V3 (3.3V Out)", "Rel +3.3V Logic Sensor", 0xFF00E5FF, "Kabel AWG 24", "Tegangan referensi ADC & pull-up (DILARANG 5V/12V!)")
       )
       "step_2_1" -> listOf(
@@ -1151,13 +1151,13 @@ fun generateDefaultConnectionsForStep(step: WiringStep, platform: McuPlatform = 
         PinConnection("conn_2", "GND_STAR", "Driver Relay GND", 0xFF00E676, "Kabel AWG 22", "Ground bersama modul relay")
       )
       "step_2_7" -> listOf(
-        PinConnection("conn_1", "ESP32 GPIO27", "Gate MOSFET Q_STR (Strobo TDC)", 0xFF00E5FF, "Resistor 330R", "Pulsa strobo timing kalibrasi TDC"),
+        PinConnection("conn_1", "ESP32 GPIO27", "Gate MOSFET Q_STR (Strobo TDC)", 0xFF00E5FF, "Resistor 100R", "Pulsa strobo timing kalibrasi TDC"),
         PinConnection("conn_2", "Drain MOSFET Q_STR", "Modul LED Strobo (-)", 0xFFFF9E0B, "Kabel AWG 22", "Kutub negatif lampu strobo")
       )
       "step_3_1" -> listOf(
         PinConnection("conn_1", "VIN_FILT (PCB Logic)", "Sekring FHV (3A Blade)", 0xFFFF9E0B, "Kabel AWG 18 Antar Board", "Daya charger push-pull"),
-        PinConnection("conn_2", "Sekring FHV Keluar", "Header JP_HV Pin 1", 0xFFFF9E0B, "Header 2.54mm", "Saklar pemutus fisik tegangan tinggi"),
-        PinConnection("conn_3", "Header JP_HV Pin 2", "Rel VIN_HV PCB Power", 0xFFFF9E0B, "Bus Bar Tembaga", "Menyuplai Center-Tap Trafo dan TC4427")
+        PinConnection("conn_2", "Sekring FHV Keluar", "SW_SERVICE Pin 1", 0xFFFF9E0B, "Saklar/konektor arus sesuai", "Isolator servis mekanis opsional"),
+        PinConnection("conn_3", "SW_SERVICE Pin 2", "Rel VIN_HV PCB Power", 0xFFFF9E0B, "Bus Bar Tembaga", "Menyuplai Center-Tap Trafo dan TC4427")
       )
       "step_3_3" -> listOf(
         PinConnection("conn_1", "Rel VIN_HV", "Trafo T1 LV_CT (Center-Tap)", 0xFFFF9E0B, "Kawat Tembaga Tebal", "Input catu daya 12V push-pull"),
@@ -1172,7 +1172,8 @@ fun generateDefaultConnectionsForStep(step: WiringStep, platform: McuPlatform = 
         PinConnection("conn_4", "Simpul ISENSE_TOP", "RSENSE (0.05 Ohm 5W)", 0xFF00E676, "Resistor Semen", "Dari ISENSE_TOP ke rel GND_POWER")
       )
       "step_3_6" -> listOf(
-        PinConnection("conn_1", "Divider HV_PRESENT", "ESP32 GPIO33 / GPIO14 (Trip Sense)", 0xFF00E5FF, "Kabel AWG 24", "Deteksi tegangan HV siap pakai")
+        PinConnection("conn_1", "LM339 OUT2/OUT3/OUT4 wired-OR", "PWM_CLAMP", 0xFF00E5FF, "Jalur PCB + pull-up 4.7k", "Hardware clamp active-low"),
+        PinConnection("conn_2", "PWM_CLAMP", "ESP32 GPIO14 (LEFT.12)", 0xFF00E5FF, "Kabel AWG 24", "Input fault active-low ke firmware")
       )
       "step_4_1" -> listOf(
         PinConnection("conn_1", "Trafo T1 HV_AC1", "DREC1 Anoda & DREC3 Katoda", 0xFFFF6D00, "Kabel HV 600V", "Fasa 1 jembatan UF4007"),
@@ -1186,10 +1187,7 @@ fun generateDefaultConnectionsForStep(step: WiringStep, platform: McuPlatform = 
         PinConnection("conn_3", "Rel BRIDGE_PLUS", "DCH_S Anoda (UF4007)", 0xFFFF6D00, "Jalur HV", "Dioda isolasi Bank Side"),
         PinConnection("conn_4", "DCH_S Katoda", "Rel HV_SIDE (Bank Samping)", 0xFFFF6D00, "Jalur HV", "Reservoir muatan koil samping")
       )
-      "step_4_4" -> listOf(
-        PinConnection("conn_1", "Hardware Shutdown Interlock", "ESP32 GPIO14 (Active-Low)", 0xFF00E5FF, "Kabel AWG 24", "Proteksi interlock HV bila terputus")
-      )
-      "step_4_6" -> listOf(
+      "step_4_3" -> listOf(
         PinConnection("conn_1", "Divider HV_C_FB", "ESP32 GPIO35 (ADC1_CH7 Bank Center)", 0xFFFF6D00, "Kabel AWG 24", "Monitor tegangan reservoir tengah (target 285V/345V)"),
         PinConnection("conn_2", "Divider HV_S_FB", "ESP32 GPIO32 (ADC1_CH4 Bank Side)", 0xFFFF6D00, "Kabel AWG 24", "Monitor tegangan reservoir samping")
       )
@@ -1205,8 +1203,8 @@ fun generateDefaultConnectionsForStep(step: WiringStep, platform: McuPlatform = 
         PinConnection("conn_4", "SCR1 Gate ke Cathode", "Resistor Pulldown 1k", 0xFF00E5FF, "Bawah PCB", "Anti pemicuan liar akibat derau busi")
       )
       "step_5_4" -> listOf(
-        PinConnection("conn_1", "ESP32 GPIO25", "Driver Gate SCR1 (Center)", 0xFF00E5FF, "Resistor 330R", "Pulsa pengapian busi tengah"),
-        PinConnection("conn_2", "ESP32 GPIO26", "Driver Gate SCR2 (Side)", 0xFF00E5FF, "Resistor 330R", "Pulsa pengapian busi samping")
+        PinConnection("conn_1", "ESP32 GPIO25", "4.7k -> Driver NPN/PNP -> 330R -> Gate SCR1", 0xFF00E5FF, "Jalur logika ke driver", "Pulsa pengapian busi tengah"),
+        PinConnection("conn_2", "ESP32 GPIO26", "4.7k -> Driver NPN/PNP -> 330R -> Gate SCR2", 0xFF00E5FF, "Jalur logika ke driver", "Pulsa pengapian busi samping")
       )
       else -> {
         val adapted = step.adaptToPlatform(platform)
@@ -1263,8 +1261,8 @@ fun generateDefaultConnectionsForStep(step: WiringStep, platform: McuPlatform = 
     )
     "step_3_1" -> listOf(
       PinConnection("conn_1", "VIN_FILT (PCB Logic)", "Sekring FHV (3A Blade)", 0xFFFF9E0B, "Kabel AWG 18 Antar Board", "Daya charger push-pull"),
-      PinConnection("conn_2", "Sekring FHV Keluar", "Header JP_HV Pin 1", 0xFFFF9E0B, "Header 2.54mm", "Saklar pemutus fisik tegangan tinggi"),
-      PinConnection("conn_3", "Header JP_HV Pin 2", "Rel VIN_HV PCB Power", 0xFFFF9E0B, "Bus Bar Tembaga", "Menyuplai Center-Tap Trafo dan TC4427")
+      PinConnection("conn_2", "Sekring FHV Keluar", "SW_SERVICE Pin 1", 0xFFFF9E0B, "Saklar/konektor arus sesuai", "Isolator servis mekanis opsional"),
+      PinConnection("conn_3", "SW_SERVICE Pin 2", "Rel VIN_HV PCB Power", 0xFFFF9E0B, "Bus Bar Tembaga", "Menyuplai Center-Tap Trafo dan TC4427")
     )
     "step_3_3" -> listOf(
       PinConnection("conn_1", "Rel VIN_HV", "Trafo T1 LV_CT (Center-Tap)", 0xFFFF9E0B, "Kawat Tembaga Tebal", "Input catu daya 12V push-pull"),

@@ -5,7 +5,7 @@ import java.util.zip.CRC32
 enum class SetupStage(val code: Int, val label: String, val desc: String) {
     BARU(0, "BARU", "Cek catu daya & BLE; kill switch OFF -> ON. HV <30V. Charger & koil OFF"),
     PULSER(1, "PULSER", "Uji input pulser J1.10; PPR=1; gate 80µs; quality >=10"),
-    TDC(2, "TDC", "Strobo PB9; sejajarkan tanda 'T'; SAVE TDC ke flash"),
+    TDC(2, "TDC", "Strobo PB9/GPIO27; sejajarkan tanda 'T'; SAVE TDC ke flash"),
     TPS_CAL(3, "TPS", "Simpan gas tertutup (0%) dan terbuka penuh (100%)"),
     FIRST_START(4, "FIRST START", "Mode aman 220V, CENTER saja, advance <=10°, limiter 3.000 RPM (Otomatis simpan 3s)"),
     READY(5, "READY", "Hidup stabil >=3 detik, simpan CENTER; boot berikutnya otomatis READY")
@@ -74,8 +74,7 @@ data class Telemetry(
 ) {
     val armed get() = flags and 0x01 != 0
     val proEnabled get() = flags and 0x02 != 0
-    // Alias dipertahankan agar UI lintas-platform 8.3.1 tidak perlu dirombak.
-    // Pada firmware R8 bit ini berasal dari setup.pro_enabled, bukan jumper.
+    // Alias kompatibilitas; bit ini berasal dari setup.pro_enabled, bukan jumper.
     val proJumper get() = proEnabled
     val isProVoltage get() = proEnabled
     val hvEnabled get() = flags and 0x04 != 0
@@ -143,7 +142,7 @@ object CdiProtocol {
         else -> SetupStage.BARU.code
     }
 
-    fun emptyTelemetry() = Telemetry(0, 0, 0, 0, 0, 0, 0, 0,
+    fun emptyTelemetry() = Telemetry(0, 0, 0, 0, 0, 0, 0, Short.MIN_VALUE.toInt(),
         0, 0, 0, 0, SetupStage.BARU.code, 0, 6000, 0, 0)
 
     fun crc16(data: ByteArray, length: Int = data.size): Int {

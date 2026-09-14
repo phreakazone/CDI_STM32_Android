@@ -382,7 +382,7 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: M
             McuPinGuidance(
                 selectedPlatform = selectedPlatform,
                 stmPin = "5V logic (H_BOTTOM.2) & GND (H_BOTTOM.1/20)",
-                espPin = "VIN 5V (Kiri.19 Pin 19) & GND_STAR (Kiri.14 / Kanan.20)",
+                espPin = "VIN 5V (LEFT.19) & GND_STAR (LEFT.14 / RIGHT.1)",
                 warning = if (selectedPlatform == McuPlatform.ESP32_WROOM) "Jangan sambungkan aki 12V langsung ke pin manapun pada ESP32!" else null
             )
 
@@ -665,16 +665,16 @@ private fun PulserStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform:
     StageBody {
         StageCard(
             title = "2 • VERIFIKASI PULSER",
-            subtitle = "JP_HV tetap dilepas. Starter 2–3 detik; RPM harus terbaca dan kualitas pulser dianjurkan ≥10."
+            subtitle = "Output tetap dikunci firmware. Starter 2–3 detik; RPM harus terbaca dan kualitas pulser dianjurkan ≥10."
         ) {
             CompactStatusRow("RPM LIVE", "${t.rpm}", t.rpm > 0)
             CompactStatusRow("PULSER QUALITY", "${t.pickupQuality}/100", t.pickupQuality >= 10)
 
             McuPinGuidance(
                 selectedPlatform = selectedPlatform,
-                stmPin = "PA0 (H_BOTTOM.15 TIM2_CH1) via LM339/LM393",
-                espPin = "GPIO4 (Kanan.32 Pin 32) via PC817 / LM393",
-                warning = if (selectedPlatform == McuPlatform.ESP32_WROOM) "PA0 (GPIO4) wajib lewat optocoupler PC817 / LM393. Dilarang menyambungkan pulser 12V langsung!" else null
+                stmPin = "PA0 (H_BOTTOM.9 TIM2_CH1) via LM339/LM393",
+                espPin = "GPIO4 (RIGHT.13) via LM339/LM393",
+                warning = if (selectedPlatform == McuPlatform.ESP32_WROOM) "GPIO4 wajib menerima sinyal 3.3V dari komparator/isolator. Dilarang menyambungkan pulser langsung!" else null
             )
 
             PulserAdvancedSettings(viewModel)
@@ -713,7 +713,7 @@ private fun OemLearnTdcCheckpointStage(viewModel: CdiViewModel, t: Telemetry, se
             McuPinGuidance(
                 selectedPlatform = selectedPlatform,
                 stmPin = "Center: PB3 (H_TOP.9) | Side: PB4 (H_TOP.8)",
-                espPin = "Center: GPIO16 (Kanan.31 Pin 31) | Side: GPIO17 (Kanan.30 Pin 30)",
+                espPin = "Center: GPIO16 (RIGHT.12) | Side: GPIO17 (RIGHT.11)",
                 warning = if (selectedPlatform == McuPlatform.ESP32_WROOM) "Wajib modul optocoupler PC817 terisolasi! Tegangan induksi koil bisa melonjak >600V!" else null
             )
 
@@ -822,7 +822,7 @@ private fun TpsStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: Mc
             McuPinGuidance(
                 selectedPlatform = selectedPlatform,
                 stmPin = "PA3 (H_BOTTOM.12) ADC TPS",
-                espPin = "GPIO36 / VP (Kiri.2 ADC1_CH0)",
+                espPin = "GPIO36 / VP (LEFT.3 ADC1_CH0)",
                 warning = if (selectedPlatform == McuPlatform.ESP32_WROOM) "Gunakan HANYA ADC1 (GPIO 32-39). ADC2 nonaktif saat BLE hidup!" else null
             )
 
@@ -876,7 +876,7 @@ private fun FirstStartStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatf
             McuPinGuidance(
                 selectedPlatform = selectedPlatform,
                 stmPin = "Gate SCR1 Center: PA1 (H_BOTTOM.10)",
-                espPin = "Gate SCR1 Center: GPIO25 (Kiri.9 Pin 9)",
+                espPin = "Gate SCR1 Center: GPIO25 (LEFT.9)",
                 warning = if (selectedPlatform == McuPlatform.ESP32_WROOM) "First Start hanya menyalakan Koil Center (GPIO25). Koil Side (GPIO26) nonaktif hingga siap." else null
             )
 
@@ -1065,7 +1065,7 @@ private fun ReadyStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: 
             McuPinGuidance(
                 selectedPlatform = selectedPlatform,
                 stmPin = "Center: PA1 (H_BOTTOM.10) | Side: PA2 (H_BOTTOM.11)",
-                espPin = "Center: GPIO25 (Kiri.9 Pin 9) | Side: GPIO26 (Kiri.10 Pin 10)"
+                espPin = "Center: GPIO25 (LEFT.9) | Side: GPIO26 (LEFT.10)"
             )
 
             Button(
@@ -1310,14 +1310,14 @@ private fun OemLearnSafetyWiringGuide(selectedPlatform: McuPlatform) {
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text("• IN1+ [R 47kΩ 2W] > J1.9 (OEM Ctr)", color = TextPrimary, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
-                                Text(if (isStm) "OUT1 > PB3 (H_TOP.9)" else "OUT1 > GPIO16 (Pin 31)", color = ElectricCyan, fontSize = 8.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                Text(if (isStm) "OUT1 > PB3 (H_TOP.9)" else "OUT1 > GPIO16 (RIGHT.12)", color = ElectricCyan, fontSize = 8.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text("• IN1- > J1.11 (GND Massa)", color = TextPrimary, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
-                                Text(if (isStm) "OUT2 > PB4 (H_TOP.8)" else "OUT2 > GPIO17 (Pin 30)", color = ElectricCyan, fontSize = 8.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                Text(if (isStm) "OUT2 > PB4 (H_TOP.8)" else "OUT2 > GPIO17 (RIGHT.11)", color = ElectricCyan, fontSize = 8.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1351,10 +1351,10 @@ private fun OemLearnSafetyWiringGuide(selectedPlatform: McuPlatform) {
                                 .padding(8.dp)
                         ) {
                             val outHeader = if (isStm) "[TERMINAL OUTPUT STM32WB55] " else "[TERMINAL OUTPUT ESP32-WROOM]"
-                            val out1 = if (isStm) "OUT1 ------> PB3 (H_TOP.9)  |" else "OUT1 ------> GPIO16 (Pin 31)|"
-                            val out2 = if (isStm) "OUT2 ------> PB4 (H_TOP.8)  |" else "OUT2 ------> GPIO17 (Pin 30)|"
-                            val vccPin = if (isStm) "VCC  ------> 3V3 (STM32)    |" else "VCC  ------> 3V3 (ESP Pin 1)|"
-                            val gndPin = if (isStm) "GND  ------> GND (STM32)    |" else "GND  ------> GND (Pin 14/20)|"
+                            val out1 = if (isStm) "OUT1 ------> PB3 (H_TOP.9)  |" else "OUT1 ------> GPIO16 (RIGHT.12)|"
+                            val out2 = if (isStm) "OUT2 ------> PB4 (H_TOP.8)  |" else "OUT2 ------> GPIO17 (RIGHT.11)|"
+                            val vccPin = if (isStm) "VCC  ------> 3V3 (STM32)    |" else "VCC  ------> 3V3 (LEFT.1)|"
+                            val gndPin = if (isStm) "GND  ------> GND (STM32)    |" else "GND  ------> GND (LEFT.14/RIGHT.1)|"
 
                             val diagram = "+-------------------------------------------------------------+\n" +
                                     "|     MODUL OPTOCOUPLER PC817 4-CHANNEL ISOLATION BOARD       |\n" +
@@ -1452,14 +1452,14 @@ private fun OemLearnSafetyWiringGuide(selectedPlatform: McuPlatform) {
                                     "=== [1] MODUL BUCK STEP-DOWN DC-DC (LM2596 / MP1584EN) ===\n" +
                                     "• Menggantikan: Regulator linear panas & elko besar.\n" +
                                     "• Fungsi: Ubah +12V kontak (J1.5) > stabil 5.0V DC dingin untuk Logic ESP32.\n" +
-                                    "• Wiring: IN+ ke J1.5, IN- ke J1.11 (GND), OUT+ ke Pin 5V/VIN (Pin 19), OUT- ke GND (Pin 14/20).\n\n" +
+                                    "• Wiring: IN+ ke J1.5, IN- ke J1.11 (GND), OUT+ ke 5V/VIN (LEFT.19), OUT- ke GND (LEFT.14/RIGHT.1).\n\n" +
                                     "=== [2] MODUL OPTOCOUPLER PC817 4-CHANNEL (REKOMENDASI UTAMA #1) ===\n" +
                                     "• Menggantikan: Desain diskrit solderan PC817 / voltage divider terpisah.\n" +
                                     "• Fungsi: Isolasi optik aman tegangan tinggi OEM Learn Center (J1.9 > GPIO16) dan Side (J1.8 > GPIO17).\n" +
                                     "• Fitur: Sekrup baut, LED indikator pulsa percikan koil, isolasi tegangan 5000V.\n\n" +
                                     "=== [3] MODUL RELAY 1-CHANNEL 5V + OPTOCOUPLER (REKOMENDASI UTAMA #2) ===\n" +
                                     "• Menggantikan: Rangkaian transistor diskrit BC547, resistor base, & dioda flyback.\n" +
-                                    "• Fungsi: Driver relay kipas radiator J1.7 via pin GPIO13 (Pin 15) langsung.\n" +
+                                    "• Fungsi: Driver relay kipas radiator J1.7 via GPIO13 (LEFT.15) langsung.\n" +
                                     "• Wiring: VCC ke 5V LM2596, GND ke GND_STAR, IN ke GPIO13, COM ke J1.7, NO ke GND.\n\n" +
                                     "=== CATATAN MODUL YANG SUDAH DIUJI & DITOLAK (JANGAN DIGUNAKAN) ===\n" +
                                     "• Modul Boost 12V->300-1200V: Arus hanya 2-20mA (kurang untuk 3 busi 10k RPM butuh 100mA+) dan tidak bisa PWM firmware.\n" +
@@ -1516,10 +1516,10 @@ private fun OemLearnSafetyWiringGuide(selectedPlatform: McuPlatform) {
                                 .horizontalScroll(rememberScrollState())
                                 .padding(8.dp)
                         ) {
-                            val centerMcu = if (isStm) "WeAct H_TOP.9 (Pin PB3)" else "ESP32 Pin 31 (GPIO16)"
-                            val sideMcu = if (isStm) "WeAct H_TOP.8 (Pin PB4)" else "ESP32 Pin 30 (GPIO17)"
-                            val vccMcu = if (isStm) "WeAct 3V3 (H_TOP.3)" else "ESP32 3V3 (Pin 1)"
-                            val gndMcu = if (isStm) "WeAct H_TOP.1 (Pin GND)" else "ESP32 Pin 14 (GND)"
+                            val centerMcu = if (isStm) "WeAct H_TOP.9 (Pin PB3)" else "ESP32 RIGHT.12 (GPIO16)"
+                            val sideMcu = if (isStm) "WeAct H_TOP.8 (Pin PB4)" else "ESP32 RIGHT.11 (GPIO17)"
+                            val vccMcu = if (isStm) "WeAct 3V3 (H_TOP.3)" else "ESP32 3V3 (LEFT.1)"
+                            val gndMcu = if (isStm) "WeAct H_TOP.1 (Pin GND)" else "ESP32 LEFT.14 (GND)"
 
                             Text(
                                 text = "=== [1] JALUR SUNTIK KOIL CENTER (J1.12 ke ${if (isStm) "PB3" else "GPIO16"}) ===\n" +
@@ -1590,9 +1590,9 @@ private fun OemLearnSafetyWiringGuide(selectedPlatform: McuPlatform) {
                                 .horizontalScroll(rememberScrollState())
                                 .padding(8.dp)
                         ) {
-                            val vInCenter = if (isStm) "PB3 (H_TOP.9)" else "GPIO16 (Pin 31)"
-                            val vInSide = if (isStm) "PB4 (H_TOP.8)" else "GPIO17 (Pin 30)"
-                            val vClamp = if (isStm) "3V3 (H_TOP.3)" else "3V3 (Pin 1)"
+                            val vInCenter = if (isStm) "PB3 (H_TOP.9)" else "GPIO16 (RIGHT.12)"
+                            val vInSide = if (isStm) "PB4 (H_TOP.8)" else "GPIO17 (RIGHT.11)"
+                            val vClamp = if (isStm) "3V3 (H_TOP.3)" else "3V3 (LEFT.1)"
 
                             Text(
                                 text = "=== JALUR CENTER (J1.12 ke ${if (isStm) "PB3" else "GPIO16"}) ===\n" +
@@ -1660,8 +1660,8 @@ private fun OemLearnSafetyWiringGuide(selectedPlatform: McuPlatform) {
                                 .horizontalScroll(rememberScrollState())
                                 .padding(8.dp)
                         ) {
-                            val vout5Pin = if (isStm) "WeAct Pin 5V (H_BOTTOM.2)\n                                                                             atau Port USB-C" else "ESP32 Pin 5V/VIN (Pin 19)\n                                                                             atau Port USB"
-                            val voutGndPin = if (isStm) "WeAct Pin GND (H_TOP.1 / H_BOTTOM.1)" else "ESP32 Pin GND (Pin 14 / Pin 20)"
+                            val vout5Pin = if (isStm) "WeAct Pin 5V (H_BOTTOM.2)\n                                                                             atau Port USB-C" else "ESP32 5V/VIN (LEFT.19)\n                                                                             atau Port USB"
+                            val voutGndPin = if (isStm) "WeAct Pin GND (H_TOP.1 / H_BOTTOM.1)" else "ESP32 GND (LEFT.14 / RIGHT.1)"
 
                             Text(
                                 text = "Harness J1.5 (Cokelat / +12V Kontak) ---> [ Sekring 2A ] ---> [ VIN+ ]\n" +
@@ -1683,7 +1683,7 @@ private fun OemLearnSafetyWiringGuide(selectedPlatform: McuPlatform) {
                             text = "LANGKAH KONEKSI DAYA SAAT OEM LEARN:\n" +
                                     "1. Sambungkan input regulator step-down ke kabel Kontak J1.5 (+12V) dan Massa J1.11 (GND).\n" +
                                     "2. Pastikan tegangan output regulator disetel stabil di 5.0 Volt DC.\n" +
-                                    "3. Hubungkan output 5.0V ke Pin ${if (isStm) "5V WeAct STM32 (H_BOTTOM.2)" else "5V/VIN ESP32 (Pin 19)"} (atau colokkan kabel USB).\n" +
+                                    "3. Hubungkan output 5.0V ke Pin ${if (isStm) "5V WeAct STM32 (H_BOTTOM.2)" else "5V/VIN ESP32 (LEFT.19)"} (atau colokkan kabel USB).\n" +
                                     "4. Pastikan Pin GND $platformName terhubung ke GND_STAR motor (J1.11).\n" +
                                     "5. Saat kontak motor diputar ke ON:\n" +
                                     "   • CDI bawaan motor mendapat daya normal.\n" +
@@ -1700,4 +1700,3 @@ private fun OemLearnSafetyWiringGuide(selectedPlatform: McuPlatform) {
         }
     }
 }
-

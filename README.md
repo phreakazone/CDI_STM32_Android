@@ -1,4 +1,4 @@
-# NS200 CDI R8 (v8.3.1) — Modern Android Tuning, Telemetry, Modular Hardware & OTA Suite
+# NS200 CDI R8 (v8.3.2) — Modern Android Tuning, Telemetry, Modular Hardware & OTA Suite
 
 Aplikasi Android kendali terpadu untuk unit pengapian **CDI Programmable NS200-CDI-R8** (Bajaj Pulsar 200 DTS-i & Modifikasi Dual/Triple Spark). Menggabungkan kokpit telemetri balap gaya MoTeC, pemetaan kurva pengapian 4-slot dinamis, kalibrasi strobo pulser TDC, mode pembelajaran kurva asli (**OEM Learn Mode**), sistem pengunggah firmware nirkabel (**BLE OTA Firmware Uploader**), alur aktivasi mandiri aman (**Safe DIY Mode**), katalog modul jadi pasaran (*Commercial Off-the-Shelf Drop-in Modules*), bengkel panduan kabel interaktif, diagnostik paket data biner BLE, serta simulator akustik mesin knalpot multi-silinder (*Live Audio Engine Test Bench*).
 
@@ -8,15 +8,15 @@ Mendukung Arsitektur Lintas Platform (*Dual-Platform*): [**WeAct STM32WB55**](ht
 
 ## 📋 Daftar Isi
 1. [Fitur Utama](#-fitur-utama)
-2. [Pembaruan Besar Firmware R8 & Aplikasi v8.3.1](#-pembaruan-besar-firmware-r8--aplikasi-v831)
+2. [Pembaruan Besar Firmware R8 & Aplikasi v8.3.2](#-pembaruan-besar-firmware-r8--aplikasi-v832)
 3. [Katalog & Panduan Modul Siap Pakai di Pasaran (Drop-In Modular Upgrade)](#-katalog--panduan-modul-siap-pakai-di-pasaran-drop-in-modular-upgrade)
-4. [Daftar Belanja Komponen Lengkap (BOM) & Persamaan Substitusi Identik](#-daftar-belanja-komponen-lengkap-bom--persamaan-substitusi-identik)
+4. [Daftar Belanja Komponen Lengkap (BOM) & Panduan Bebas Salah Beli](#-daftar-belanja-komponen-lengkap-bom--panduan-bebas-salah-beli)
 5. [Arsitektur & Tumpukan Teknologi](#-arsitektur--tumpukan-teknologi)
 6. [Detail Modul & Layar](#-detail-modul--layar)
    - [1. Dashboard MoTeC & Tacho Slider](#1-dashboard-motec--tacho-slider)
    - [2. Ignition Maps (4-Slot Timing)](#2-ignition-maps-4-slot-timing)
    - [3. Setup CDI, OEM Learn & Kalibrasi TDC](#3-setup-cdi-oem-learn--kalibrasi-tdc)
-   - [4. Pengunggah Firmware BLE OTA (APP.bin)](#4-pengunggah-firmware-ble-ota-appbin)
+   - [4. Pengunggah Firmware BLE OTA](#4-pengunggah-firmware-ble-ota)
    - [5. Live Audio Engine Test Bench & MOGE Super Bass](#5-live-audio-engine-test-bench--moge-super-bass)
    - [6. Quick Setup & Wiring Workshop](#6-quick-setup--wiring-workshop)
    - [7. BLE Terminal & Hex Diagnostics](#7-ble-terminal--hex-diagnostics)
@@ -30,10 +30,10 @@ Mendukung Arsitektur Lintas Platform (*Dual-Platform*): [**WeAct STM32WB55**](ht
 ## 🚀 Fitur Utama
 
 - **Koneksi Nirkabel BLE Ultra-Stabil**: Scanning otomatis, auto-reconnect, pengiriman perintah berbasis antrean (*queue-based write*), handshaking kapabilitas `GET,CAPS`, dan proteksi transisi mode bebas *ghost telemetry*.
-- **Telemetri Balap Real-Time (20 Hz)**: Memantau RPM hingga 13.000, bukaan gas (TPS 0–100%), derajat *ignition advance* (° BTDC), tegangan pengisian kapasitor HV Center & Side (hingga 345V PRO), voltase aki (Cv), suhu mesin (°C), dan status *rev limiter*.
+- **Telemetri Balap Real-Time (20 Hz)**: Memantau RPM (batas kendali firmware 10.500 Normal / 11.500 PRO), TPS 0–100%, *ignition advance* (° BTDC), HV Center/Side (285V Normal / 345V PRO), voltase aki, fault, output, dan *rev limiter*. Kanal suhu disediakan protokol tetapi bernilai `N/A` sampai kurva konversi NTC firmware dikalibrasi.
 - **Mode Pembelajaran Mandiri (OEM Learn Pasif)**: Membaca pulsa pengapian CDI bawaan pabrik secara pasif melalui input mikrokontroler saat mesin hidup, merekam kurva pengapian asli motor secara otomatis.
-- **Rangkaian Pengaman & Opsi Modul Pasaran**: Panduan visual interaktif rangkaian isolasi optik 4-channel PC817, modul buck DC-DC MP1584, modul boost HV ZVS 45–390V, serta modul komparator pulser LM393 siap pakai di pasaran untuk memangkas kerumitan perakitan solderan hingga 85%.
-- **Pengunggah Firmware BLE OTA**: Memperbarui binary mikrokontroler (`APP.bin`) langsung lewat Bluetooth LE tanpa kabel, dilengkapi verifikasi CRC32 dan interlock keselamatan preflight.
+- **Rangkaian Pengaman & Opsi Modul Pasaran**: Panduan visual interaktif rangkaian isolasi optik 4-channel PC817, modul buck DC-DC MP1584, modul relay kipas, serta modul komparator pulser LM393. Blok charger HV tetap memakai rangkaian push-pull yang dikendalikan firmware; modul boost generik tidak kompatibel.
+- **Pengunggah Firmware BLE OTA**: Memperbarui image aplikasi target melalui Bluetooth LE (STM32 `APP.bin`; ESP32 image aplikasi ESP-IDF sesuai partition table), dilengkapi verifikasi CRC32 dan preflight keselamatan.
 - **Alur Setup Checkpoint & Verifikasi Flash Nyata**: 
   - Alur OEM: Rekam timing pasif ➔ Konfirmasi cabut output koil OEM (`OEM_UNPLUGGED`) ➔ FIRST START aman (220V, center saja, advance ≤10°, limiter 3.000 RPM).
   - Menunggu bukti status `READY` nyata yang tersimpan di flash MCU (bukan hanya berhenti pada timer lokal).
@@ -49,18 +49,18 @@ Mendukung Arsitektur Lintas Platform (*Dual-Platform*): [**WeAct STM32WB55**](ht
 
 ---
 
-## ⚡ Pembaruan Besar Firmware R8 & Aplikasi v8.3.1
+## ⚡ Pembaruan Besar Firmware R8 & Aplikasi v8.3.2
 
-| Fitur | Firmware R7 Lama | Firmware R8 / Aplikasi v8.3.1 Baru |
+| Fitur | Firmware R7 Lama | Firmware R8 / Aplikasi v8.3.2 Baru |
 |---|---|---|
 | **Alur Akuisisi Timing** | Wajib strobo manual / timing light tanda T | **OEM Learn Pasif**: Rekam kurva CDI OEM langsung via Input MCU. |
-| **Pilihan Perakitan Hardware** | Wajib solder puluhan komponen diskrit di perfboard | **Drop-in Modular Ready**: Mendukung modul jadi pasaran (Modul PC817 4-ch, Modul Buck MP1584EN, Modul Boost ZVS HV 45-390V). |
+| **Pilihan Perakitan Hardware** | Wajib solder puluhan komponen diskrit di perfboard | **Hybrid Modular**: PC817 4-ch, buck MP1584EN, relay kipas, dan komparator pulser boleh berupa modul; charger HV/SCR tetap diskrit agar sesuai kendali firmware. |
 | **Interlock Fisik** | Mengharuskan jumper `JP_HV`, `SW_ARM`, `JP_PRO` | **Software Interlock & Safety Confirmation**: Menghilangkan batasan saklar fisik; kontrol mode terpadu di aplikasi. |
 | **Aktivasi Mode DIY** | Manual via jumper dan langkah rumit | **Safe DIY Mode**: Wajib konfirmasi `OEM_UNPLUGGED` (tidak ada pengambilalihan otomatis berbahaya). |
 | **First Start & Ready** | Mengharuskan pencabutan jumper berulang kali | **Verifikasi Flash Nyata**: Deteksi idle stabil ≥3s mengunci kalibrasi, lalu aplikasi menunggu status `READY` nyata dari flash MCU. |
 | **Level Tegangan HV** | Terkunci pada 240V–280V | **Dual Target R8 Aktif**: NORMAL (285 V) dan PRO (345 V) via pemuatan profil firmware R8 sesungguhnya. |
 | **Handshake Protokol BLE** | Terbatas pada GET,STATUS | **Kontrak Lengkap**: Mengenali `GET,CAPS`, `MODE`, `LEARN`, `OTA`, sambil menjaga kompatibilitas UUID dan paket telemetri biner v3. |
-| **Update Firmware MCU** | Wajib buka bodi & ST-Link V2 / DFU USB | **BLE OTA Flashing**: Unggah `APP.bin` langsung lewat aplikasi Android dengan proteksi CRC32. |
+| **Update Firmware MCU** | Wajib buka bodi & ST-Link V2 / DFU USB | **BLE OTA Flashing**: Unggah image aplikasi STM32/ESP32 yang sesuai lewat aplikasi Android dengan proteksi CRC32. |
 
 ---
 
@@ -72,7 +72,7 @@ Untuk mengurangi kerumitan wiring kabel dan solder-menyolder komponen diskrit, s
 
 ### Ringkasan Blok Fungsi & Modul Pengganti
 
-> **FILOSOFI MODULAR R8**: Rekomendasi utama berfokus pada **2 MODUL JADI PASARAN (NOL PCB CUSTOM)** yang memangkas perakitan paling rumit, sementara blok yang kritis tetap mempertahankan performa komponen teruji.
+> **FILOSOFI MODULAR R8**: Modul pasaran dipakai hanya pada blok yang cocok secara listrik (isolator OEM Learn, relay kipas, dan buck 5V). Charger HV, feedback HV, dan pemicu SCR tetap mengikuti rangkaian diskrit yang dikendalikan firmware.
 
 | Blok Fungsi CDI | Status Rekomendasi | Modul Pasaran Siap Pakai | Estimasi Harga | Alasan Teknis & Keuntungan Utama |
 |---|---|---|---|---|
@@ -152,7 +152,7 @@ Modul ini digunakan HANYA pada Fase 1 (OEM_LEARN) untuk membaca sinyal timing ko
 | :--- | :---: | :--- | :--- | :--- |
 | **MOD_MCU** | **1 pcs** | **ESP32-WROOM-32D / 32E DevKitC (38-Pin)** *(atau WeAct STM32WB55CGU6)* | Otak kendali timing pengapian, kalkulasi kurva map, pembaca pulser, dan konektivitas BLE Android. | • Mikrokontroler Dual-Core + BLE onboard<br>• Regulator LDO 3.3V onboard<br>• Osilator Kristal onboard<br>• Tombol EN & BOOT onboard<br>• Port USB Type-C / Micro + IC Serial CH340/CP2102<br>• Kapasitor decoupling & filter daya |
 | **MOD_BUCK** | **1 pcs** | **Modul Mini DC-DC Buck MP1584EN** *(atau Modul LM2596 Step Down)* | Menurunkan tegangan aki 12V motor menjadi **5.00V DC stabil & dingin** untuk menyuplai pin 5V board MCU. | • IC Switching Buck Converter<br>• Induktor Choke Ferrite onboard<br>• Kapasitor filter elko / keramik in-out<br>• Trimpot potensiometer pengatur voltase<br>• Dioda freewheeling |
-| **MOD_RELAY** | **1 pcs** | **Modul Relay 1-Channel 5V dengan Optocoupler** | Menyalakan / mematikan kipas radiator motor (J1.7) secara otomatis berdasarkan suhu mesin (NTC). | • Relay 5V 10A<br>• **Transistor Driver Relay (BC547 / SS8050)**<br>• **Dioda Flyback peredam lonjakan induktif koil relay (1N4007)**<br>• Optocoupler pengaman isolasi sinyal MCU<br>• LED indikator Relay ON/OFF<br>• Terminal sekrup baut untuk kabel motor kipas |
+| **MOD_RELAY** | **1 pcs** | **Modul Relay 1-Channel 5V dengan Optocoupler** | Mengendalikan kipas radiator motor (J1.7). Firmware saat ini: OFF = LOW; ON dan AUTO = HIGH failsafe karena konversi NTC belum tersedia. | • Relay 5V 10A<br>• **Transistor Driver Relay (BC547 / SS8050)**<br>• **Dioda flyback koil relay (1N4007)**<br>• Optocoupler pengaman isolasi sinyal MCU<br>• LED indikator Relay ON/OFF<br>• Terminal sekrup baut untuk kabel motor kipas |
 | **MOD_LEARN** | **1 pcs** | **Modul Optocoupler PC817 4-Channel Isolation Board** | Menyadap pulsa timing CDI bawaan pabrik (OEM Learn) secara pasif tanpa mengganggu CDI asli (J1.12 Center & J1.6 Side). | • **4 buah IC Optocoupler PC817**<br>• 4 buah LED indikator kedip pulsa<br>• Resistor bias & pull-up onboard<br>• Jumper selektor level tegangan output<br>• Terminal sekrup baut (screw terminal) kabel sadapan |
 
 ---
@@ -193,14 +193,14 @@ Modul ini digunakan HANYA pada Fase 1 (OEM_LEARN) untuk membaca sinyal timing ko
 #### 4. Resistor Pembagi Tegangan & Bias (Metal Film 1% 0.25W)
 | Nilai Resistor | Jumlah Butuh | Penempatan / Rangkaian |
 | :--- | :---: | :--- |
-| **270k Ohm 1%** | **8 pcs** | Feedback pembacaan tegangan tinggi HV (4 seri untuk Center, 4 seri untuk Side ke ADC MCU). *(Bisa diganti 8 pcs 220k atau 8 pcs 330k).* |
+| **270k Ohm 1%** | **8 pcs** | Feedback pembacaan tegangan tinggi HV (4 seri untuk Center, 4 seri untuk Side ke ADC MCU). Nilai ini harus dipertahankan agar rasio ADC sesuai firmware; nilai lain memerlukan kalibrasi firmware baru. |
 | **10 Ohm** | **2 pcs** | Snubber gerbang driver. |
 | **100 Ohm** | **4 pcs** | Proteksi gerbang MOSFET dan filter sinyal pulser. |
 | **330 Ohm** | **4 pcs** | Pembatas arus transistor pemicu gate SCR. |
 | **1k Ohm** | **4 pcs** | Pulldown gate-katoda SCR1 & SCR2 (mencegah pemicuan liar dari noise). |
 | **2.2k Ohm** | **2 pcs** | Jalur kolektor NPN ke basis PNP pemicu SCR. |
 | **4.7k Ohm** | **4 pcs** | Resistor basis NPN & pullup pulser. |
-| **8.2k Ohm** | **2 pcs** | Pembagi tegangan sensor suhu NTC. |
+| **8.2k Ohm** | **2 pcs** | Resistor bawah pembagi feedback HV Center dan Side. Sensor suhu memakai jaringan 4.7k/15k/27k terpisah. |
 | **10k Ohm** | **6 pcs** | Pullup basis PNP & pulldown referensi ADC. |
 | **15k Ohm** | **2 pcs** | Pembagi tegangan sensor bukaan gas TPS. |
 | **22k Ohm** | **2 pcs** | Pembagi tegangan pembaca voltase aki (VBAT). |
@@ -224,8 +224,8 @@ Modul ini digunakan HANYA pada Fase 1 (OEM_LEARN) untuk membaca sinyal timing ko
 | **Kabel Busi & HV AWG 18-20** | **1 set (~2 meter)** | Kabel tembaga serabut tebal berisolasi tahan tegangan 600V untuk jalur koil busi J1.12, J1.6, dan output sekunder trafo. |
 | **Rumah Sikring + Sekring Blade** | **3 set** | 1x **5A** (Sikring Utama FMAIN), 1x **1A** (Sikring Logic MCU FLOGIC), dan 1x **3A** (Sikring Inverter FHV). |
 | **Induktor Choke Input (L_IN)** | **1 pcs** | Toroid ferit 47 uH dengan rating arus minimal 5A (bisa diambil langsung dari donor PSU PC). |
-| **Pin Header Male 2.54mm** | **1 strip (40 pin)** | Untuk soket jumper konfigurasi, probe uji titik ukur (test point), dan kabel interkoneksi antar modul. |
-| **Jumper Shunt 2.54mm** | **4 pcs** | Jumper setting mode & uji kalibrasi. |
+| **Pin Header Male 2.54mm** | **1 strip (40 pin)** | Untuk selektor fisik TPS `J_TPS`, titik ukur, dan kabel interkoneksi. Bukan pemilih mode firmware. |
+| **Jumper Shunt 2.54mm** | **2 pcs** | Hanya untuk selektor pasangan kabel TPS `J_TPS`; mode/HV/PRO dikendalikan firmware dan aplikasi. |
 | **Papan PCB Lubang Matrix** | **2 keping** | 1 keping ukuran **7 x 9 cm** (Papan Logic MCU & Sensor) dan 1 keping ukuran **5 x 7 cm** (Papan Khusus Power Inverter HV terpisah dengan celah isolasi 6mm). |
 
 ---
@@ -248,14 +248,14 @@ Modul ini digunakan HANYA pada Fase 1 (OEM_LEARN) untuk membaca sinyal timing ko
 
 ### 1. Dashboard MoTeC & Tacho Slider
 Menampilkan instrumen balap presisi tinggi:
-- **Tachometer Radial & Linear**: Visualisasi jarum analog digital hingga 13.000 RPM dengan indikator redline dinamis.
+- **Tachometer Radial & Linear**: Skala visual hingga 13.000 RPM; batas kendali firmware tetap 10.500 RPM Normal / 11.500 RPM PRO dengan redline dinamis.
 - **Panel Status Dual/Triple Spark**: Indikator busi utama (Center Plug) dan busi sekunder (Side Plugs) aktif berkedip sesuai sinyal pemantik.
 - **Telemetry Readout Matrix**:
   - `ADVANCE`: Derajat pengapian (° BTDC)
   - `TPS`: Persentase bukaan gas (0–100%)
   - `BATTERY`: Tegangan aki motor (contoh: 14.1V)
   - `HV CAP`: Tegangan kapasitor discharge CDI (hingga 345V pada mode PRO)
-  - `TEMP`: Estimasi suhu mesin
+  - `TEMP`: `N/A` pada firmware saat ini sampai kurva NTC dikalibrasi dan diimplementasikan
   - `MODE FIRMWARE`: Indikator mode aktif (OEM_LEARN / MANUAL / DIY)
 - **Interactive Tacho Slider**: Pengontrol putaran mesin simulasi di mode demo, dan pengikut RPM motor di mode BLE.
 - **Tombol Aksi Cepat**: Preset instan `IDLE (1.4K)`, `5K`, `8K`, `LIMITER`, serta tombol interaktif `BLIP GAS`.
@@ -279,13 +279,13 @@ Wizard komisi terpadu satu tahap per layar: BARU ➔ PULSER ➔ TDC ➔ TPS ➔ 
   - Tombol seleksi tegangan HV **NORMAL (285 V)** dan **PRO (345 V)**.
   - Memuat profil R8 yang tepat (`LOAD,<slot>`) sehingga target aktual pada hardware MCU benar-benar berpindah 285 V ↔ 345 V.
 
-### 4. Pengunggah Firmware BLE OTA (APP.bin)
+### 4. Pengunggah Firmware BLE OTA
 Pembaruan firmware nirkabel terintegrasi di tab BLE Terminal:
 - **Interlock Keselamatan Preflight**: Tombol upload terkunci otomatis kecuali syarat aman terpenuhi:
   - `RPM == 0` (mesin wajib mati).
   - `Output Coils == OFF` (koil pemantik tidak aktif).
   - `HV Center & Side < 30V` (kapasitor daya tinggi sudah terkuras aman).
-- **Transmisi Chunk Cerdas**: Mengirim binary `APP.bin` per-blok melalui BLE GATT write without response, dilengkapi progress bar persentase, total byte terkirim, dan tombol pembatalan seketika.
+- **Transmisi Chunk Cerdas**: Mengirim image aplikasi target per blok melalui BLE GATT write without response, dilengkapi progress, total byte terkirim, dan pembatalan. Gunakan `APP.bin` untuk STM32 atau image aplikasi ESP-IDF yang sesuai partition table untuk ESP32.
 - **Integritas Flash**: Verifikasi checksum CRC32 otomatis di sisi mikrokontroler sebelum menjalankan reboot aplikasi baru.
 
 ### 5. Live Audio Engine Test Bench & MOGE Super Bass
@@ -310,7 +310,7 @@ Panduan perkabelan dan alur inisialisasi tahap demi tahap:
   - Pilihan Rasio Pulsa: 1, 2, 3, atau 4 PPR (Pulse Per Revolution).
   - Durasi Gate SCR: 60 µs, 80 µs (standar NS200), 100 µs, atau 120 µs.
 - **Kontrol Mode Kipas Radiator (`FanModeSettings`)**:
-  - Pilihan mode: `OFF`, `ON`, dan `AUTO` dengan safety interlock.
+  - Pilihan mode: `OFF`, `ON`, dan `AUTO` dengan syarat tulis RPM 0 dan HV aman. Pada firmware saat ini ON/AUTO sama-sama HIGH failsafe.
 - **Soket CDI 12-pin**: Kode warna kabel asli NS200, jalur koil sekunder, dan sensor TPS.
 
 ### 7. BLE Terminal & Hex Diagnostics
@@ -330,36 +330,46 @@ Aplikasi berkomunikasi melalui BLE GATT Custom Service:
 - **Telemetry Characteristic UUID (Notify 20 Hz)**: `7a8f1001-6c9d-4e40-a45f-0b4b4e533230`
 - **Command Characteristic UUID (Write)**: `7a8f1002-6c9d-4e40-a45f-0b4b4e533230`
 - **Response Characteristic UUID (Notify ASCII Stream)**: `7a8f1003-6c9d-4e40-a45f-0b4b4e533230`
-- **Format Telemetri Paket Biner v3 (20 Bytes)**:
-  - `[0..1]` : Magic Header `0x15, 0xCD` (NS200 CDI Identifier)
-  - `[2]` : Protocol Version (`0x03`)
-  - `[3]` : Frame Kind (`0` = CORE, `1` = EXTRA)
-  - `[4..5]` : Sequence Counter (16-bit LE)
-  - `[6..7]` : Engine Speed RPM (16-bit LE)
-  - `[8..9]` : Throttle Position Sensor ADC/Raw (16-bit LE)
-  - `[10..11]` : Spark Advance (centi-degree BTDC, 16-bit LE)
-  - `[12..13]` : Battery Voltage (centi-volt, 16-bit LE)
-  - `[14..15]` : HV Center Capacitor Voltage (16-bit LE)
-  - `[16..17]` : HV Side Capacitor Voltage (16-bit LE)
-  - `[18..19]` : CRC16-CCITT Checksum (Polinomial `0x1021`, Initial `0xFFFF`, Final XOR `0x0000`)
+- **Format telemetri biner v3**: tepat 20 byte; frame CORE dan DIAGNOSTIC bergantian pada total 20 Hz.
+
+| Byte | Semua frame | CORE (`kind=0`) | DIAGNOSTIC (`kind=1`) |
+|---:|---|---|---|
+| 0–1 | Magic LE `0xCD15` | — | — |
+| 2 | Versi `0x03` | — | — |
+| 3 | Jenis frame | `0` | `1` |
+| 4–5 | Sequence `uint16 LE` | — | — |
+| 6–7 | Payload | RPM `uint16` | Suhu `int16` centi-°C; saat ini `INT16_MIN` = N/A |
+| 8–9 | Payload | TPS permille `uint16` | Slot aktif `uint8`, limiter state `uint8` |
+| 10–11 | Payload | Advance `int16` centi-degree | Flags `uint8`, output flags `uint8` |
+| 12–13 | Payload | VBAT centivolt `uint16` | Fault bits `uint16` |
+| 14–15 | Payload | HV Center volt `uint16` | Trigger angle centi-degree `uint16` |
+| 16–17 | Payload | HV Side volt `uint16` | Pickup quality `uint8`, first-start seconds `uint8` |
+| 18–19 | CRC | CRC16-CCITT atas byte 0–17, polinomial `0x1021`, init `0xFFFF` | sama |
+
+Tahap setup tidak dikodekan di telemetri v3. Aplikasi mengambilnya dari `GET,SETUP` dan mempertahankannya saat frame biner masuk.
 
 ### Perintah Teks Firmware R8
-- **Handshake Kapabilitas**:
-  - `GET,CAPS` : Menanyakan kapabilitas firmware R8 (`CAPS,OK,OEM_LEARN,PRO_HV,OTA`).
+- Semua perintah/respons ASCII dibungkus sebagai `@<seq>,<body>*<CRC16-hex>\n`.
+- **Handshake dan pembacaan**:
+  - `GET,CAPS` → `CAPS,R8.0,PROTO4,OEM_LEARN,MANUAL,OTA_STAGE,AUTO_FIRST_START,NO_JUMPERS`.
+  - `GET,STATUS`, `GET,META`, `GET,SETUP`, `GET,MODE`, `GET,LEARN`, `GET,OTA`, `GET,CELL,<tps>,<rpm>`.
 - **Mode & Pembelajaran**:
   - `MODE,OEM_LEARN` : Mengaktifkan mode belajar timing pasif dari CDI OEM.
   - `MODE,MANUAL` : Mengaktifkan mode manual/strobo darurat.
   - `MODE,DIY,OEM_UNPLUGGED` : Mengaktifkan operasi CDI mandiri setelah soket OEM dicabut.
   - `LEARN,START` : Memulai perekaman pulsa pengapian OEM.
   - `LEARN,STOP` : Menghentikan perekaman dan menyimpan timing ke flash.
-  - Respons pulsa: `@<seq>,LEARN,PULSES,<center_count>,<side_samples>`
-- **Pengaturan Tegangan R8**:
-  - `SETUP,VOLTAGE,NORMAL` : Mengatur target HV ke 285 V (penggunaan standar/harian).
-  - `SETUP,VOLTAGE,PRO` : Mengatur target HV ke 345 V (kompetisi balap).
-  - `LOAD,<slot>` : Memuat profil slot pengapian sesuai target voltase aktif.
+  - `LEARN,ABORT` : Membatalkan rekaman.
+  - `GET,LEARN` → `LEARN,<state>,<coverage>,<accepted>,<rejected>,<side_samples>,<side_offset_cdeg>`.
+- **Map, limiter, dan PRO**:
+  - `FEATURE,PRO,ON|OFF` : Mengaktifkan izin profil PRO; hanya saat mesin berhenti dan HV aman.
+  - `LOAD,<slot>` / `SAVE,<slot>` : Memuat/menyimpan slot 0–3. Slot 3 adalah 16x8 PRO 345V; slot 0–2 adalah 8x4 Normal 285V.
+  - `LIVE,<tps_index>,<rpm_index>,<advance_cdeg>` : Mengubah satu sel working map.
+  - `LIMIT,SOFT|HARD,<rpm>,<band>` : Mengatur limiter. Maksimum 10.500 Normal atau 11.500 PRO.
 - **Protokol OTA Firmware**:
-  - `OTA,START,<file_size>,<crc32_hex>` : Inisialisasi proses update firmware.
-  - Pengiriman paket data biner 208-byte via kanal BLE.
+  - `OTA,BEGIN,<version>,<file_size>,<crc32_decimal>` : Memulai sesi OTA setelah preflight RPM 0, output/HV mati, dan kedua bank <30V.
+  - Kirim chunk biner melalui characteristic OTA Data; ukuran chunk mengikuti MTU/platform yang dinegosiasikan aplikasi.
+  - `OTA,COMMIT` : Verifikasi image dan tandai siap reboot.
   - `OTA,ABORT` : Pembatalan darurat upload firmware.
 - **Perintah Setup & Status Umum**:
   - `GET,STATUS` : Meminta status telemetri lengkap.
@@ -367,8 +377,9 @@ Aplikasi berkomunikasi melalui BLE GATT Custom Service:
   - `GET,META` : Meminta metadata firmware dan build string.
   - `SETUP,EDGE,<FALLING|RISING>` : Mengatur trigger edge pulser.
   - `SETUP,PPR,<1-4>` : Mengatur rasio pulsa per putaran.
-  - `SETUP,GATE_US,<60|80|100|120>` : Mengatur durasi pulsa SCR gate.
-  - `SETUP,FAN,<OFF|ON|AUTO>` : Mengatur mode kontrol relai kipas radiator.
+  - `SETUP,GATE_US,<40-150>` : Mengatur durasi pulsa SCR gate; UI menyediakan preset 60/80/100/120 µs.
+  - `SETUP,PICKUP,CONFIRM`, `SETUP,STROBE,ON|OFF`, `SETUP,OFFSET,<cdeg>`, `SETUP,SAVE_TDC`, `SETUP,MANUAL_TDC,<cdeg>,CONFIRM`, `SETUP,TPS,CLOSED|OPEN`.
+  - `SETUP,FAN,<OFF|ON|AUTO>` : Saat ini OFF menghasilkan output LOW; ON dan AUTO sama-sama HIGH failsafe sampai konversi NTC tersedia.
   - `SETUP,FIRST_START` : Memulai mode first start aman (220V, auto-lock 3s).
   - `SETUP,READY,CENTER` / `SETUP,READY,THREE,<offset>` : Tahap pengaktifan output penuh.
   - `SETUP,RESET,CONFIRM` : Reset alur setup ke tahap awal.
@@ -387,7 +398,7 @@ Tabel ini memetakan fungsi kabel harness bawaan motor NS200 ke pin yang tepat un
 | 4  | TPS_B | Abu-Abu | PA3 / PA5 | **GPIO34** | Input sensor bukaan gas pasangan B / Referensi. |
 | 5  | +12 V kontak | Cokelat | - | - | Input daya utama kunci kontak ON. Melewati penurun tegangan ke 5V. |
 | 6  | COIL_SIDE | Hitam-Merah | **PA2** | **GPIO26** | **OUTPUT (DIY):** Menembak koil samping via SCR driver menuju J1.6. |
-| 7  | FAN_RELAY | Biru-Kuning | PB5 | **GPIO13** | Output kendali relay kipas radiator otomatis. |
+| 7  | FAN_RELAY | Biru-Kuning | PB5 | **GPIO13** | Output relay active-high; ON/AUTO = HIGH pada firmware saat ini. |
 | 8  | OEM_SIDE | Kosong / NC | **PB4** | **GPIO17** | **INPUT (Learn):** Menyadap pulsa koil samping pabrik via Optocoupler dari kabel **J1.6**. |
 | 9  | OEM_CTR | Kosong / NC | **PB3** | **GPIO16** | **INPUT (Learn):** Menyadap pulsa koil utama pabrik via Optocoupler dari kabel **J1.12**. |
 | 10 | PULSER | Putih-Merah | **PA0** | **GPIO4** | Input sensor magnet. Tersambung permanen ke MCU via modul komparator LM393. |
@@ -419,52 +430,50 @@ Menu **Pinout MCU** dalam aplikasi menyediakan visualisasi ganda (**Mode Tabel 2
 #### 1. WeAct Studio STM32WB55 Core Board (35 PIN)
 - **Header Atas (H_TOP, 15 Pin)**:
   - `H_TOP.1` - `H_TOP.2`: `GND`
-  - `H_TOP.3` - `H_TOP.4`: `3V3` (Output LDO 3.3V internal, max 300mA)
-  - `H_TOP.5`: `PB7` (Status LED onboard)
-  - `H_TOP.6`: `PB6` (UART1_TX debug telemetri kabel)
-  - `H_TOP.7`: `PB5` (Relay Kipas Radiator J1.7 via ULN2003 / Opto)
+  - `H_TOP.3` - `H_TOP.4`: `3V3` (referensi/pull-up, bukan beban besar)
+  - `H_TOP.5`: `PB7` (UART service RX opsional)
+  - `H_TOP.6`: `PB6` (UART service TX opsional)
+  - `H_TOP.7`: `PB5` (output fan J1.7 via relay/transistor)
   - `H_TOP.8`: `PB4` (Sadap Koil Samping OEM Learn via Opto PC817)
   - `H_TOP.9`: `PB3` (Sadap Koil Tengah OEM Learn via Opto PC817)
-  - `H_TOP.10`: `PA15` (JTDI / GPIO serbaguna)
-  - `H_TOP.11`: `PA10` (UART1_RX debug telemetri kabel)
-  - `H_TOP.12`: `PA9` (TC4427 PWM Driver Charger B)
-  - `H_TOP.13`: `PA8` (MCO / Jam clock external)
-  - `H_TOP.14`: `PB9` (Strobe Light Output / Kalibrasi TDC)
-  - `H_TOP.15`: `PB8` (TC4427 PWM Driver Charger A)
+  - `H_TOP.10`: `PA15` (cadangan)
+  - `H_TOP.11`: `PA10` (input hardware fault `PWM_CLAMP`, active-low)
+  - `H_TOP.12`: `PE4` (LED status onboard, active-low)
+  - `H_TOP.13`: `PB1` (cadangan)
+  - `H_TOP.14`: `PB0` (ADC VBAT melalui pembagi/clamp)
+  - `H_TOP.15`: `GND`
 - **Header Bawah (H_BOTTOM, 20 Pin)**:
   - `H_BOTTOM.1`: `GND`
   - `H_BOTTOM.2` - `H_BOTTOM.3`: `5V` (Input Catu Daya 5.00V dari Buck Converter MP1584)
-  - `H_BOTTOM.4`: `VBAT` (Peringatan keras: Khusus baterai koin RTC 3V, **DILARANG** ke aki 12V!)
-  - `H_BOTTOM.5`: `PH3` (BOOT0 pin)
-  - `H_BOTTOM.6`: `PB2` (TPS Throttle Backup ADC2)
-  - `H_BOTTOM.7`: `PB0` (HV Sense Monitor ADC1_IN15 via pembagi tegangan 100:1)
-  - `H_BOTTOM.8`: `PA7` (Temp Sensor ADC1_IN12)
-  - `H_BOTTOM.9`: `PA6` (TPS B ADC1_IN11)
-  - `H_BOTTOM.10`: `PA5` (TPS A ADC1_IN10)
-  - `H_BOTTOM.11`: `PA4` (V_BATT 12V ADC1_IN9)
-  - `H_BOTTOM.12`: `PA3` (MAP Sensor ADC1_IN8)
-  - `H_BOTTOM.13`: `PA2` (Gate SCR Koil Samping J1.6)
-  - `H_BOTTOM.14`: `PA1` (Gate SCR Koil Tengah J1.12)
-  - `H_BOTTOM.15`: `PA0` (Pulser Pick-Up J1.10 via Hardware Capture TIM2_CH1)
-  - `H_BOTTOM.16` - `H_BOTTOM.17`: `3V3`
-  - `H_BOTTOM.18` - `H_BOTTOM.20`: `GND`
+  - `H_BOTTOM.4`: `VBAT` (backup RTC; **DILARANG** ke aki 12V)
+  - `H_BOTTOM.5`: `PH3` (cadangan)
+  - `H_BOTTOM.6`: `PB9` (output strobo TDC)
+  - `H_BOTTOM.7`: `PB8` (PWM charger B ke TC4427 INB)
+  - `H_BOTTOM.8`: `NRST`
+  - `H_BOTTOM.9`: `PA0` (pickup TIM2_CH1 dari komparator)
+  - `H_BOTTOM.10`: `PA1` (gate Center via driver SCR1)
+  - `H_BOTTOM.11`: `PA2` (gate Side via driver SCR2)
+  - `H_BOTTOM.12`: `PA3` (ADC TPS)
+  - `H_BOTTOM.13`: `PA4` (ADC suhu; konversi firmware belum tersedia)
+  - `H_BOTTOM.14`: `PA5` (ADC monitor TPS reference)
+  - `H_BOTTOM.15`: `PA6` (ADC feedback HV Center)
+  - `H_BOTTOM.16`: `PA7` (ADC feedback HV Side)
+  - `H_BOTTOM.17`: `PA8` (cadangan)
+  - `H_BOTTOM.18`: `PA9` (PWM charger A ke TC4427 INA)
+  - `H_BOTTOM.19`: `PB2` (dikonfigurasi pulldown, tidak dipakai keputusan firmware; bukan interlock)
+  - `H_BOTTOM.20`: `GND`
 
 #### 2. ESP32-WROOM-32D DevKitC V4 (38 PIN)
-- **Header Sisi Kiri (Pin 1–19)**:
-  - `Pin 1`: `3V3` | `Pin 2`: `EN` | `Pin 3`: `GPIO36/VP` (TPS A ADC1) | `Pin 4`: `GPIO39/VN` (Temp ADC1)
-  - `Pin 5`: `GPIO34` (TPS B ADC1) | `Pin 6`: `GPIO35` (MAP ADC1) | `Pin 7`: `GPIO32` (HV Sense ADC1)
-  - `Pin 8`: `GPIO33` (V_BATT 12V Sense ADC1) | `Pin 9`: `GPIO25` (Gate Koil Tengah)
-  - `Pin 10`: `GPIO26` (Gate Koil Samping) | `Pin 11`: `GPIO27` (Status LED) | `Pin 12`: `GPIO14` (Strobe Light TDC)
-  - `Pin 13`: `GPIO12` (Bootstrap Pin) | `Pin 14`: `GND` | `Pin 15`: `GPIO13` (Relay Kipas Radiator)
-  - `Pin 16`: `GPIO09` | `Pin 17`: `GPIO10` | `Pin 18`: `GPIO11` | `Pin 19`: `5V/VIN`
-- **Header Sisi Kanan (Pin 20–38)**:
-  - `Pin 20`: `GND` | `Pin 21`: `GPIO23` (Bench SPI/MOSI) | `Pin 22`: `GPIO22` (I2C SCL Display)
-  - `Pin 23`: `GPIO01/TX0` | `Pin 24`: `GPIO03/RX0` | `Pin 25`: `GPIO21` (I2C SDA Display)
-  - `Pin 26`: `GND` | `Pin 27`: `GPIO19` (PWM Charger B) | `Pin 28`: `GPIO18` (PWM Charger A)
-  - `Pin 29`: `GPIO05` (Bench Trigger) | `Pin 30`: `GPIO17` (Sadap OEM Samping via PC817)
-  - `Pin 31`: `GPIO16` (Sadap OEM Tengah via PC817) | `Pin 32`: `GPIO04` (Pulser LM393 Interrupt)
-  - `Pin 33`: `GPIO00` (Bootloader Button) | `Pin 34`: `GPIO02` (Onboard Blue LED)
-  - `Pin 35`: `GPIO15` (Bootstrap) | `Pin 36`: `GPIO08` | `Pin 37`: `GPIO07` | `Pin 38`: `GPIO06`
+- Penomoran memakai posisi lokal per sisi agar tidak ambigu terhadap varian DevKit.
+- **Header kiri (`LEFT.1`–`LEFT.19`, atas ke bawah)**:
+  - `LEFT.1 3V3`; `LEFT.2 EN`; `LEFT.3 GPIO36/VP` TPS; `LEFT.4 GPIO39/VN` suhu; `LEFT.5 GPIO34` TPS reference.
+  - `LEFT.6 GPIO35` HV Center; `LEFT.7 GPIO32` HV Side; `LEFT.8 GPIO33` VBAT; `LEFT.9 GPIO25` gate Center; `LEFT.10 GPIO26` gate Side.
+  - `LEFT.11 GPIO27` strobo; `LEFT.12 GPIO14` hardware fault active-low; `LEFT.13 GPIO12` strapping/cadangan; `LEFT.14 GND`; `LEFT.15 GPIO13` fan.
+  - `LEFT.16 GPIO9`, `LEFT.17 GPIO10`, `LEFT.18 GPIO11` terhubung flash internal—jangan digunakan; `LEFT.19 VIN/5V`.
+- **Header kanan (`RIGHT.1`–`RIGHT.19`, atas ke bawah)**:
+  - `RIGHT.1 GND`; `RIGHT.2 GPIO23`; `RIGHT.3 GPIO22`; `RIGHT.4 TX0/GPIO1`; `RIGHT.5 RX0/GPIO3`; `RIGHT.6 GPIO21`; `RIGHT.7 GND`.
+  - `RIGHT.8 GPIO19` charger B; `RIGHT.9 GPIO18` charger A; `RIGHT.10 GPIO5` bench only; `RIGHT.11 GPIO17` OEM Side; `RIGHT.12 GPIO16` OEM Center; `RIGHT.13 GPIO4` pickup.
+  - `RIGHT.14 GPIO0` BOOT; `RIGHT.15 GPIO2`; `RIGHT.16 GPIO15`; `RIGHT.17 GPIO8`, `RIGHT.18 GPIO7`, `RIGHT.19 GPIO6` terhubung flash internal—jangan digunakan.
 
 ---
 
@@ -495,6 +504,14 @@ Menu **Pinout MCU** dalam aplikasi menyediakan visualisasi ganda (**Mode Tabel 2
 
 ## 📝 Catatan Rilis (Changelog)
 
+### Versi 8.3.2 (Audit Kontrak Firmware dan Wiring Dua Platform)
+- Menyamakan parser/alur Android dengan firmware STM32 dan ESP32: `ACK,MODE` kini diikuti pembacaan ulang MODE, SETUP, dan STATUS; tahap READY dipertahankan sebagai nilai firmware 0–4.
+- Menyamakan batas map dan limiter: 8x4/10.500 RPM untuk Normal, 16x8/11.500 RPM untuk PRO, advance maksimum 36°.
+- Mengoreksi pin ESP32 dengan penomoran lokal `LEFT.n`/`RIGHT.n`, seluruh header STM32, jalur OEM, pickup, charger, fault, fan, strobe, dan feedback HV.
+- Menghapus asumsi `JP_HV`, `JP_PRO`, `PB2 VIN_HV`, `SETUP,VOLTAGE`, dan `OTA,START` yang tidak ada pada kontrak firmware R8.
+- Mendokumentasikan dua frame telemetri v3, respons LEARN yang sebenarnya, OTA BEGIN/COMMIT, target HV 285V/345V, fault 360V, dan status suhu/fan saat ini.
+- Audit ini hanya menggunakan pembandingan sumber dan pemeriksaan statis; tidak menyatakan hasil build atau pengujian perangkat keras.
+
 ### Versi 8.3.1 (Perapihan Total Diagram Wiring & Kesiapan Produksi Dual-Platform STM32 & ESP32)
 - **Standardisasi Simbol Panah Diagram Wiring (`>`)**:
   - Mengganti seluruh karakter panah visual grafik (`▶`) yang rentan merusak lebar kolom dan menyebabkan teks menyebar/berantakan di layar kecil dengan simbol ASCII panah standar `>` (misalnya: `Kabel J1.12 > Resistor 47k > PC817 Pin 1`).
@@ -502,17 +519,17 @@ Menu **Pinout MCU** dalam aplikasi menyediakan visualisasi ganda (**Mode Tabel 2
 - **Validasi Keakuratan Jalur Wiring Dinamis Dual-Platform (STM32 & ESP32)**:
   - Memastikan seluruh jalur pengkabelan, pin input/output, dan nama header secara dinamis beradaptasi sesuai mikrokontroler yang dipilih:
     - **STM32WB55 (WeAct 35-Pin)**:
-      - Pulser Pickup: `PA0 (H_BOTTOM.15)`
-      - Ignition Gates: `PA1 (H_BOTTOM.14)` (Center) & `PA2 (H_BOTTOM.13)` (Side)
+      - Pulser Pickup: `PA0 (H_BOTTOM.9)`
+      - Ignition Gates: `PA1 (H_BOTTOM.10)` (Center) & `PA2 (H_BOTTOM.11)` (Side)
       - OEM Learn Inputs: `PB3 (H_TOP.9)` (Center Capture) & `PB4 (H_TOP.8)` (Side Capture)
       - Fan Relay Driver: `PB5 (H_TOP.7)`
       - Power: `5V (H_BOTTOM.2)` & `GND_STAR (H_BOTTOM.1 / H_TOP.1)`
     - **ESP32-WROOM-32D (38-Pin)**:
-      - Pulser Pickup: `GPIO4 (Pin 32)`
-      - Ignition Gates: `GPIO25 (Pin 9)` (Center) & `GPIO26 (Pin 10)` (Side)
-      - OEM Learn Inputs: `GPIO16 (Pin 31)` (Center Capture) & `GPIO17 (Pin 30)` (Side Capture)
-      - Fan Relay Driver: `GPIO13 (Pin 15)`
-      - Power: `5V/VIN (Pin 19)` & `GND (Pin 14 / Pin 20)`
+      - Pulser Pickup: `GPIO4 (RIGHT.13)`
+      - Ignition Gates: `GPIO25 (LEFT.9)` (Center) & `GPIO26 (LEFT.10)` (Side)
+      - OEM Learn Inputs: `GPIO16 (RIGHT.12)` (Center Capture) & `GPIO17 (RIGHT.11)` (Side Capture)
+      - Fan Relay Driver: `GPIO13 (LEFT.15)`
+      - Power: `5V/VIN (LEFT.19)` & `GND (LEFT.14 / RIGHT.1)`
   - Baik pada Mode Demo (simulasi) maupun Mode Nyata (koneksi BLE ke hardware), seluruh jalur dan tahapan alur keselamatan dipastikan 100% konsisten dan bebas galat.
 - **Kesiapan Produksi (Production Ready Verification)**:
   - Kompilasi build berhasil tanpa error (`compile_applet` PASS).
@@ -555,7 +572,7 @@ Menu **Pinout MCU** dalam aplikasi menyediakan visualisasi ganda (**Mode Tabel 2
   - Menghadirkan visualisasi board 30-pin ESP32-WROOM-32 DevKit V1 yang realistis (Micro-USB/CP2102, pelat metal shielding can RF Espressif, antena tembaga meander, tombol tactile EN & BOOT, dan pinout GPIO autentik).
 - **Konsistensi Visualisasi Wiring & Diagram Simulator Lintas Platform**:
   - Visualizer skema wiring per langkah (`StepWiringVisualCanvas`) dan simulator pcb kumulatif (`FullCumulativeCircuitSimulator`) kini berganti secara instan dan konsisten mengikuti platform yang dipilih:
-    - **STM32**: Menggunakan `RealisticWeActBoard` dengan pinout STM32WB55 (PA0 pulser, PA1/PA2 gate, PA4 TPS, PB0 VBAT, dll.) dan komparator pulser LM339.
+    - **STM32**: Menggunakan `RealisticWeActBoard` dengan pinout STM32WB55 (PA0 pulser, PA1/PA2 gate, PA3 TPS, PA4 suhu, PB0 VBAT, dll.) dan komparator pulser LM339.
     - **ESP32**: Menggunakan `RealisticEsp32Board` dengan pinout ESP32 (GPIO4 pulser via PC817 opto, GPIO25 center gate, GPIO26 side gate, GPIO36/VP TPS ADC1_CH0, GPIO39/VN Temp ADC1_CH3, GPIO33 VBAT ADC1_CH5, dll.).
 - **Label Platform Ringkas & Jelas**:
   - Seluruh antarmuka beralih ke penamaan ringkas "STM32" atau "ESP32" tanpa teks panjang yang memecah baris.
@@ -582,10 +599,10 @@ Menu **Pinout MCU** dalam aplikasi menyediakan visualisasi ganda (**Mode Tabel 2
 - **Katalog & Panduan Modul Siap Pakai di Pasaran**:
   - Menyediakan panduan lengkap penggantian blok diskrit dengan modul siap pakai di pasaran (*drop-in modules*) untuk memangkas kerumitan perakitan solderan hingga 85%.
   - Integrasi visual dan tutorial **Modul Optocoupler PC817 4-Channel** dengan terminal sekrup baut, LED indikator pulsa, dan jumper pull-up onboard untuk alur OEM Learn.
-  - Panduan modul pelengkap: **Modul Buck MP1584EN / LM2596** (+12V ke +5V, menjaga suplai logic WeAct tetap aktif saat mesin mati sesaat pada transisi OEM Learn agar data RAM tidak hilang), **Modul Boost ZVS HV 45-390V** (Pengecas Kapasitor 285V/345V), **Modul Komparator LM393 Speed Sensor** (Pulser Pick-up J1.10), dan **Modul Relay Opto 1-Channel** (Kipas Radiator J1.7).
+  - Panduan modul pelengkap: **Modul Buck MP1584EN / LM2596** (+12V ke +5V), **Modul Komparator LM393** dengan output 3.3V terproteksi (Pulser J1.10), dan **Modul Relay Opto 1-Channel** (Kipas J1.7). Modul boost HV generik dinyatakan tidak kompatibel karena tidak mengikuti kontrol PWM, feedback, serta target 285V/345V firmware.
   - Mempertahankan 100% kompatibilitas wiring soket harness bawaan NS200 12-pin (J1).
 - **Kontrak Firmware R8 & Handshake Kapabilitas**:
-  - Menambahkan handshake `GET,CAPS` saat koneksi BLE terhubung untuk mendeteksi kapabilitas firmware R8 (`OEM_LEARN`, `PRO_HV`, `OTA`).
+  - Menambahkan handshake `GET,CAPS` saat koneksi BLE terhubung untuk mendeteksi kapabilitas firmware R8 (`PROTO4`, `OEM_LEARN`, `MANUAL`, `OTA_STAGE`, `AUTO_FIRST_START`, `NO_JUMPERS`).
   - Menjaga keutuhan UUID BLE GATT dan struktur telemetri biner v3 (20-byte).
   - Menghapus asumsi pin lawas sebagai jumper fisik lama; pin sadap kini murni diakui sebagai probe pasif OEM Center & Side.
 - **Penyempurnaan Alur Setup Checkpoint**:
@@ -597,13 +614,13 @@ Menu **Pinout MCU** dalam aplikasi menyediakan visualisasi ganda (**Mode Tabel 2
 
 ### Versi 8.0.0 (Rilis Utama Firmware R8)
 - **Dukungan Penuh Firmware R8**: Integrasi menyeluruh dengan arsitektur firmware terbaru Dual-Core MCU.
-- **Pengunggah Firmware BLE OTA (`APP.bin`)**:
+- **Pengunggah Firmware BLE OTA (image aplikasi target)**:
   - Menu pengunggah binary firmware langsung via BLE GATT di tab Terminal / Hex.
   - Pemeriksaan keselamatan preflight ketat: hanya dapat dimulai saat RPM = 0, koil OFF, dan HV < 30V.
   - Streaming chunk 208-byte dengan verifikasi checksum CRC32 dan tombol pembatalan.
 - **Alur OEM Learn Pasif**:
   - Pembacaan sinyal timing asli dari CDI bawaan motor.
-  - Indikator counter pulsa Center dan sampel Side secara langsung (@seq,LEARN,PULSES,...).
+  - Status belajar dibaca melalui `GET,LEARN`: state, coverage, pulsa diterima/ditolak, sampel Side, dan offset Side.
   - Tombol kontrol *Mulai Learn* dan *Simpan & Stop*.
 - **Mode Kontrol Firmware Fleksibel**:
   - Pilihan mode `OEM_LEARN`, `MANUAL` (strobo/TDC darurat), dan `DIY`.
@@ -612,7 +629,7 @@ Menu **Pinout MCU** dalam aplikasi menyediakan visualisasi ganda (**Mode Tabel 2
   - Deteksi idle stabil ≥3 detik pada mode aman (220V, center saja, limiter 3.000 RPM) otomatis mengunci kalibrasi.
   - Transisi status otomatis ke READY begitu mesin dimatikan atau pada proses booting berikutnya.
 - **Dual Target Tegangan Tinggi (HV)**:
-  - Dukungan seleksi tegangan HV **NORMAL (285 V)** dan **PRO (345 V)** via perintah BLE `SETUP,VOLTAGE`.
+  - Dukungan target HV **NORMAL (285 V)** dan **PRO (345 V)** melalui `FEATURE,PRO,ON|OFF` dan profil slot (`LOAD,<slot>`).
   - Ambang batas proteksi tegangan berlebih disesuaikan ke 360 V untuk mendukung mode PRO 345 V.
 - **Pembersihan Logika Interlock Hardware Lama**: Menghilangkan dependensi interlock fisik jumper dari firmware R8, digantikan dengan software safety checks dan monitoring pasif.
 

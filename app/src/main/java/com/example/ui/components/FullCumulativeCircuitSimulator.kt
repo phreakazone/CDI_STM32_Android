@@ -446,13 +446,13 @@ private fun HarnessAssemblySection(
           Triple("J1.2", "HIJAU-PUTIH", "TPS A"),
           Triple("J1.4", "ABU-ABU", "TPS B"),
           Triple("J1.3", "HITAM-PUTIH", "Suhu Coolant"),
-          Triple("J1.1", "HITAM-HIJAU", "Kontrol Relay Fan"),
+          Triple("J1.7", "BIRU-KUNING", "Kontrol Relay Fan"),
           Triple("J1.12", "ORANYE-KUNING", "Koil Tengah HV"),
           Triple("J1.6", "ORANYE-HITAM", "Koil Samping HV")
         ).forEach { (pin, colorLabel, func) ->
           val isPinActive = when (pin) {
             "J1.11", "J1.5" -> activeStage >= 1
-            "J1.10", "J1.2", "J1.4", "J1.3", "J1.1" -> activeStage >= 2
+            "J1.10", "J1.2", "J1.4", "J1.3", "J1.7" -> activeStage >= 2
             "J1.12", "J1.6" -> activeStage >= 5
             else -> false
           }
@@ -559,9 +559,10 @@ private fun PcbLogicAssemblySection(
       if (isEsp) {
         RealisticEsp32Board(
           activePins = when {
-            activeStage >= 5 -> setOf("VIN", "GND", "3V3", "4", "25", "26", "VP", "VN", "34", "18", "19", "16", "17")
-            activeStage >= 3 -> setOf("VIN", "GND", "3V3", "4", "VP", "VN", "34", "18", "19")
-            activeStage >= 2 -> setOf("VIN", "GND", "3V3", "4", "VP", "34", "18")
+            activeStage >= 5 -> setOf("VIN", "GND", "3V3", "4", "13", "14", "16", "17", "18", "19", "25", "26", "27", "32", "33", "34", "35", "VP", "VN")
+            activeStage >= 4 -> setOf("VIN", "GND", "3V3", "4", "13", "14", "16", "17", "18", "19", "27", "32", "33", "34", "35", "VP", "VN")
+            activeStage >= 3 -> setOf("VIN", "GND", "3V3", "4", "13", "14", "16", "17", "18", "19", "27", "33", "34", "VP", "VN")
+            activeStage >= 2 -> setOf("VIN", "GND", "3V3", "4", "13", "16", "17", "27", "33", "34", "VP", "VN")
             else -> setOf("VIN", "GND", "3V3")
           },
           highlightedPin = if (activeStage >= 2) "4" else "VIN"
@@ -569,8 +570,9 @@ private fun PcbLogicAssemblySection(
       } else {
         RealisticWeActBoard(
           activePins = when {
-            activeStage >= 5 -> setOf("G", "5V", "3V3", "A0", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "B0", "B1", "B2", "B3", "B4", "B5", "B8", "B9", "A10")
-            activeStage >= 3 -> setOf("G", "5V", "3V3", "A0", "A3", "A4", "A5", "A8", "A9", "B0", "B8")
+            activeStage >= 5 -> setOf("G", "5V", "3V3", "A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "A9", "A10", "B0", "B3", "B4", "B5", "B8", "B9")
+            activeStage >= 4 -> setOf("G", "5V", "3V3", "A0", "A3", "A4", "A5", "A6", "A7", "A9", "A10", "B0", "B3", "B4", "B5", "B8", "B9")
+            activeStage >= 3 -> setOf("G", "5V", "3V3", "A0", "A3", "A4", "A5", "A9", "A10", "B0", "B3", "B4", "B5", "B8", "B9")
             activeStage >= 2 -> setOf("G", "5V", "3V3", "A0", "A3", "A4", "A5", "B0", "B3", "B4", "B5", "B9")
             else -> setOf("G", "5V", "3V3")
           },
