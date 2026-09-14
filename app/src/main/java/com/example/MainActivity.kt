@@ -216,7 +216,7 @@ fun MotorsportTopBar(
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "NS200-CDI",
+                                text = "CDI-UNIVERSAL",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Black,
                                 fontFamily = FontFamily.Monospace,
@@ -228,7 +228,7 @@ fun MotorsportTopBar(
                                 color = MotecOrange.copy(alpha = 0.2f)
                             ) {
                                 Text(
-                                    text = "R8",
+                                    text = "R9",
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace,

@@ -156,7 +156,7 @@ fun BleHexScreen(
                         Column {
                             Text(
                                 text = if (isConnected) {
-                                    if (isSimulation) "MODE SIMULASI CDI R8"
+                                    if (isSimulation) "MODE SIMULASI CDI R9"
                                     else if (telemetryPacketCount < 2L) "BLE CONNECTED • STANDBY"
                                     else "BLE CONNECTED • ${packetRate} Hz"
                                 } else "BLE OFFLINE / TERPUTUS",
@@ -290,7 +290,7 @@ fun BleHexScreen(
             }
         }
 
-        // BLE OTA FIRMWARE UPLOADER (APP.BIN - R8) CARD
+        // BLE OTA FIRMWARE UPLOADER (APP.BIN - R9) CARD
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -307,7 +307,7 @@ fun BleHexScreen(
                 ) {
                     Column {
                         Text(
-                            text = "PENGUNGGAH FIRMWARE BLE (OTA R8)",
+                            text = "PENGUNGGAH FIRMWARE BLE (OTA R9)",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = MotecOrange,
@@ -461,7 +461,7 @@ fun BleHexScreen(
                         ) {
                             Icon(Icons.Default.CheckCircle, null, tint = RacingLime, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("SUKSES! Firmware R8 berhasil diunggah. ${state.message}", fontSize = 10.sp, color = RacingLime, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                            Text("SUKSES! Firmware R9 berhasil diunggah. ${state.message}", fontSize = 10.sp, color = RacingLime, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                         }
                     }
                     is OtaState.Error -> {
@@ -501,19 +501,15 @@ fun BleHexScreen(
                         }
 
                         OutlinedButton(
-                            enabled = isSafetyOk,
-                            onClick = {
-                                val dummyAppBin = ByteArray(65536) { (it and 0xFF).toByte() }
-                                viewModel.startOtaUpload(dummyAppBin, "APP_R8_DEMO.bin")
-                            },
+                            onClick = { viewModel.sendRawCommand("GET,OTA") },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(6.dp),
                             contentPadding = PaddingValues(vertical = 6.dp),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = ElectricCyan)
                         ) {
-                            Icon(Icons.Default.FlashOn, null, tint = ElectricCyan, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Info, null, tint = ElectricCyan, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("TEST FIRMWARE R8", fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                            Text("STATUS OTA", fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                         }
                     }
                 }
@@ -544,7 +540,7 @@ fun BleHexScreen(
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
-                            text = "Target: NS200-CDI-R7 / STM32WB55",
+                            text = "Target: CDI Universal R9 / STM32WB55 atau ESP32",
                             fontSize = 10.sp,
                             color = TextSecondary,
                             fontFamily = FontFamily.Monospace

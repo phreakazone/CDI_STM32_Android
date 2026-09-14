@@ -28,6 +28,9 @@ extern bool CDI_NVM_Save(const void *data, size_t size);
 extern void CDI_SetIgnitionEnable(bool enabled);
 extern void CDI_SetChargerEnable(bool enabled);
 extern void CDI_SetFanEnable(bool enabled);
+extern uint8_t CDI_ADC_LoadPercent(void);
+extern uint16_t CDI_ADC_TemperatureRaw(void);
+extern uint16_t CDI_ADC_HvMaximumX10(void);
 #if CDI_STM32_OTA_ENABLE
 extern bool CDI_Bootloader_Begin(uint32_t size, uint32_t crc32);
 extern bool CDI_Bootloader_Write(uint32_t offset, const uint8_t *data, size_t size);
@@ -83,6 +86,7 @@ void cdi_stm32_process(void) {
         cdi_trigger_result_t result=cdi_on_reference_pulse(s_ctx,timestamp);
         if(result.fire) schedule_fire(result.delay_us);
     }
+    cdi_set_inputs(s_ctx,CDI_ADC_LoadPercent(),CDI_ADC_TemperatureRaw(),CDI_ADC_HvMaximumX10());
     cdi_tick(s_ctx);
 }
 

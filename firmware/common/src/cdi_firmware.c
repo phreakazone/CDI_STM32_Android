@@ -186,6 +186,8 @@ static uint8_t lower_index_u8(const uint8_t *axis, uint8_t count, uint8_t value)
 }
 
 static int16_t map_lookup(const cdi_profile_t *p, uint16_t rpm, uint8_t load) {
+    rpm = clamp_u16(rpm, p->rpm_axis[0], p->rpm_axis[p->rpm_count - 1u]);
+    load = clamp_u8(load, p->load_axis[0], p->load_axis[p->load_count - 1u]);
     uint8_t ri = lower_index_u16(p->rpm_axis, p->rpm_count, rpm);
     uint8_t li = lower_index_u8(p->load_axis, p->load_count, load);
     uint8_t rj = (uint8_t)(ri + 1u < p->rpm_count ? ri + 1u : ri);

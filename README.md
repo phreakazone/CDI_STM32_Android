@@ -1,8 +1,33 @@
-# NS200 CDI R8 (v8.3.2) — Modern Android Tuning, Telemetry, Modular Hardware & OTA Suite
+# CDI Universal R9 (v9.0.0) — Android Tuning, Dual-MCU Firmware & OTA
+
+
+> **Kontrak R9 yang berlaku:** seluruh firmware sekarang berada di repository ini:
+> [core bersama](firmware/common), [STM32WB55](firmware/stm32wb55), dan
+> [ESP32](firmware/esp32). Tautan/prosedur R8 di bagian historis hanya untuk
+> kompatibilitas perangkat lama dan bukan sumber firmware R9.
+
+## Alur integrasi R9
+
+1. Android terhubung lewat BLE lalu meminta `GET,CAPS`, `GET,PROFILE`, `GET,TEMP`.
+2. Firmware menyatakan batas nyata: RPM, advance, ukuran map, slot, PPR, fan, dyno, OTA.
+3. Aplikasi membatasi editor berdasarkan jawaban firmware, bukan berdasarkan nama NS200.
+4. Penulisan profile/map/kalibrasi hanya dilakukan saat RPM 0 dan HV di bawah 30 V.
+5. FIRST START tetap 3.000 RPM dan maksimum 10° sampai `SETUP,DONE` tersimpan.
+6. STM32WB55 dan ESP32 memakai [core C99 yang sama](firmware/common/src/cdi_firmware.c);
+   port hanya menangani GPIO, ADC, timer, NVM, BLE, dan OTA sesuai MCU.
+
+| Fungsi | Android | Core bersama | STM32WB55 | ESP32 |
+|---|---|---|---|---|
+| Profil/limit/map | Maps | validasi + 4 slot | Flash/NVM hook | NVS |
+| Suhu/fan | Setup + Demo | NTC 3 titik + AUTO fail-safe | PA4/PB5 | GPIO39/GPIO13 |
+| Pulser/trigger | Setup/telemetry | lookup + clipping fisik | PA0/TIM1 | GPIO4/esp_timer |
+| Gate Center/Side | telemetry | jadwal pengapian | PA1/PA2 | GPIO25/GPIO26 |
+| Charger | telemetry | izin + interlock OTA | PA9/PB8 | GPIO18/GPIO19 |
+| OTA | BLE | state/interlock | bootloader opsional | A/B partition |
 
 Aplikasi Android kendali terpadu untuk unit pengapian **CDI Programmable NS200-CDI-R8** (Bajaj Pulsar 200 DTS-i & Modifikasi Dual/Triple Spark). Menggabungkan kokpit telemetri balap gaya MoTeC, pemetaan kurva pengapian 4-slot dinamis, kalibrasi strobo pulser TDC, mode pembelajaran kurva asli (**OEM Learn Mode**), sistem pengunggah firmware nirkabel (**BLE OTA Firmware Uploader**), alur aktivasi mandiri aman (**Safe DIY Mode**), katalog modul jadi pasaran (*Commercial Off-the-Shelf Drop-in Modules*), bengkel panduan kabel interaktif, diagnostik paket data biner BLE, serta simulator akustik mesin knalpot multi-silinder (*Live Audio Engine Test Bench*).
 
-Mendukung Arsitektur Lintas Platform (*Dual-Platform*): [**WeAct STM32WB55**](https://github.com/phreakazone/Firmware_CDI_NS200) dan [**ESP32 WROOM**](https://github.com/phreakazone/Firmware_CDI_NS200_ESP32).
+Mendukung Arsitektur Lintas Platform (*Dual-Platform*): [**WeAct STM32WB55**](https://github.com/phreakazone/Firmware_CDI_NS200) dan [**ESP32 WROOM**](firmware/esp32).
 
 ---
 
@@ -30,7 +55,7 @@ Mendukung Arsitektur Lintas Platform (*Dual-Platform*): [**WeAct STM32WB55**](ht
 ## 🚀 Fitur Utama
 
 - **Koneksi Nirkabel BLE Ultra-Stabil**: Scanning otomatis, auto-reconnect, pengiriman perintah berbasis antrean (*queue-based write*), handshaking kapabilitas `GET,CAPS`, dan proteksi transisi mode bebas *ghost telemetry*.
-- **Telemetri Balap Real-Time (20 Hz)**: Memantau RPM (batas kendali firmware 10.500 Normal / 11.500 PRO), TPS 0–100%, *ignition advance* (° BTDC), HV Center/Side (285V Normal / 345V PRO), voltase aki, fault, output, dan *rev limiter*. Kanal suhu disediakan protokol tetapi bernilai `N/A` sampai kurva konversi NTC firmware dikalibrasi.
+- **Telemetri Balap Real-Time (20 Hz)**: Memantau RPM (batas mengikuti profil dan CAPS firmware (format maksimum 30.000 RPM)), TPS 0–100%, *ignition advance* (° BTDC), HV Center/Side (285V Normal / 345V PRO), voltase aki, fault, output, dan *rev limiter*. Kanal suhu disediakan protokol tetapi bernilai `N/A` sampai kurva konversi NTC firmware dikalibrasi.
 - **Mode Pembelajaran Mandiri (OEM Learn Pasif)**: Membaca pulsa pengapian CDI bawaan pabrik secara pasif melalui input mikrokontroler saat mesin hidup, merekam kurva pengapian asli motor secara otomatis.
 - **Rangkaian Pengaman & Opsi Modul Pasaran**: Panduan visual interaktif rangkaian isolasi optik 4-channel PC817, modul buck DC-DC MP1584, modul relay kipas, serta modul komparator pulser LM393. Blok charger HV tetap memakai rangkaian push-pull yang dikendalikan firmware; modul boost generik tidak kompatibel.
 - **Pengunggah Firmware BLE OTA**: Memperbarui image aplikasi target melalui Bluetooth LE (STM32 `APP.bin`; ESP32 image aplikasi ESP-IDF sesuai partition table), dilengkapi verifikasi CRC32 dan preflight keselamatan.
@@ -248,7 +273,7 @@ Modul ini digunakan HANYA pada Fase 1 (OEM_LEARN) untuk membaca sinyal timing ko
 
 ### 1. Dashboard MoTeC & Tacho Slider
 Menampilkan instrumen balap presisi tinggi:
-- **Tachometer Radial & Linear**: Skala visual hingga 13.000 RPM; batas kendali firmware tetap 10.500 RPM Normal / 11.500 RPM PRO dengan redline dinamis.
+- **Tachometer Radial & Linear**: Skala visual hingga 13.000 RPM; batas mengikuti profil aktif; format protokol maksimum 30.000 RPM dengan redline dinamis.
 - **Panel Status Dual/Triple Spark**: Indikator busi utama (Center Plug) dan busi sekunder (Side Plugs) aktif berkedip sesuai sinyal pemantik.
 - **Telemetry Readout Matrix**:
   - `ADVANCE`: Derajat pengapian (° BTDC)
