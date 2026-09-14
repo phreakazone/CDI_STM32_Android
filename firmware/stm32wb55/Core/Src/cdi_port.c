@@ -98,7 +98,7 @@ void cdi_stm32_ble_rx(const uint8_t *data,uint16_t size) {
             if(s_line_len) {
                 char reply[220];
                 s_line[s_line_len]='\0';
-                size_t n=cdi_handle_command(s_ctx,s_line,reply,sizeof(reply));
+                size_t n=cdi_protocol_exchange(s_ctx,s_line,reply,sizeof(reply));
                 if(n) CDI_BLE_Notify((const uint8_t*)reply,(uint16_t)n);
                 s_line_len=0;
             }

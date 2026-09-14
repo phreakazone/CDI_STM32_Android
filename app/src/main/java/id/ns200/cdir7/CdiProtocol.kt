@@ -105,9 +105,9 @@ object CdiProtocol {
     const val OTA_STATUS = "7a8f1005-6c9d-4e40-a45f-0b4b4e533230"
     const val OTA_CHUNK_MAX_SIZE = 208
     const val OTA_STATUS_SIZE = 16
-    const val OTA_IMAGE_VERSION = 80200L
+    const val OTA_IMAGE_VERSION = 90000L
     const val OTA_MIN_IMAGE_SIZE = 256
-    const val OTA_MAX_IMAGE_SIZE = 0x00030000
+    const val OTA_MAX_IMAGE_SIZE = 0x00100000
 
     const val TELEMETRY_SIZE = 20
     const val VERSION_3 = 3 // R7 / v3

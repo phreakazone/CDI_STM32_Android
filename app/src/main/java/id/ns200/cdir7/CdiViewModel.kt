@@ -852,10 +852,15 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 Toast.makeText(context, "LOAD ditolak: mesin harus mati dan HV < 30 V", Toast.LENGTH_LONG).show()
                 return
             }
-            bleClient.send("FEATURE,PRO,${if (bounded == 3) "ON" else "OFF"}")
-            bleClient.send("LOAD,$bounded")
-            bleClient.send("GET,MODE")
-            appendLog("BLE Send R8: FEATURE PRO ${if (bounded == 3) "ON" else "OFF"} -> LOAD,$bounded (${preset.name})")
+            if (_firmwareCapabilities.value.protocolVersion >= 5) {
+                bleClient.send("MAP,SELECT,$bounded")
+                bleClient.send("GET,PROFILE")
+            } else {
+                bleClient.send("FEATURE,PRO,${if (bounded == 3) "ON" else "OFF"}")
+                bleClient.send("LOAD,$bounded")
+                bleClient.send("GET,MODE")
+            }
+            appendLog("Map slot $bounded dipilih: ${preset.name}")
         } else if (_isSimulationMode.value) {
             _selectedMapSlot.value = bounded
             _softRevLimiterRpm.value = preset.revLimit
@@ -891,12 +896,17 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 Toast.makeText(context, "SYNC ditolak: mesin harus mati dan HV < 30 V", Toast.LENGTH_LONG).show()
                 return
             }
-            bleClient.send("FEATURE,PRO,${if (slot == 3) "ON" else "OFF"}")
-            bleClient.send("LOAD,$slot")
-            bleClient.send("LIMIT,${_limiterType.value},$rpm,$band")
-            bleClient.send("SAVE,$slot")
-            bleClient.send("GET,MODE")
-            appendLog("BLE Sync R8: FEATURE PRO ${if (slot == 3) "ON" else "OFF"} -> LOAD,$slot -> LIMIT,${_limiterType.value},$rpm,$band -> SAVE,$slot")
+            if (caps.protocolVersion >= 5) {
+                bleClient.send("SET,LIMIT,$rpm")
+                bleClient.send("GET,PROFILE")
+            } else {
+                bleClient.send("FEATURE,PRO,${if (slot == 3) "ON" else "OFF"}")
+                bleClient.send("LOAD,$slot")
+                bleClient.send("LIMIT,${_limiterType.value},$rpm,$band")
+                bleClient.send("SAVE,$slot")
+                bleClient.send("GET,MODE")
+            }
+            appendLog("Limiter $rpm RPM tersinkron via protokol v${caps.protocolVersion}")
         } else if (_isSimulationMode.value) {
             appendLog("Sync Kurva Map $slot (Limiter: $rpm RPM, Band: $band RPM) Disimpan Lokal.")
         } else {
@@ -1845,7 +1855,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 _softRevLimiterRpm.value = _softRevLimiterRpm.value.coerceIn(it.rpmMin, it.rpmMax)
             }
             "STATUS" -> if (f.size >= 9) {
-                val slot = f[5].toIntOrNull()?.coerceIn(0, 3) ?: _selectedMapSlot.value
+                val slot = f[5].toIntOrNull()?.coerceIn(0, _firmwareCapabilities.value.mapSlots - 1) ?: _selectedMapSlot.value
                 _selectedMapSlot.value = slot
                 _telemetry.value = _telemetry.value.copy(
                     rpm = f[1].toIntOrNull() ?: _telemetry.value.rpm,
@@ -1860,8 +1870,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             }
             "META" -> if (f.size >= 10) {
                 _limiterType.value = if (f[3].toIntOrNull() == 1) "HARD" else "SOFT"
-                _softRevLimiterRpm.value = f[4].toIntOrNull()?.coerceIn(3000, 11500) ?: _softRevLimiterRpm.value
-                _softBandRpm.value = f[5].toIntOrNull()?.coerceIn(100, 1000) ?: _softBandRpm.value
+                _softRevLimiterRpm.value = f[4].toIntOrNull()?.coerceIn(_firmwareCapabilities.value.rpmMin, _firmwareCapabilities.value.rpmMax) ?: _softRevLimiterRpm.value
+                _softBandRpm.value = f[5].toIntOrNull()?.coerceIn(50, 3000) ?: _softBandRpm.value
                 _targetHvVoltage.value = f[6].toIntOrNull()
                     ?.coerceIn(CdiProtocol.VOLTAGE_FIRST_START, CdiProtocol.VOLTAGE_PRO)
                     ?: _targetHvVoltage.value
@@ -1900,7 +1910,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     ?: _telemetry.value.triggerCdeg
 
                 val sideOffset = f[4].toIntOrNull() ?: 0
-                val ppr = f[5].toIntOrNull()?.coerceIn(1, 4) ?: 1
+                val ppr = f[5].toIntOrNull()?.coerceIn(1, _firmwareCapabilities.value.maxPulserPpr) ?: 1
                 val gateUs = f[6].toIntOrNull()?.coerceIn(40, 150) ?: 80
                 val tpsClosed = f[7].toIntOrNull() ?: 0
                 val tpsOpen = f[8].toIntOrNull() ?: 0
@@ -2241,7 +2251,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     }
                     val simTelemetry = Telemetry(
                         sequence = seq,
-                        rpm = simRpm.toInt().coerceIn(0, 13000),
+                        rpm = simRpm.toInt().coerceIn(0, _firmwareCapabilities.value.rpmMax),
                         tps = (simTps * 1000).toInt(),
                         advanceCdeg = (finalAdvance * 100).toInt(),
                         batteryCv = if (isRunning) 1380 + (sin(seq * 0.1) * 20).toInt() else 1260,

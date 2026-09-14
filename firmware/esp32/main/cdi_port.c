@@ -98,7 +98,7 @@ static void ble_rx(const uint8_t *data,size_t size){
         if(ch=='\n'||ch=='\r'){
             if(s_line_len){
                 char reply[220];s_line[s_line_len]='\0';
-                size_t n=cdi_handle_command(&s_cdi,s_line,reply,sizeof(reply));
+                size_t n=cdi_protocol_exchange(&s_cdi,s_line,reply,sizeof(reply));
                 if(n)cdi_ble_notify((const uint8_t*)reply,n);
                 s_line_len=0;
             }

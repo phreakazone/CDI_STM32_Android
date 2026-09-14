@@ -131,6 +131,8 @@ void cdi_set_inputs(cdi_context_t *ctx, uint8_t load_pct, uint16_t temp_adc, uin
 void cdi_tick(cdi_context_t *ctx);
 cdi_trigger_result_t cdi_on_reference_pulse(cdi_context_t *ctx, uint32_t now_us);
 size_t cdi_handle_command(cdi_context_t *ctx, const char *line, char *reply, size_t reply_size);
+size_t cdi_protocol_exchange(cdi_context_t *ctx, const char *frame, char *reply, size_t reply_size);
+uint16_t cdi_crc16(const uint8_t *data, size_t size);
 uint32_t cdi_crc32(const uint8_t *data, size_t size);
 
 #ifdef __cplusplus

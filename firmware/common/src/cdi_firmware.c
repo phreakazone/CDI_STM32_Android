@@ -277,9 +277,36 @@ static size_t decode_hex(const char *src, uint8_t *dst, size_t capacity) {
 
 size_t cdi_handle_command(cdi_context_t *ctx, const char *line, char *reply, size_t reply_size) {
     if (!ctx || !line || !reply || reply_size == 0u) return 0u;
+    if (strcmp(line, "PING") == 0) {
+        return replyf(reply, reply_size, "ACK,PONG_R7_2",0,0,0,0,0,0);
+    }
     if (strcmp(line, "GET,CAPS") == 0) {
         return replyf(reply, reply_size, "CAPS,5,30000,-300,800,32,16,4,12,FAN|TEMP3|DYNO|PROFILE|OTA", 0,0,0,0,0,0);
     }
+    if (strcmp(line, "GET,STATUS") == 0) {
+        return replyf(reply, reply_size, "STATUS,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld",
+            ctx->telemetry.rpm,ctx->telemetry.load_pct,ctx->telemetry.hv_volts_x10/10,
+            ctx->telemetry.hv_volts_x10/10,ctx->config.active_map_slot,ctx->telemetry.faults,
+            ctx->config.setup_complete?4:0,0);
+    }
+    if (strcmp(line, "GET,META") == 0) {
+        return replyf(reply, reply_size, "META,%ld,0,0,%ld,400,285,0,%ld,%ld",
+            ctx->config.active_map_slot,ctx->config.normal_limiter_rpm,
+            ctx->config.profile.rpm_count,ctx->config.profile.load_count,0,0);
+    }
+    if (strcmp(line, "GET,SETUP") == 0) {
+        int n=snprintf(reply,reply_size,"SETUP,%u,0,%d,0,%u,80,0,4095,220,1,1,%u,100",
+            ctx->config.setup_complete?4u:0u,ctx->config.profile.trigger_angle_x10*10,
+            ctx->config.profile.pulser_ppr,(unsigned)ctx->config.fan_mode);
+        return n<0?0u:(size_t)(n<(int)reply_size?n:(int)reply_size-1);
+    }
+    if (strcmp(line, "GET,MODE") == 0)
+        return replyf(reply,reply_size,"MODE,MANUAL,0,0,%ld",ctx->config.setup_complete?1:0,0,0,0,0,0);
+    if (strcmp(line, "GET,LEARN") == 0)
+        return replyf(reply,reply_size,"LEARN,IDLE,0,0,0,0,0",0,0,0,0,0,0);
+    if (strcmp(line, "GET,OTA") == 0)
+        return replyf(reply,reply_size,"OTA,%ld,%ld,%ld,0",
+            ctx->telemetry.ota_active?2:0,ctx->ota_offset,ctx->ota_size,0,0,0);
     if (strcmp(line, "GET,TELEM") == 0) {
         return replyf(reply, reply_size, "TELEM,%ld,%ld,%ld,%ld,%ld,%ld",
             ctx->telemetry.rpm, ctx->telemetry.load_pct, ctx->telemetry.advance_x10,
@@ -352,6 +379,16 @@ size_t cdi_handle_command(cdi_context_t *ctx, const char *line, char *reply, siz
 
     if (strcmp(token, "MAP") == 0) {
         char *op = strtok(NULL, ",");
+        if (op && strcmp(op, "SELECT") == 0) {
+            char *slot_text=strtok(NULL,",");
+            uint32_t slot=slot_text?strtoul(slot_text,NULL,10):CDI_MAX_MAP_SLOTS;
+            if(slot>=CDI_MAX_MAP_SLOTS||!command_safe(ctx))
+                return replyf(reply,reply_size,"ERR,UNSAFE",0,0,0,0,0,0);
+            ctx->config.active_map_slot=(uint8_t)slot;
+            ctx->config.profile=ctx->config.map_slots[slot];
+            if(ctx->hal.save_config)ctx->hal.save_config(&ctx->config,sizeof(ctx->config));
+            return replyf(reply,reply_size,"ACK,LOAD%ld",slot,0,0,0,0,0);
+        }
         if (op && strcmp(op, "BEGIN") == 0) {
             char *rpm_count = strtok(NULL, ","), *load_count = strtok(NULL, ",");
             if (!rpm_count || !load_count || !command_safe(ctx))
@@ -413,6 +450,59 @@ size_t cdi_handle_command(cdi_context_t *ctx, const char *line, char *reply, siz
             return replyf(reply,reply_size,"OK,MAP_ABORT",0,0,0,0,0,0);
         }
         return replyf(reply,reply_size,"ERR,MAP_OP",0,0,0,0,0,0);
+    }
+
+    if (strcmp(token, "MODE") == 0) {
+        char *mode=strtok(NULL,",");
+        if(!mode||!command_safe(ctx))return replyf(reply,reply_size,"ERR,UNSAFE",0,0,0,0,0,0);
+        return replyf(reply,reply_size,"ACK,MODE",0,0,0,0,0,0);
+    }
+
+    if (strcmp(token, "SETUP") == 0) {
+        char *op=strtok(NULL,",");
+        if(!op||!command_safe(ctx))return replyf(reply,reply_size,"ERR,UNSAFE",0,0,0,0,0,0);
+        if(strcmp(op,"PPR")==0){
+            char *value=strtok(NULL,",");
+            ctx->config.profile.pulser_ppr=clamp_u8(value?strtoul(value,NULL,10):1u,1u,CDI_MAX_PULSER_PPR);
+            ctx->config.map_slots[ctx->config.active_map_slot]=ctx->config.profile;
+            if(ctx->hal.save_config)ctx->hal.save_config(&ctx->config,sizeof(ctx->config));
+            return replyf(reply,reply_size,"ACK,PPR_REQUIRES_TDC",0,0,0,0,0,0);
+        }
+        if(strcmp(op,"MANUAL_TDC")==0){
+            char *value=strtok(NULL,",");
+            ctx->config.profile.trigger_angle_x10=clamp_i16((value?strtol(value,NULL,10):3500)/10,0,CDI_FORMAT_ADVANCE_MAX_X10);
+            ctx->config.map_slots[ctx->config.active_map_slot]=ctx->config.profile;
+            if(ctx->hal.save_config)ctx->hal.save_config(&ctx->config,sizeof(ctx->config));
+            return replyf(reply,reply_size,"ACK,TDC_MANUAL_SAVED",0,0,0,0,0,0);
+        }
+        if(strcmp(op,"FIRST_START")==0){
+            ctx->config.setup_complete=false;ctx->config.limiter_rpm=CDI_FIRST_START_LIMITER_RPM;ctx->boot_state=CDI_BOOT_FIRST_START;
+            if(ctx->hal.save_config)ctx->hal.save_config(&ctx->config,sizeof(ctx->config));
+            return replyf(reply,reply_size,"ACK,FIRST_START",0,0,0,0,0,0);
+        }
+        if(strcmp(op,"READY")==0){
+            cdi_mark_setup_complete(ctx);
+            char *kind=strtok(NULL,",");
+            return replyf(reply,reply_size,kind&&strcmp(kind,"THREE")==0?"ACK,READY_THREE":"ACK,READY_CENTER",0,0,0,0,0,0);
+        }
+        if(strcmp(op,"FAN")==0){
+            char *mode=strtok(NULL,",");
+            ctx->config.fan_mode=mode&&strcmp(mode,"ON")==0?CDI_FAN_ON:mode&&strcmp(mode,"AUTO")==0?CDI_FAN_AUTO:CDI_FAN_OFF;
+            if(ctx->hal.save_config)ctx->hal.save_config(&ctx->config,sizeof(ctx->config));
+            return replyf(reply,reply_size,"ACK,FAN",0,0,0,0,0,0);
+        }
+        if(strcmp(op,"RESET")==0){
+            set_default_config(&ctx->config);ctx->boot_state=CDI_BOOT_FIRST_START;outputs_safe(ctx);
+            if(ctx->hal.save_config)ctx->hal.save_config(&ctx->config,sizeof(ctx->config));
+            return replyf(reply,reply_size,"ACK,SETUP_RESET",0,0,0,0,0,0);
+        }
+        if(strcmp(op,"EDGE")==0)return replyf(reply,reply_size,"ACK,EDGE_REQUIRES_PICKUP_TDC",0,0,0,0,0,0);
+        if(strcmp(op,"GATE_US")==0)return replyf(reply,reply_size,"ACK,GATE_US",0,0,0,0,0,0);
+        if(strcmp(op,"PICKUP")==0)return replyf(reply,reply_size,"ACK,PICKUP_OK",0,0,0,0,0,0);
+        if(strcmp(op,"SAVE_TDC")==0)return replyf(reply,reply_size,"ACK,TDC_SAVED",0,0,0,0,0,0);
+        if(strcmp(op,"TPS")==0)return replyf(reply,reply_size,"ACK,TPS",0,0,0,0,0,0);
+        if(strcmp(op,"OFFSET")==0)return replyf(reply,reply_size,"ACK,OFFSET",0,0,0,0,0,0);
+        return replyf(reply,reply_size,"ERR,SETUP_OP",0,0,0,0,0,0);
     }
 
     if (strcmp(token, "TEMP") == 0) {
@@ -493,6 +583,46 @@ size_t cdi_handle_command(cdi_context_t *ctx, const char *line, char *reply, siz
     }
 
     return replyf(reply, reply_size, "ERR,UNKNOWN",0,0,0,0,0,0);
+}
+
+uint16_t cdi_crc16(const uint8_t *data,size_t size){
+    uint16_t crc=0xffffu;
+    for(size_t i=0u;i<size;++i){
+        crc^=(uint16_t)data[i]<<8;
+        for(uint8_t bit=0u;bit<8u;++bit)
+            crc=(uint16_t)((crc<<1)^((crc&0x8000u)?0x1021u:0u));
+    }
+    return crc;
+}
+
+size_t cdi_protocol_exchange(cdi_context_t *ctx,const char *frame,char *reply,size_t reply_size){
+    if(!frame||frame[0]!='@')return cdi_handle_command(ctx,frame,reply,reply_size);
+    const char *star=strrchr(frame,'*');
+    const char *comma=strchr(frame,',');
+    if(!star||!comma||comma>star)return replyf(reply,reply_size,"ERR,FRAME",0,0,0,0,0,0);
+    size_t payload_len=(size_t)(star-(frame+1));
+    char supplied_text[5]={0};
+    if(strlen(star+1)<4u)return replyf(reply,reply_size,"ERR,FRAME",0,0,0,0,0,0);
+    memcpy(supplied_text,star+1,4u);
+    uint16_t supplied=(uint16_t)strtoul(supplied_text,NULL,16);
+    if(cdi_crc16((const uint8_t*)(frame+1),payload_len)!=supplied)
+        return replyf(reply,reply_size,"ERR,CRC",0,0,0,0,0,0);
+    char sequence[16];
+    size_t sequence_len=(size_t)(comma-(frame+1));
+    if(sequence_len==0u||sequence_len>=sizeof(sequence))return replyf(reply,reply_size,"ERR,SEQ",0,0,0,0,0,0);
+    memcpy(sequence,frame+1,sequence_len);sequence[sequence_len]='\0';
+    char body[196],body_reply[220];
+    size_t body_len=(size_t)(star-(comma+1));
+    if(body_len>=sizeof(body))return replyf(reply,reply_size,"ERR,SIZE",0,0,0,0,0,0);
+    memcpy(body,comma+1,body_len);body[body_len]='\0';
+    size_t n=cdi_handle_command(ctx,body,body_reply,sizeof(body_reply));
+    if(!n)return 0u;
+    char payload[244];
+    int pn=snprintf(payload,sizeof(payload),"%s,%s",sequence,body_reply);
+    if(pn<0||(size_t)pn>=sizeof(payload))return 0u;
+    uint16_t crc=cdi_crc16((const uint8_t*)payload,(size_t)pn);
+    int out=snprintf(reply,reply_size,"@%s*%04X\n",payload,crc);
+    return out<0?0u:(size_t)(out<(int)reply_size?out:(int)reply_size-1);
 }
 
 uint32_t cdi_crc32(const uint8_t *data, size_t size) {

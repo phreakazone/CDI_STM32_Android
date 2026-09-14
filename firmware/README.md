@@ -32,7 +32,9 @@ application.
 
 ## Commands used by Android
 
-- `GET,CAPS`, `GET,PROFILE`, `GET,TELEM`, `GET,TEMP`
+- Android framing: `@sequence,command*CRC16-CCITT` (plain commands remain available for bench consoles)
+- `PING`, `GET,CAPS`, `GET,PROFILE`, `GET,TELEM`, `GET,TEMP`, `GET,STATUS`, `GET,META`, `GET,SETUP`
+- `MAP,SELECT,slot`
 - `SET,PROFILE,name,rpmMin,rpmMax,advMinX10,advMaxX10,ppr,triggerX10`
 - `SET,LIMIT,rpm`
 - `SET,FAN,OFF|ON|AUTO,onX10,offX10`
