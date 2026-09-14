@@ -49,8 +49,9 @@ fun MapsScreen(viewModel: CdiViewModel) {
     var safetyAlertText by remember { mutableStateOf<String?>(null) }
     var showSaveConfirmDialog by remember { mutableStateOf(false) }
 
-    val currentMap = viewModel.mapPresets[selectedSlot]
-    val limiterMaxRpm = if (selectedSlot == 3) 11_500 else 10_500
+    val currentMap = viewModel.mapPresets[selectedSlot.coerceIn(viewModel.mapPresets.indices)]
+    val capabilities by viewModel.firmwareCapabilities.collectAsState()
+    val limiterMaxRpm = capabilities.rpmMax
 
     Column(
         modifier = Modifier
@@ -60,6 +61,9 @@ fun MapsScreen(viewModel: CdiViewModel) {
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        EngineProfileCard(viewModel)
+        DynoLiveTuneCard(viewModel)
+
         // Section Header
         Row(
             modifier = Modifier.fillMaxWidth(),
