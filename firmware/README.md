@@ -37,6 +37,7 @@ application.
 - `SET,LIMIT,rpm`
 - `SET,FAN,OFF|ON|AUTO,onX10,offX10`
 - `TEMP,CAL,adc1,temp1X10,adc2,temp2X10,adc3,temp3X10`
+- `MAP,BEGIN,rpmCount,loadCount`, `MAP,RPM`, `MAP,LOAD`, `MAP,CELL`, `MAP,SAVE,slot|ABORT`
 - `DYNO,BEGIN|TRIM|COMMIT|ABORT`
 - `OTA,BEGIN,size,crc32`, `OTA,DATA,offset,hex`, `OTA,END|ABORT`
 - `SETUP,DONE`

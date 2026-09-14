@@ -558,6 +558,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         _isSimulationMode.value = !_isSimulationMode.value
         if (_isSimulationMode.value) {
             if (bleClient.gattReady || bleClient.isBusy.value) bleClient.disconnect()
+            _firmwareCapabilities.value = FirmwareCapabilities.demoR9()
+            _engineProfile.value = EngineProfile.universal()
             _connectionStatus.value = "SIMULASI AKTIF • Telemetry 20Hz (MoTeC Mode)"
             _isConnected.value = true
             // Default simulasi: Mesin hidup stasioner idle ~1.420 RPM layaknya motor hidup normal

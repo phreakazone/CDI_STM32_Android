@@ -16,7 +16,9 @@
 
 static cdi_context_t s_cdi;
 static TaskHandle_t s_trigger_task;
+static esp_timer_handle_t s_delay_timer;
 static esp_timer_handle_t s_fire_timer;
+static volatile uint32_t s_reference_timestamp_us;
 static const esp_partition_t *s_ota_partition;
 static esp_ota_handle_t s_ota_handle;
 static nvs_handle_t s_nvs;
@@ -56,6 +58,7 @@ static void fire_now(void *arg){
 static void IRAM_ATTR reference_isr(void *arg){
     (void)arg;
     BaseType_t wake=pdFALSE;
+    s_reference_timestamp_us=(uint32_t)esp_timer_get_time();
     vTaskNotifyGiveFromISR(s_trigger_task,&wake);
     if(wake) portYIELD_FROM_ISR();
 }
@@ -64,11 +67,10 @@ static void trigger_task(void *arg){
     (void)arg;
     for(;;){
         ulTaskNotifyTake(pdTRUE,portMAX_DELAY);
-        cdi_trigger_result_t r=cdi_on_reference_pulse(&s_cdi,port_micros());
+        cdi_trigger_result_t r=cdi_on_reference_pulse(&s_cdi,s_reference_timestamp_us);
         if(r.fire){
-            esp_timer_handle_t delay_timer;
-            esp_timer_create_args_t args={.callback=fire_now,.name="cdi_delay"};
-            if(esp_timer_create(&args,&delay_timer)==ESP_OK) esp_timer_start_once(delay_timer,r.delay_us);
+            esp_timer_stop(s_delay_timer);
+            esp_timer_start_once(s_delay_timer,r.delay_us);
         }
     }
 }
@@ -97,6 +99,8 @@ void app_main(void){
     gpio_config(&out);
     gpio_config_t in={.pin_bit_mask=1ULL<<CDI_GPIO_REFERENCE,.mode=GPIO_MODE_INPUT,.intr_type=GPIO_INTR_POSEDGE};
     gpio_config(&in);
+    esp_timer_create_args_t delay_args={.callback=fire_now,.name="cdi_delay"};
+    esp_timer_create(&delay_args,&s_delay_timer);
     esp_timer_create_args_t fire_args={.callback=fire_off,.name="cdi_fire_off"};
     esp_timer_create(&fire_args,&s_fire_timer);
     cdi_hal_t hal={port_micros,set_ignition,set_charger,set_fan,load_config,save_config,ota_begin,ota_write,ota_finish,ota_abort};

@@ -75,7 +75,10 @@ typedef struct {
 
 typedef struct {
     uint32_t schema;
+    bool setup_complete;
+    uint8_t active_map_slot;
     cdi_profile_t profile;
+    cdi_profile_t map_slots[CDI_MAX_MAP_SLOTS];
     uint16_t limiter_rpm;
     uint16_t normal_limiter_rpm;
     cdi_fan_mode_t fan_mode;
@@ -114,6 +117,8 @@ typedef struct {
     uint16_t pulse_count;
     int16_t live_trim_x10;
     cdi_profile_t dyno_backup;
+    cdi_profile_t map_staging;
+    bool map_staging_active;
     uint32_t ota_size;
     uint32_t ota_crc32;
     uint32_t ota_offset;

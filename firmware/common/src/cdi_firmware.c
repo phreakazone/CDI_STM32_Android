@@ -37,6 +37,7 @@ static bool config_valid(const cdi_config_t *cfg) {
     return cfg->schema == CDI_CONFIG_SCHEMA &&
            cfg->profile.rpm_count >= 2u && cfg->profile.rpm_count <= CDI_MAX_RPM_AXIS &&
            cfg->profile.load_count >= 1u && cfg->profile.load_count <= CDI_MAX_LOAD_AXIS &&
+           cfg->active_map_slot < CDI_MAX_MAP_SLOTS &&
            cfg->profile.pulser_ppr >= 1u && cfg->profile.pulser_ppr <= CDI_MAX_PULSER_PPR &&
            cfg->profile.rpm_max <= CDI_FORMAT_RPM_MAX &&
            cfg->fan_off_x10 < cfg->fan_on_x10;
@@ -70,6 +71,11 @@ static void set_default_config(cdi_config_t *cfg) {
     memset(cfg, 0, sizeof(*cfg));
     cfg->schema = CDI_CONFIG_SCHEMA;
     cdi_set_profile_defaults(&cfg->profile, "UNIVERSAL_BASE");
+    for (uint8_t slot = 0u; slot < CDI_MAX_MAP_SLOTS; ++slot) {
+        cfg->map_slots[slot] = cfg->profile;
+    }
+    cfg->setup_complete = false;
+    cfg->active_map_slot = 0u;
     cfg->normal_limiter_rpm = 22000u;
     cfg->limiter_rpm = CDI_FIRST_START_LIMITER_RPM;
     cfg->fan_mode = CDI_FAN_AUTO;
@@ -96,9 +102,12 @@ void cdi_init(cdi_context_t *ctx, const cdi_hal_t *hal) {
         ctx->boot_state = CDI_BOOT_FIRST_START;
         ctx->telemetry.faults |= CDI_FAULT_CONFIG;
         if (ctx->hal.save_config) ctx->hal.save_config(&ctx->config, sizeof(ctx->config));
-    } else {
+    } else if (ctx->config.setup_complete) {
         ctx->boot_state = CDI_BOOT_READY;
         ctx->config.limiter_rpm = ctx->config.normal_limiter_rpm;
+    } else {
+        ctx->boot_state = CDI_BOOT_FIRST_START;
+        ctx->config.limiter_rpm = CDI_FIRST_START_LIMITER_RPM;
     }
     outputs_safe(ctx);
 }
@@ -106,6 +115,7 @@ void cdi_init(cdi_context_t *ctx, const cdi_hal_t *hal) {
 void cdi_mark_setup_complete(cdi_context_t *ctx) {
     if (!ctx) return;
     ctx->config.normal_limiter_rpm = clamp_u16(ctx->config.normal_limiter_rpm, 1000u, CDI_FORMAT_RPM_MAX);
+    ctx->config.setup_complete = true;
     ctx->config.limiter_rpm = ctx->config.normal_limiter_rpm;
     ctx->boot_state = CDI_BOOT_READY;
     ctx->telemetry.faults &= ~CDI_FAULT_CONFIG;
@@ -226,7 +236,7 @@ cdi_trigger_result_t cdi_on_reference_pulse(cdi_context_t *ctx, uint32_t now_us)
 
     ctx->telemetry.advance_x10 = applied;
     ctx->telemetry.ignition_enabled = true;
-    if (ctx->hal.set_ignition) ctx->hal.set_ignition(true);
+    /* The port raises the gate only when the scheduled delay expires. */
     result.fire = true;
     result.delay_us = (uint32_t)delay;
     result.requested_advance_x10 = requested;
@@ -332,9 +342,75 @@ size_t cdi_handle_command(cdi_context_t *ctx, const char *line, char *reply, siz
             ctx->config.profile.advance_max_x10 = clamp_i16(strtol(amax,NULL,10),ctx->config.profile.advance_min_x10,CDI_FORMAT_ADVANCE_MAX_X10);
             ctx->config.profile.pulser_ppr = clamp_u8(strtoul(ppr,NULL,10),1u,CDI_MAX_PULSER_PPR);
             ctx->config.profile.trigger_angle_x10 = clamp_i16(strtol(trigger,NULL,10),0,CDI_FORMAT_ADVANCE_MAX_X10);
+            ctx->config.map_slots[ctx->config.active_map_slot] = ctx->config.profile;
             if (ctx->hal.save_config) ctx->hal.save_config(&ctx->config, sizeof(ctx->config));
             return replyf(reply, reply_size, "OK,PROFILE",0,0,0,0,0,0);
         }
+    }
+
+    if (strcmp(token, "MAP") == 0) {
+        char *op = strtok(NULL, ",");
+        if (op && strcmp(op, "BEGIN") == 0) {
+            char *rpm_count = strtok(NULL, ","), *load_count = strtok(NULL, ",");
+            if (!rpm_count || !load_count || !command_safe(ctx))
+                return replyf(reply, reply_size, "ERR,UNSAFE",0,0,0,0,0,0);
+            uint8_t rn = clamp_u8(strtoul(rpm_count,NULL,10),2u,CDI_MAX_RPM_AXIS);
+            uint8_t ln = clamp_u8(strtoul(load_count,NULL,10),1u,CDI_MAX_LOAD_AXIS);
+            ctx->map_staging = ctx->config.profile;
+            ctx->map_staging.rpm_count = rn;
+            ctx->map_staging.load_count = ln;
+            ctx->map_staging_active = true;
+            return replyf(reply,reply_size,"OK,MAP_BEGIN,%ld,%ld",rn,ln,0,0,0,0);
+        }
+        if (!ctx->map_staging_active)
+            return replyf(reply,reply_size,"ERR,MAP_STATE",0,0,0,0,0,0);
+        if (op && strcmp(op, "RPM") == 0) {
+            char *index=strtok(NULL,","), *value=strtok(NULL,",");
+            uint32_t i=index?strtoul(index,NULL,10):CDI_MAX_RPM_AXIS;
+            if(!value||i>=ctx->map_staging.rpm_count) return replyf(reply,reply_size,"ERR,MAP_INDEX",0,0,0,0,0,0);
+            ctx->map_staging.rpm_axis[i]=clamp_u16(strtoul(value,NULL,10),ctx->map_staging.rpm_min,ctx->map_staging.rpm_max);
+            return replyf(reply,reply_size,"OK,MAP_RPM,%ld",i,0,0,0,0,0);
+        }
+        if (op && strcmp(op, "LOAD") == 0) {
+            char *index=strtok(NULL,","), *value=strtok(NULL,",");
+            uint32_t i=index?strtoul(index,NULL,10):CDI_MAX_LOAD_AXIS;
+            if(!value||i>=ctx->map_staging.load_count) return replyf(reply,reply_size,"ERR,MAP_INDEX",0,0,0,0,0,0);
+            ctx->map_staging.load_axis[i]=clamp_u8(strtoul(value,NULL,10),0u,100u);
+            return replyf(reply,reply_size,"OK,MAP_LOAD,%ld",i,0,0,0,0,0);
+        }
+        if (op && strcmp(op, "CELL") == 0) {
+            char *ri=strtok(NULL,","), *li=strtok(NULL,","), *value=strtok(NULL,",");
+            uint32_t r=ri?strtoul(ri,NULL,10):CDI_MAX_RPM_AXIS;
+            uint32_t l=li?strtoul(li,NULL,10):CDI_MAX_LOAD_AXIS;
+            if(!value||r>=ctx->map_staging.rpm_count||l>=ctx->map_staging.load_count)
+                return replyf(reply,reply_size,"ERR,MAP_INDEX",0,0,0,0,0,0);
+            ctx->map_staging.advance_x10[r][l]=clamp_i16(strtol(value,NULL,10),
+                ctx->map_staging.advance_min_x10,ctx->map_staging.advance_max_x10);
+            return replyf(reply,reply_size,"OK,MAP_CELL,%ld,%ld",r,l,0,0,0,0);
+        }
+        if (op && strcmp(op, "SAVE") == 0) {
+            char *slot_text=strtok(NULL,",");
+            uint32_t slot=slot_text?strtoul(slot_text,NULL,10):CDI_MAX_MAP_SLOTS;
+            if(slot>=CDI_MAX_MAP_SLOTS||!command_safe(ctx))
+                return replyf(reply,reply_size,"ERR,UNSAFE",0,0,0,0,0,0);
+            for(uint8_t i=1u;i<ctx->map_staging.rpm_count;++i)
+                if(ctx->map_staging.rpm_axis[i]<=ctx->map_staging.rpm_axis[i-1u])
+                    return replyf(reply,reply_size,"ERR,RPM_AXIS",0,0,0,0,0,0);
+            for(uint8_t i=1u;i<ctx->map_staging.load_count;++i)
+                if(ctx->map_staging.load_axis[i]<=ctx->map_staging.load_axis[i-1u])
+                    return replyf(reply,reply_size,"ERR,LOAD_AXIS",0,0,0,0,0,0);
+            ctx->config.map_slots[slot]=ctx->map_staging;
+            ctx->config.profile=ctx->map_staging;
+            ctx->config.active_map_slot=(uint8_t)slot;
+            ctx->map_staging_active=false;
+            if(ctx->hal.save_config)ctx->hal.save_config(&ctx->config,sizeof(ctx->config));
+            return replyf(reply,reply_size,"OK,MAP_SAVE,%ld",slot,0,0,0,0,0);
+        }
+        if (op && strcmp(op, "ABORT") == 0) {
+            ctx->map_staging_active=false;
+            return replyf(reply,reply_size,"OK,MAP_ABORT",0,0,0,0,0,0);
+        }
+        return replyf(reply,reply_size,"ERR,MAP_OP",0,0,0,0,0,0);
     }
 
     if (strcmp(token, "TEMP") == 0) {
