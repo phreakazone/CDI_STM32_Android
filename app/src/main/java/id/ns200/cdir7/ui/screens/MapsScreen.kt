@@ -50,6 +50,7 @@ fun MapsScreen(viewModel: CdiViewModel) {
     var showSaveConfirmDialog by remember { mutableStateOf(false) }
 
     val currentMap = viewModel.mapPresets[selectedSlot]
+    val limiterMaxRpm = if (selectedSlot == 3) 11_500 else 10_500
 
     Column(
         modifier = Modifier
@@ -74,7 +75,7 @@ fun MapsScreen(viewModel: CdiViewModel) {
                     color = MotecOrange
                 )
                 Text(
-                    text = if (isCustomMapMode) "${customPoints.size} titik RPM • 4/8 baris TPS • ACK+CRC readback" else "4 Slot Memori STM32WB55 • 8x4 Normal / 16x8 Pro",
+                    text = if (isCustomMapMode) "${customPoints.size} titik RPM • 4/8 baris TPS • ACK+CRC readback" else "4 slot firmware universal • 8x4 Normal / 16x8 PRO",
                     fontSize = 11.sp,
                     color = TextSecondary,
                     fontFamily = FontFamily.Monospace
@@ -315,7 +316,7 @@ fun MapsScreen(viewModel: CdiViewModel) {
                 }
             }
 
-            // SOFT REV-LIMITER SLIDER CARD (9.500 RPM to 12.000 RPM)
+            // Firmware limit: normal slots 10,500 RPM; PRO slot 11,500 RPM.
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -358,10 +359,10 @@ fun MapsScreen(viewModel: CdiViewModel) {
                     }
 
                     Slider(
-                        value = softLimiterRpm.toFloat(),
+                        value = softLimiterRpm.coerceAtMost(limiterMaxRpm).toFloat(),
                         onValueChange = { viewModel.setSoftRevLimiter(it.toInt()) },
-                        valueRange = 3000f..11500f,
-                        steps = 84,
+                        valueRange = 3000f..limiterMaxRpm.toFloat(),
+                        steps = ((limiterMaxRpm - 3000) / 100) - 1,
                         modifier = Modifier.fillMaxWidth(),
                         colors = SliderDefaults.colors(
                             thumbColor = RaceRedline,
@@ -375,7 +376,7 @@ fun MapsScreen(viewModel: CdiViewModel) {
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text("3.000 RPM", fontSize = 10.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
-                        Text("11.500 RPM (batas firmware)", fontSize = 10.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
+                        Text("${"%,d".format(limiterMaxRpm).replace(',', '.')} RPM (batas slot)", fontSize = 10.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))

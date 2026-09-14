@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.WiringDataProvider
 import com.example.model.HarnessPin
+import com.example.model.adaptToPlatform
 import com.example.ui.components.HarnessJ1Visualizer
 import com.example.ui.theme.*
 import com.example.viewmodel.AppTab
@@ -35,9 +36,11 @@ fun HarnessPinsScreen(
 ) {
   val uiState by viewModel.uiState.collectAsState()
   var searchQuery by remember { mutableStateOf("") }
-  val allPins = WiringDataProvider.harnessPins
+  val allPins = remember(uiState.mcuPlatform) {
+    WiringDataProvider.harnessPins.map { it.adaptToPlatform(uiState.mcuPlatform) }
+  }
 
-  val filteredPins = remember(searchQuery) {
+  val filteredPins = remember(searchQuery, allPins) {
     if (searchQuery.isBlank()) allPins
     else {
       val query = searchQuery.lowercase()

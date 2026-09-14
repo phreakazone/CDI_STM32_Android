@@ -83,6 +83,7 @@ fun BleHexScreen(
     val telemetry by viewModel.telemetry.collectAsState()
     val logs by viewModel.terminalLogs.collectAsState()
     val otaState by viewModel.otaState.collectAsState()
+    val selectedPlatform by viewModel.selectedPlatform.collectAsState()
     val context = LocalContext.current
 
     val linkQuality = evaluateLinkQuality(isConnected, packetRate, crcPercent)
@@ -313,7 +314,11 @@ fun BleHexScreen(
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
-                            text = "Target binary: APP.bin (STM32WB55 Dual-Core)",
+                            text = if (selectedPlatform == id.ns200.cdir7.McuPlatform.STM32WB55) {
+                                "Target: STM32 APP.bin"
+                            } else {
+                                "Target: ESP32 application image sesuai partition table"
+                            },
                             fontSize = 10.sp,
                             color = TextSecondary,
                             fontFamily = FontFamily.Monospace

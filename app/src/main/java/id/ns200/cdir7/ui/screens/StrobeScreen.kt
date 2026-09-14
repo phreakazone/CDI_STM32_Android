@@ -34,6 +34,7 @@ fun StrobeScreen(viewModel: CdiViewModel) {
     val pulserOffset by viewModel.pulserOffsetDeg.collectAsState()
     val flashSaved by viewModel.flashSaved.collectAsState()
     val telemetry by viewModel.telemetry.collectAsState()
+    val selectedPlatform by viewModel.selectedPlatform.collectAsState()
     val setupCommandPending by viewModel.setupCommandPending.collectAsState()
     val scrollState = rememberScrollState()
 
@@ -74,7 +75,7 @@ fun StrobeScreen(viewModel: CdiViewModel) {
             )
         }
 
-        // STROBO LED PB9 SWITCH CARD (10.0° BTDC Locked Pulse)
+        // STROBO LED PB9/GPIO27 SWITCH CARD
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -119,7 +120,7 @@ fun StrobeScreen(viewModel: CdiViewModel) {
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "STROBO LED PB9 • TRIGGER %.1f°".format(telemetry.triggerCdeg / 100f),
+                            text = "STROBO LED ${selectedPlatform.strobePin.substringBefore(" (")} • TRIGGER %.1f°".format(telemetry.triggerCdeg / 100f),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,

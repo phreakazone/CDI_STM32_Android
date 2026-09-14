@@ -42,7 +42,7 @@ sealed class OtaState {
 
 /**
  * BleCdiClient:
- * Dedicated GATT client for NS200 CDI R8 (STM32WB55), with legacy BLE identity compatibility.
+ * Dedicated GATT client for NS200 CDI R8 on STM32WB55 and ESP32, with legacy BLE identity compatibility.
  *
  * Requirements:
  * 1. Tanpa PIN / Bonding: Koneksi langsung via BLE GATT tanpa dialog PIN pairing Android.
@@ -53,7 +53,7 @@ sealed class OtaState {
  * 6. Retry Terbatas per Command: Maksimal 2x retry per perintah sebelum fail/timeout.
  * 7. Reconnect Eksponensial: Backoff eksponensial (1s, 2s, 4s, 8s, 16s, maks 30s) saat koneksi terputus atau GATT 8.
  * 8. Telemetry v3/v4 20-Byte: Menerima paket 20-byte bergantian CORE / DIAGNOSTIC dengan validasi CRC16.
- * 9. OTA R8 APP.bin Uploader: Karakteristik ...1004 (data 208B chunk) & ...1005 (status) dengan integritas CRC32.
+ * 9. OTA R8 image uploader: karakteristik ...1004 (data) & ...1005 (status) dengan integritas CRC32.
  */
 class BleCdiClient(private val context: Context, private val listener: Listener) {
 
@@ -627,7 +627,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
     fun release() = disconnect()
 
     /**
-     * Memulai pengunggahan firmware APP.bin melalui BLE OTA R8.
+     * Memulai pengunggahan image aplikasi target melalui BLE OTA R8.
      * Karakteristik Data: ...1004 (chunk sequential maks 208 byte)
      * Karakteristik Status: ...1005 (notifikasi / status flash)
      */
@@ -638,7 +638,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
     ): Boolean {
         if (data.size !in CdiProtocol.OTA_MIN_IMAGE_SIZE..CdiProtocol.OTA_MAX_IMAGE_SIZE) {
             _otaState.value = OtaState.Error(
-                "Ukuran APP.bin harus ${CdiProtocol.OTA_MIN_IMAGE_SIZE}..${CdiProtocol.OTA_MAX_IMAGE_SIZE} byte"
+                "Ukuran image firmware harus ${CdiProtocol.OTA_MIN_IMAGE_SIZE}..${CdiProtocol.OTA_MAX_IMAGE_SIZE} byte"
             )
             return false
         }
@@ -776,7 +776,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
                 otaAwaitingStatus = false
                 otaDataBuffer = null
                 _otaState.value = OtaState.Success(
-                    "APP.bin terverifikasi; ${otaPlatform.shortName} akan boot ke firmware baru"
+                    "Image firmware terverifikasi; ${otaPlatform.shortName} akan boot ke firmware baru"
                 )
             }
             FirmwareOtaState.ERROR -> Unit

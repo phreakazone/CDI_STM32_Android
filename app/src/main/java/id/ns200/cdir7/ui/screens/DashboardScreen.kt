@@ -118,7 +118,7 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
-                            text = "Matikan kontak/kill switch, lepas JP_HV, lalu periksa feedback ADC PA6/PA7 dan rangkaian clamp sebelum melanjutkan.",
+                            text = "Matikan kontak/kill switch, buka SW_SERVICE atau cabut FHV, lalu periksa feedback HV PA6/PA7 atau GPIO35/GPIO32 dan rangkaian clamp.",
                             fontSize = 10.sp,
                             color = TextPrimary,
                             fontFamily = FontFamily.Monospace
@@ -948,13 +948,13 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                         else -> SensorAmber
                     })
                     val oemPinsLabel = if (selectedPlatform == McuPlatform.STM32WB55) "BACA OEM PB3/PB4" else "BACA OEM GPIO16/17"
-                    val fanPinLabel = if (selectedPlatform == McuPlatform.STM32WB55) "ACTIVE (PB5 LOW)" else "ACTIVE (GPIO13 LOW)"
+                    val fanPinLabel = if (selectedPlatform == McuPlatform.STM32WB55) "ACTIVE (PB5 HIGH)" else "ACTIVE (GPIO13 HIGH)"
                     TechDataRow("MODE FIRMWARE", "${fwMode.name} (${if (fwMode == FirmwareRunMode.DIY) "MANDIRI" else if (fwMode == FirmwareRunMode.OEM_LEARN) oemPinsLabel else "MANUAL"})", ElectricCyan)
                     TechDataRow("TARGET TEGANGAN HV", "$targetHv V (${if (isPro) "PRO 345V" else "NORMAL 285V"})", RacingLime)
                     TechDataRow("OUTPUT COILS", "CENTER: ${if (telemetry.centerEnabled) "ON" else "OFF"} | SIDE: ${if (telemetry.sideEnabled) "ON" else "OFF"}", RacingLime)
                     TechDataRow("PULSER QUALITY", "${telemetry.pickupQuality} / 100 (PPR=1 Gate=80µs)", if (telemetry.pickupQuality >= 10) RacingLime else RaceRedline)
                     TechDataRow("TRIGGER TIMING", "%.1f° BTDC".format(telemetry.triggerCdeg / 100f), ElectricCyan)
-                    TechDataRow("FAN RELAY (J1.7)", if (telemetry.fanEnabled) fanPinLabel else "OFF (HIGH)", if (telemetry.fanEnabled) SensorAmber else TextMuted)
+                    TechDataRow("FAN RELAY (J1.7)", if (telemetry.fanEnabled) fanPinLabel else "OFF (LOW)", if (telemetry.fanEnabled) SensorAmber else TextMuted)
                     TechDataRow("FAULT BITS", if (telemetry.faults == 0) "0x0000 (NO FAULT)" else "0x%04X".format(telemetry.faults), if (telemetry.faults == 0) RacingLime else RaceRedline)
                 }
             }

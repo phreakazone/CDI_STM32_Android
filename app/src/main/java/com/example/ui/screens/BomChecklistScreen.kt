@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.WiringDataProvider
 import com.example.model.BomItem
+import com.example.model.adaptToPlatform
 import com.example.ui.theme.*
 import com.example.viewmodel.WiringViewModel
 
@@ -32,10 +33,13 @@ fun BomChecklistScreen(
   modifier: Modifier = Modifier
 ) {
   val acquiredIds by viewModel.acquiredBomIds.collectAsState()
+  val uiState by viewModel.uiState.collectAsState()
   var selectedCategory by remember { mutableStateOf("SEMUA") }
-  val allBomItems = WiringDataProvider.bomItems
+  val allBomItems = remember(uiState.mcuPlatform) {
+    WiringDataProvider.bomItems.map { it.adaptToPlatform(uiState.mcuPlatform) }
+  }
 
-  val filteredItems = remember(selectedCategory) {
+  val filteredItems = remember(selectedCategory, allBomItems) {
     if (selectedCategory == "SEMUA") allBomItems
     else allBomItems.filter { it.section.contains(selectedCategory, ignoreCase = true) }
   }

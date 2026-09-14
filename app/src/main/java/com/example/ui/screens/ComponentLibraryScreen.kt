@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.WiringDataProvider
+import com.example.model.adaptToPlatform
 import com.example.ui.components.ComponentPinoutCard
 import com.example.ui.theme.*
 import com.example.viewmodel.WiringViewModel
@@ -24,10 +25,13 @@ fun ComponentLibraryScreen(
   viewModel: WiringViewModel,
   modifier: Modifier = Modifier
 ) {
+  val uiState by viewModel.uiState.collectAsState()
   var searchQuery by remember { mutableStateOf("") }
-  val allComponents = WiringDataProvider.componentPinouts
+  val allComponents = remember(uiState.mcuPlatform) {
+    WiringDataProvider.componentPinouts.map { it.adaptToPlatform(uiState.mcuPlatform) }
+  }
 
-  val filteredComponents = remember(searchQuery) {
+  val filteredComponents = remember(searchQuery, allComponents) {
     if (searchQuery.isBlank()) allComponents
     else {
       val q = searchQuery.lowercase()

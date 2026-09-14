@@ -116,7 +116,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             batteryCv = 0,
             hvCenter = 0,
             hvSide = 0,
-            tempCdeg = 0,
+            tempCdeg = Short.MIN_VALUE.toInt(),
             slot = 0,
             limiter = 0,
             flags = 0,
@@ -293,49 +293,53 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         MapSlotData(
             slot = 0,
             name = "Slot 1: ECO",
-            description = "Kurva linear responsif untuk jalan raya, efisiensi BBM dan suhu dingin. Konservatif anchor 5° BTDC/1500 RPM sampai 32°/9800 RPM. Target HV 285V.",
-            revLimit = 9800,
-            peakAdvance = 32.0f,
+            description = "Kurva default firmware untuk jalan raya dan efisiensi. Grid Normal 8x4, limiter 9.500 RPM, target HV 285V.",
+            revLimit = 9500,
+            peakAdvance = 35.0f,
             curvePoints = listOf(
-                1500 to 5f, 2500 to 14f, 4500 to 24f, 6500 to 30f, 8500 to 32f, 9800 to 28f, 10500 to 10f
+                500 to 0f, 1000 to 1f, 1500 to 4f, 2500 to 9f,
+                4000 to 17f, 6000 to 24f, 8000 to 30f, 10000 to 35f
             )
         ),
         MapSlotData(
             slot = 1,
             name = "Slot 2: STREET",
-            description = "Map standar performa jalanan agresif. Respons gas instan dengan advance maksimum 34° BTDC. Target HV 285V.",
-            revLimit = 10500,
-            peakAdvance = 34.0f,
+            description = "Map STREET default firmware. Grid Normal 8x4, limiter 9.500 RPM, target HV 285V.",
+            revLimit = 9500,
+            peakAdvance = 36.0f,
             curvePoints = listOf(
-                1500 to 6f, 2500 to 16f, 4500 to 26f, 7000 to 33f, 8800 to 34f, 10500 to 30f, 11000 to 12f
+                500 to 0f, 1000 to 2f, 1500 to 5f, 2500 to 10f,
+                4000 to 18f, 6000 to 25f, 8000 to 31f, 10000 to 36f
             )
         ),
         MapSlotData(
             slot = 2,
             name = "Slot 3: RAIN",
-            description = "Kurva aman untuk cuaca basah dan bensin oktan rendah (Low-RON). Mencegah slip dan knocking/detonasi. Target HV 285V.",
+            description = "Map RAIN default firmware untuk kondisi basah/Low-RON. Grid Normal 8x4, limiter 9.500 RPM, target HV 285V.",
             revLimit = 9500,
-            peakAdvance = 28.0f,
+            peakAdvance = 34.0f,
             curvePoints = listOf(
-                1500 to 5f, 2500 to 11f, 4500 to 19f, 6500 to 25f, 8000 to 28f, 9500 to 22f, 10000 to 10f
+                500 to 0f, 1000 to 0f, 1500 to 3f, 2500 to 8f,
+                4000 to 16f, 6000 to 23f, 8000 to 29f, 10000 to 34f
             )
         ),
         MapSlotData(
             slot = 3,
             name = "Slot 4: PRO",
-            description = "Map kompetisi tingkat tinggi 16x8 matrix / 345V PRO. Dipilih melalui konfigurasi tersimpan (tanpa jumper fisik JP_PRO). Advance maksimum 36° BTDC.",
-            revLimit = 11500,
+            description = "Map PRO default firmware 16x8 / 345V. Diaktifkan lewat FEATURE,PRO,ON tanpa jumper fisik. Limiter default 11.000 RPM.",
+            revLimit = 11000,
             peakAdvance = 36.0f,
             curvePoints = listOf(
-                1500 to 8f, 2500 to 18f, 5000 to 29f, 7500 to 35f, 9500 to 36f, 10800 to 34f, 11800 to 14f
+                500 to 0.5f, 1000 to 2.5f, 1500 to 5.5f, 2500 to 10.5f,
+                4000 to 18.5f, 6000 to 25.5f, 8000 to 31.5f, 10000 to 36f, 11500 to 36f
             )
         )
     )
 
-    private val _selectedMapSlot = MutableStateFlow(0)
+    private val _selectedMapSlot = MutableStateFlow(1)
     val selectedMapSlot: StateFlow<Int> = _selectedMapSlot.asStateFlow()
 
-    // Custom Advance Map Points (Default based on technical document anchor: 5° @ 1500 RPM to 34° @ 8500 RPM)
+    // Kurva awal mengikuti baris TPS 0% map STREET default firmware.
     private val _customAdvancePoints = MutableStateFlow(
         listOf(
             CustomAdvancePoint(500, 0.0f), CustomAdvancePoint(1000, 2.0f),
@@ -346,10 +350,10 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     )
     val customAdvancePoints: StateFlow<List<CustomAdvancePoint>> = _customAdvancePoints.asStateFlow()
 
-    private val _softRevLimiterRpm = MutableStateFlow(9800)
+    private val _softRevLimiterRpm = MutableStateFlow(9500)
     val softRevLimiterRpm: StateFlow<Int> = _softRevLimiterRpm.asStateFlow()
 
-    private val _hardRevLimiterRpm = MutableStateFlow(10300)
+    private val _hardRevLimiterRpm = MutableStateFlow(9500)
     val hardRevLimiterRpm: StateFlow<Int> = _hardRevLimiterRpm.asStateFlow()
 
     private val _softBandRpm = MutableStateFlow(400)
@@ -445,7 +449,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         }
 
         _pulserOffsetDeg.value = prefs.getFloat("pulser_offset", 0.0f)
-        _softRevLimiterRpm.value = prefs.getInt("rev_limiter", 9800)
+        _softRevLimiterRpm.value = prefs.getInt("rev_limiter", 9500)
         val savedStage = prefs.getInt("setup_stage", SetupStage.BARU.code)
             .coerceIn(SetupStage.BARU.code, SetupStage.READY.code)
         _quickSetupPage.value = savedStage
@@ -739,7 +743,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (t.rpm > 0) {
             return "PERINGATAN KESELAMATAN: Mesin terdeteksi hidup (${t.rpm} RPM)! Simpan Flash MCU hanya diizinkan saat mesin mati (RPM = 0) untuk mencegah crash interrupt TIM2."
         }
-        if ((t.hvCenter >= 30 || t.hvSide >= 30) && _isConnected.value) {
+        if ((t.hvEnabled || t.hvCenter >= 30 || t.hvSide >= 30) && _isConnected.value) {
             return "PERINGATAN KESELAMATAN: Tegangan tinggi kapasitor CDI masih aktif (CENTER: ${t.hvCenter}V, SIDE: ${t.hvSide}V)! Tunggu hingga tegangan < 30 V sebelum menulis flash."
         }
 
@@ -803,11 +807,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun calibrateTpsMin() {
         if (!requireMcuOrDemo("kalibrasi TPS")) return
-        val t = _telemetry.value
-        if (t.rpm > 0) {
-            Toast.makeText(context, "Kalibrasi TPS hanya saat mesin mati (RPM=0)!", Toast.LENGTH_SHORT).show()
-            return
-        }
+        if (!checkSetupWriteSafety("Kalibrasi TPS minimum")) return
         if (bleClient.gattReady) {
             bleClient.send("SETUP,TPS,CLOSED")
             appendLog("BLE Send: SETUP,TPS,CLOSED (Gas tertutup 0% disimpan)")
@@ -819,11 +819,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun calibrateTpsMax() {
         if (!requireMcuOrDemo("kalibrasi TPS")) return
-        val t = _telemetry.value
-        if (t.rpm > 0) {
-            Toast.makeText(context, "Kalibrasi TPS hanya saat mesin mati (RPM=0)!", Toast.LENGTH_SHORT).show()
-            return
-        }
+        if (!checkSetupWriteSafety("Kalibrasi TPS maksimum")) return
         if (bleClient.gattReady) {
             bleClient.send("SETUP,TPS,OPEN")
             appendLog("BLE Send: SETUP,TPS,OPEN (Gas penuh 100% WOT disimpan)")
@@ -835,6 +831,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun setPulserEdge(isRising: Boolean) {
         if (!requireMcuOrDemo("pengaturan edge pulser")) return
+        if (!checkSetupWriteSafety("Pengaturan edge pulser")) return
         val edgeStr = if (isRising) "RISING" else "FALLING"
         if (bleClient.gattReady) {
             bleClient.send("SETUP,EDGE,$edgeStr")
@@ -849,7 +846,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         val preset = mapPresets[bounded]
         if (bleClient.gattReady) {
             val t = _telemetry.value
-            if (t.rpm != 0 || t.hvCenter >= 30 || t.hvSide >= 30) {
+            if (t.rpm != 0 || t.hvEnabled || t.hvCenter >= 30 || t.hvSide >= 30) {
                 Toast.makeText(context, "LOAD ditolak: mesin harus mati dan HV < 30 V", Toast.LENGTH_LONG).show()
                 return
             }
@@ -867,7 +864,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     }
 
     fun setSoftRevLimiter(rpm: Int) {
-        _softRevLimiterRpm.value = rpm.coerceIn(3000, 11500)
+        val firmwareMax = if (_selectedMapSlot.value == 3) 11500 else 10500
+        _softRevLimiterRpm.value = rpm.coerceIn(3000, firmwareMax)
     }
 
     fun setSoftBand(band: Int) {
@@ -880,12 +878,14 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun syncCurveToBle() {
         val slot = _selectedMapSlot.value
-        val rpm = _softRevLimiterRpm.value
+        val firmwareMax = if (slot == 3) 11500 else 10500
+        val rpm = _softRevLimiterRpm.value.coerceIn(3000, firmwareMax)
+        _softRevLimiterRpm.value = rpm
         val band = _softBandRpm.value
 
         if (bleClient.gattReady) {
             val t = _telemetry.value
-            if (t.rpm != 0 || t.hvCenter >= 30 || t.hvSide >= 30) {
+            if (t.rpm != 0 || t.hvEnabled || t.hvCenter >= 30 || t.hvSide >= 30) {
                 Toast.makeText(context, "SYNC ditolak: mesin harus mati dan HV < 30 V", Toast.LENGTH_LONG).show()
                 return
             }
@@ -1071,7 +1071,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 "RPM masih ${t.rpm}. Matikan mesin; tahap awal hanya diperiksa saat RPM 0."
             )
             t.hvCenter >= 30 || t.hvSide >= 30 -> failQuickSetupPreflight(
-                "HV belum aman: CENTER ${t.hvCenter} V, SIDE ${t.hvSide} V. Lepas JP_HV dan tunggu <30 V."
+                "HV belum aman: CENTER ${t.hvCenter} V, SIDE ${t.hvSide} V. Matikan kontak/kill switch dan tunggu <30 V."
             )
             else -> {
                 preflightTimeoutJob?.cancel()
@@ -1124,9 +1124,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         _strobeActive.value = active
         if (bleClient.gattReady) {
             bleClient.send(if (active) "SETUP,STROBE,ON" else "SETUP,STROBE,OFF")
-            appendLog("BLE Send: SETUP,STROBE,${if (active) "ON" else "OFF"} (PB9)")
+            appendLog("BLE Send: SETUP,STROBE,${if (active) "ON" else "OFF"} (${_selectedPlatform.value.strobePin})")
         } else {
-            appendLog("Strobo LED PB9 ${if (active) "AKTIF (basis ${triggerEditBaseCdeg / 100f}°)" else "NONAKTIF"}")
+            appendLog("Strobo LED ${_selectedPlatform.value.strobePin} ${if (active) "AKTIF (basis ${triggerEditBaseCdeg / 100f}°)" else "NONAKTIF"}")
         }
     }
 
@@ -1145,22 +1145,24 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         }
     }
 
-    fun checkFlashSafety(action: String): Boolean {
+    private fun checkSetupWriteSafety(action: String): Boolean {
         val t = _telemetry.value
         if (t.rpm > 0) {
-            val msg = "DITOLAK: Operasi flash $action dilarang saat mesin berputar (${t.rpm} RPM)!"
+            val msg = "DITOLAK: $action hanya boleh saat RPM 0 (sekarang ${t.rpm} RPM)."
             Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
             appendLog("SAFETY: $msg")
             return false
         }
-        if ((t.hvCenter >= 30 || t.hvSide >= 30) && _isConnected.value) {
-            val msg = "DITOLAK: Operasi flash $action ditolak! Kapasitor HV masih aktif (CENTER: ${t.hvCenter}V, SIDE: ${t.hvSide}V). Tunggu HV < 30V!"
+        if ((t.hvEnabled || t.hvCenter >= 30 || t.hvSide >= 30) && _isConnected.value) {
+            val msg = "DITOLAK: $action mensyaratkan charger/HV OFF dan kedua bank <30V (CENTER ${t.hvCenter}V, SIDE ${t.hvSide}V)."
             Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
             appendLog("SAFETY: $msg")
             return false
         }
         return true
     }
+
+    fun checkFlashSafety(action: String): Boolean = checkSetupWriteSafety(action)
 
     fun saveCalibrationToFlash(): Boolean {
         if (!checkFlashSafety("Kalibrasi Flash")) return false
@@ -1201,6 +1203,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun setPulserEdge(edge: String) { // "FALLING" or "RISING"
         if (!requireMcuOrDemo("pengaturan edge pulser")) return
+        if (!checkSetupWriteSafety("Pengaturan edge pulser")) return
         if (bleClient.gattReady) {
             markSetupCommandPending()
             bleClient.send("SETUP,EDGE,$edge")
@@ -1214,6 +1217,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun setPulserPpr(ppr: Int) {
         if (!requireMcuOrDemo("pengaturan PPR")) return
+        if (!checkSetupWriteSafety("Pengaturan PPR")) return
         if (bleClient.gattReady) {
             markSetupCommandPending()
             bleClient.send("SETUP,PPR,$ppr")
@@ -1226,6 +1230,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun setGateDurationUs(us: Int) {
         if (!requireMcuOrDemo("pengaturan gate SCR")) return
+        if (!checkSetupWriteSafety("Pengaturan gate SCR")) return
         if (bleClient.gattReady) {
             markSetupCommandPending()
             bleClient.send("SETUP,GATE_US,$us")
@@ -1238,6 +1243,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun confirmPulserPickup() {
         if (!requireMcuOrDemo("konfirmasi pickup")) return
+        if (!checkSetupWriteSafety("Konfirmasi pickup")) return
         if (bleClient.gattReady) {
             markSetupCommandPending()
             bleClient.send("SETUP,PICKUP,CONFIRM")
@@ -1286,6 +1292,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun calibrateTpsClosed() {
         if (!requireMcuOrDemo("kalibrasi TPS tertutup")) return
+        if (!checkSetupWriteSafety("Kalibrasi TPS tertutup")) return
         if (bleClient.gattReady) {
             markSetupCommandPending()
             bleClient.send("SETUP,TPS,CLOSED")
@@ -1298,6 +1305,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun calibrateTpsOpen() {
         if (!requireMcuOrDemo("kalibrasi TPS terbuka")) return
+        if (!checkSetupWriteSafety("Kalibrasi TPS terbuka")) return
         if (bleClient.gattReady) {
             markSetupCommandPending()
             bleClient.send("SETUP,TPS,OPEN")
@@ -1311,6 +1319,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun prepareFirstStartMode() {
         if (!requireMcuOrDemo("FIRST START")) return
+        if (!checkSetupWriteSafety("Aktivasi FIRST START")) return
         if (bleClient.gattReady) {
             markSetupCommandPending()
             bleClient.send("SETUP,FIRST_START")
@@ -1326,10 +1335,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (!requireMcuOrDemo("READY CENTER")) return
         val t = _telemetry.value
         if (bleClient.gattReady) {
-            if (t.hvCenter >= 30 || t.hvSide >= 30) {
-                Toast.makeText(context, "PERINGATAN: Pastikan HV < 30V sebelum simpan!", Toast.LENGTH_LONG).show()
-                return
-            }
+            if (!checkSetupWriteSafety("Simpan READY CENTER")) return
             markSetupCommandPending()
             bleClient.send("SETUP,READY,CENTER")
             appendLog("BLE Send: SETUP,READY,CENTER (Mode Siap Jalan - Koil CENTER)")
@@ -1351,10 +1357,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (!requireMcuOrDemo("READY tiga busi")) return
         val t = _telemetry.value
         if (bleClient.gattReady) {
-            if (t.hvCenter >= 30 || t.hvSide >= 30) {
-                Toast.makeText(context, "PERINGATAN: Pastikan HV < 30V sebelum simpan!", Toast.LENGTH_LONG).show()
-                return
-            }
+            if (!checkSetupWriteSafety("Simpan READY tiga busi")) return
             markSetupCommandPending()
             bleClient.send("SETUP,READY,THREE,$sideOffsetCdeg")
             appendLog("BLE Send: SETUP,READY,THREE,$sideOffsetCdeg (Mode Triple Spark Terkalibrasi)")
@@ -1375,6 +1378,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     // --- R8 Mode & Flow Controls ---
     fun setFirmwareMode(mode: FirmwareRunMode) {
         if (!requireMcuOrDemo("ganti mode")) return
+        if (!checkSetupWriteSafety("Perubahan mode firmware")) return
         val (cPin, sPin) = if (selectedPlatform.value == McuPlatform.STM32WB55) Pair("PB3", "PB4") else Pair("GPIO16", "GPIO17")
         val mcuName = selectedPlatform.value.displayName
         when (mode) {
@@ -1423,13 +1427,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun startOemLearn() {
         if (!requireMcuOrDemo("start OEM Learn")) return
-        val t = _telemetry.value
         val (cPin, sPin) = if (selectedPlatform.value == McuPlatform.STM32WB55) Pair("PB3", "PB4") else Pair("GPIO16", "GPIO17")
         val mcuName = selectedPlatform.value.displayName
-        if (bleClient.gattReady && (t.rpm != 0 || t.hvCenter >= 30 || t.hvSide >= 30)) {
-            Toast.makeText(context, "Firmware R8 mensyaratkan RPM 0 dan HV <30 V saat mulai OEM Learn", Toast.LENGTH_LONG).show()
-            return
-        }
+        if (!checkSetupWriteSafety("Mulai OEM Learn")) return
         if (bleClient.gattReady) {
             markSetupCommandPending()
             bleClient.send("MODE,OEM_LEARN")
@@ -1448,12 +1448,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun stopOemLearn() {
         if (!requireMcuOrDemo("stop OEM Learn")) return
-        val t = _telemetry.value
         val mcuName = selectedPlatform.value.displayName
-        if (bleClient.gattReady && (t.rpm != 0 || t.hvCenter >= 30 || t.hvSide >= 30)) {
-            Toast.makeText(context, "Firmware R8 mensyaratkan RPM 0 dan HV <30 V saat menyimpan OEM Learn", Toast.LENGTH_LONG).show()
-            return
-        }
+        if (!checkSetupWriteSafety("Simpan OEM Learn")) return
         if (bleClient.gattReady) {
             markSetupCommandPending()
             bleClient.send("LEARN,STOP")
@@ -1470,6 +1466,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     }
 
     fun confirmOemUnplugged() {
+        if (!checkSetupWriteSafety("Aktivasi DIY/OEM_UNPLUGGED")) return
         if (bleClient.gattReady) {
             markSetupCommandPending()
             bleClient.send("MODE,DIY,OEM_UNPLUGGED")
@@ -1486,6 +1483,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun setHvVoltageMode(proMode: Boolean) {
         if (!requireMcuOrDemo("pengaturan tegangan")) return
+        if (!checkSetupWriteSafety("Perubahan profil HV")) return
         if (bleClient.gattReady) {
             markSetupCommandPending()
             bleClient.send("FEATURE,PRO,${if (proMode) "ON" else "OFF"}")
@@ -1506,6 +1504,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     fun checkOtaPreflightSafety(): String? {
         val t = _telemetry.value
         if (t.rpm > 0) return "Mesin masih berputar (${t.rpm} RPM)! Matikan mesin (RPM = 0)."
+        if (t.armed) return "Output pengapian masih diizinkan. Nonaktifkan output sebelum OTA."
+        if (t.hvEnabled) return "Charger HV masih aktif. Nonaktifkan charger sebelum OTA."
         if (t.hvCenter >= 30 || t.hvSide >= 30) return "Tegangan HV masih tinggi (Center: ${t.hvCenter}V, Side: ${t.hvSide}V)! Tunggu hingga < 30V."
         return null
     }
@@ -1539,6 +1539,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun resetSetupWorkflow() {
         if (!requireMcuOrDemo("reset setup")) return
+        if (!checkSetupWriteSafety("Reset setup")) return
         if (bleClient.gattReady) {
             markSetupCommandPending()
             bleClient.send("SETUP,RESET,CONFIRM")
@@ -1552,6 +1553,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun setFanMode(mode: String) { // "OFF", "ON", "AUTO"
         if (!requireMcuOrDemo("pengaturan kipas")) return
+        if (!checkSetupWriteSafety("Perubahan mode fan")) return
         if (bleClient.gattReady) {
             markSetupCommandPending()
             bleClient.send("SETUP,FAN,$mode")
@@ -1653,7 +1655,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         // bukan berhenti atau menganggap selesai hanya karena bukti FIRST START (firstStartSeconds >= 3) tercatat di RAM.
         if (value.ready || _firmwareSetupStage.value >= 4) {
             targetStage = SetupStage.READY.code
-            _firmwareSetupStage.value = targetStage
+            _firmwareSetupStage.value = 4 // CDI_R7_STAGE_READY; wizard READY adalah halaman 5.
             _quickSetupUnlockedStage.value = maxOf(_quickSetupUnlockedStage.value, targetStage)
             if (_quickSetupPage.value == SetupStage.FIRST_START.code) {
                 _quickSetupPage.value = targetStage
@@ -1862,7 +1864,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     outputFlags =
                         (if (center) 1 else 0) or
                         (if (side) 2 else 0) or
-                        (if (_strobeActive.value) 4 else 0),
+                        (if (_strobeActive.value) 4 else 0) or
+                        (if (fanCode != 0) 8 else 0),
                     pickupQuality = quality
                 )
 
@@ -1921,7 +1924,11 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 )
 
                 when {
-                    operation == "MODE" -> bleClient.send("GET,MODE")
+                    operation == "MODE" -> {
+                        bleClient.send("GET,MODE")
+                        bleClient.send("GET,SETUP")
+                        bleClient.send("GET,STATUS")
+                    }
                     operation == "LEARN_STARTED_PASSIVE" || operation == "LEARN_START" -> {
                         _isOemLearning.value = true
                         _firmwareMode.value = FirmwareRunMode.OEM_LEARN

@@ -34,9 +34,9 @@ object WiringDataProvider {
       direction = "Input Sensor",
       completePath = "+5V -- 4.7k -- J1.3; J1.3 -- 15k -- TEMP_ADC; TEMP_ADC -- 27k || 10nF -- GND; TEMP_ADC -- 1k -- PA4; BAT54S clamp",
       destination = "H_BOTTOM.13 (PA4 ADC)",
-      status = "AKTIF setelah kalibrasi sensor",
+      status = "RANGKAIAN SIAP; TELEMETRI N/A",
       isConnected = true,
-      detailGuide = "Membaca sensor suhu coolant motor. Resistor pull-up 4.7k ke 5V logic membentuk pembagi tegangan dengan sensor NTC motor. Dilindungi BAT54S clamp."
+      detailGuide = "Rangkaian menyiapkan ADC sensor coolant. Resistor pull-up 4.7k ke 5V membentuk pembagi dengan NTC dan BAT54S melindungi input; firmware saat ini belum mengonversi ADC ke suhu sehingga telemetri menampilkan N/A."
     ),
     HarnessPin(
       pinNumber = 4,
@@ -80,7 +80,7 @@ object WiringDataProvider {
       destination = "H_TOP.7 (PB5)",
       status = "CONFIRM polaritas relay",
       isConnected = true,
-      detailGuide = "Transistor NPN BC547 menarik ground relay kipas saat suhu mesin melewati batas ambang di firmware. Periksa polaritas relay motor sebelum mengaktifkan."
+      detailGuide = "Transistor NPN BC547 menarik ground relay kipas saat output MCU HIGH. Firmware saat ini memakai HIGH untuk ON dan AUTO (failsafe); AUTO berbasis suhu menunggu konversi NTC."
     ),
     HarnessPin(
       pinNumber = 8,
@@ -172,11 +172,11 @@ object WiringDataProvider {
     WeActPin("H_BOTTOM", 12, "PA3", "Input", "TPS_SIG -> 15k -> TPS_ADC -> 1k -> PA3; 27k || 4.7nF ke GND dan clamp", "ADC Sensor Bukaan Gas (TPS)", "AKTIF setelah selector", isCritical = true),
     WeActPin("H_BOTTOM", 13, "PA4", "Input", "J1.3 network -> 1k -> PA4", "ADC Sensor Suhu Mesin (TEMP)", "AKTIF"),
     WeActPin("H_BOTTOM", 14, "PA5", "Input", "TPS_REF -> 15k -> TPS_REF_MON -> 1k -> PA5; 27k || 4.7nF dan clamp", "ADC Monitor Referensi 5V TPS", "DIAGNOSTIK"),
-    WeActPin("H_BOTTOM", 15, "PA6", "Input", "HV_CENTER -> 4x270k seri -> HV_C_FB -> 1k -> PA6; 8.2k || 10nF dan clamp", "ADC Tegangan Bank CENTER", "AKTIF", isCritical = true, warning = "Tegangan tinggi hingga 290V/345V. Wajib 4 resistor 270k seri dan clamp BAT54S."),
+    WeActPin("H_BOTTOM", 15, "PA6", "Input", "HV_CENTER -> 4x270k seri -> HV_C_FB -> 1k -> PA6; 8.2k || 10nF dan clamp", "ADC Tegangan Bank CENTER", "AKTIF", isCritical = true, warning = "Tegangan tinggi hingga 345V. Wajib 4 resistor 270k seri dan clamp BAT54S."),
     WeActPin("H_BOTTOM", 16, "PA7", "Input", "HV_SIDE -> 4x270k seri -> HV_S_FB -> 1k -> PA7; 8.2k || 10nF dan clamp", "ADC Tegangan Bank SIDE", "AKTIF", isCritical = true),
     WeActPin("H_BOTTOM", 17, "PA8", "-", "Tidak dipakai firmware universal", "Cadangan", "CADANGAN"),
     WeActPin("H_BOTTOM", 18, "PA9", "Output", "PA9 -> 1k -> TC4427 pin 2 (INA); pin 7 (OUTA) -> 10R -> Gate QHV1", "TIM1_CH2 PWM Charger A", "AKTIF", isCritical = true),
-    WeActPin("H_BOTTOM", 19, "PB2", "Input", "VIN_HV -> 100k -> HV_PRESENT -> 1k -> PB2; 27k ke GND dan clamp", "Sense Deteksi Jalur Tegangan Tinggi (VIN_HV)", "AKTIF", isCritical = true),
+    WeActPin("H_BOTTOM", 19, "PB2", "Input", "Dikonfigurasi pulldown oleh board init; tidak dipakai keputusan R8", "Cadangan / test firmware mendatang", "JANGAN JADIKAN INTERLOCK"),
     WeActPin("H_BOTTOM", 20, "GND", "Input", "GND_STAR", "Board Ground Logic", "AKTIF", isCritical = true)
   )
 
@@ -184,12 +184,12 @@ object WiringDataProvider {
     // LEFT HEADER (Sisi Kiri DevKitC V4 - 19 Pin)
     Esp32Pin("LEFT", 1, "3V3", "3V3", "POWER", "Output", "Regulator Onboard 3.3V", "Suplai Referensi ADC & Pull-up", "AKTIF 3.3V", isCritical = true, warning = "Bukan sumber daya beban besar! Maksimal 150mA."),
     Esp32Pin("LEFT", 2, "EN", "NRST", "POWER", "Input", "Tombol EN Onboard", "Reset Hardware ESP32", "RESET"),
-    Esp32Pin("LEFT", 3, "GPIO36 (VP)", "PA4", "ADC1_SENSOR", "Input", "TPS_SIG -> R divider -> GPIO36", "ADC1_CH0 Sensor TPS", "AKTIF ADC1", isCritical = true, warning = "Hanya ADC1 yang aman digunakan saat BLE/WiFi aktif. Jangan masukkan tegangan >3.3V."),
-    Esp32Pin("LEFT", 4, "GPIO39 (VN)", "PA5", "ADC1_SENSOR", "Input", "TEMP_SIG -> R network -> GPIO39", "ADC1_CH3 Sensor Suhu Radiator", "AKTIF ADC1"),
-    Esp32Pin("LEFT", 5, "GPIO34", "PA3", "ADC1_SENSOR", "Input", "TPS_REF -> R divider -> GPIO34", "ADC1_CH6 Monitor Referensi 5V TPS", "DIAGNOSTIK"),
+    Esp32Pin("LEFT", 3, "GPIO36 (VP)", "PA3", "ADC1_SENSOR", "Input", "TPS_SIG -> R divider -> GPIO36", "ADC1_CH0 Sensor TPS", "AKTIF ADC1", isCritical = true, warning = "Hanya ADC1 yang aman digunakan saat BLE/WiFi aktif. Jangan masukkan tegangan >3.3V."),
+    Esp32Pin("LEFT", 4, "GPIO39 (VN)", "PA4", "ADC1_SENSOR", "Input", "TEMP_SIG -> R network -> GPIO39", "ADC1_CH3 Sensor Suhu Radiator", "AKTIF ADC1"),
+    Esp32Pin("LEFT", 5, "GPIO34", "PA5", "ADC1_SENSOR", "Input", "TPS_REF -> R divider -> GPIO34", "ADC1_CH6 Monitor Referensi 5V TPS", "DIAGNOSTIK"),
     Esp32Pin("LEFT", 6, "GPIO35", "PA6", "ADC1_SENSOR", "Input", "HV_CENTER -> 4x270k seri -> 1k -> GPIO35", "ADC1_CH7 Feedback Tegangan Bank Center", "AKTIF ADC1", isCritical = true, warning = "Wajib 4 resistor 270k seri + BAT54S clamp ke 3V3! Tegangan koil >300V akan mematikan chip jika bocor."),
     Esp32Pin("LEFT", 7, "GPIO32", "PA7", "ADC1_SENSOR", "Input", "HV_SIDE -> 4x270k seri -> 1k -> GPIO32", "ADC1_CH4 Feedback Tegangan Bank Side", "AKTIF ADC1", isCritical = true),
-    Esp32Pin("LEFT", 8, "GPIO33", "PB0 / PB2", "ADC1_SENSOR", "Input", "VIN_FILT -> 100k -> 1k -> GPIO33; 22k GND", "ADC1_CH5 Monitor Tegangan Aki (VBAT)", "AKTIF ADC1", isCritical = true),
+    Esp32Pin("LEFT", 8, "GPIO33", "PB0", "ADC1_SENSOR", "Input", "VIN_FILT -> 100k -> 1k -> GPIO33; 22k GND", "ADC1_CH5 Monitor Tegangan Aki (VBAT)", "AKTIF ADC1", isCritical = true),
     Esp32Pin("LEFT", 9, "GPIO25", "PA1", "GATE", "Output", "GPIO25 -> 4.7k -> Driver SCR1 -> BT151 Gate", "Gate Center / Koil Tengah (J1.12 via SCR)", "AKTIF GATE CTR", isCritical = true, warning = "Jalur pemicu pengapian koil utama. Wajib gunakan driver buffer dan pulldown 1k ke GND."),
     Esp32Pin("LEFT", 10, "GPIO26", "PA2", "GATE", "Output", "GPIO26 -> 4.7k -> Driver SCR2 -> BT151 Gate", "Gate Side / Koil Samping (J1.6 via SCR)", "AKTIF GATE SIDE", isCritical = true),
     Esp32Pin("LEFT", 11, "GPIO27", "PB9", "SECONDARY", "Output", "GPIO27 -> 100R -> Gate MOSFET Strobo", "Strobo Manual / Timing Light TDC", "MODE MANUAL"),
@@ -237,7 +237,7 @@ object WiringDataProvider {
       ),
       orientationGuide = "Pegang komponen menghadap sisi tulisan sablon menghadap Anda dengan pin mengarah ke bawah: Kaki 1 di kiri (Cathode), Kaki 2 di tengah (Anode), Kaki 3 di kanan (Gate). Plat pendingin logam (tab belakang) terhubung internal dengan Anode (tegangan tinggi 285V), jangan sampai menyentuh ground!",
       donorPsuRule = "Wajib beli baru kualitas bagus. Jangan gunakan triac AC.",
-      safetyNotice = "Tab logam di belakang BT151 bertegangan tinggi (220-290V) saat bekerja. Jangan tempelkan ke heatsink bersama tanpa mika isolator!"
+      safetyNotice = "Tab logam di belakang BT151 bertegangan tinggi (220-345V) saat bekerja. Jangan tempelkan ke heatsink bersama tanpa mika isolator!"
     ),
     ComponentPinout(
       ref = "IRF3205",
@@ -264,7 +264,7 @@ object WiringDataProvider {
         PinLeg("Pin 3", "GND", "Ground Daya (GND_POWER)"),
         PinLeg("Pin 4", "INB", "Input PWM B dari PB8 via resistor 1k dan pulldown 10k ke GND"),
         PinLeg("Pin 5", "OUTB", "Output penggerak Gate QHV2 via resistor 10R"),
-        PinLeg("Pin 6", "VDD", "Catu daya driver dari VIN_HV (setelah jumper JP_HV)"),
+        PinLeg("Pin 6", "VDD", "Catu daya driver dari VIN_HV (setelah FHV/SW_SERVICE opsional)"),
         PinLeg("Pin 7", "OUTA", "Output penggerak Gate QHV1 via resistor 10R"),
         PinLeg("Pin 8", "NC", "Tidak terhubung")
       ),
@@ -345,7 +345,7 @@ object WiringDataProvider {
       packageType = "Trafo Utama Bekas PSU Komputer (EE-35 / EI-33)",
       ratingSpec = "Input 12V Push-Pull Center Tap -> Output Sekunder AC 200-300V",
       pinLegs = listOf(
-        PinLeg("LV_CT", "Center-Tap Sekunder 5V Lama", "Tersambung ke VIN_HV (12V setelah jumper JP_HV)"),
+        PinLeg("LV_CT", "Center-Tap Sekunder 5V Lama", "Tersambung ke VIN_HV (12V setelah FHV/SW_SERVICE opsional)"),
         PinLeg("LV_A", "Kaki Kiri 5V Lama", "Tersambung ke Drain MOSFET QHV1"),
         PinLeg("LV_B", "Kaki Kanan 5V Lama", "Tersambung ke Drain MOSFET QHV2"),
         PinLeg("HV_AC1", "Kaki Primer Tegangan Tinggi Lama 1", "Ke input jembatan dioda DREC1 (Anode) & DREC3 (Cathode)"),
@@ -353,7 +353,7 @@ object WiringDataProvider {
       ),
       orientationGuide = "Trafo ATX digunakan terbalik: Lilitan 5V center-tap yang dahulu menghasilkan 5V kini menjadi input primer 12V push-pull. Lilitan primer tegangan tinggi 300V lama kini menjadi keluaran sekunder AC tegangan tinggi. Lilitan 3.3V, 12V, dan auxiliary dipotong atau diisolasi.",
       donorPsuRule = "WAJIB trafo utama ATX utuh tanpa dibongkar atau dililit ulang! Dilarang menggunakan trafo raket nyamuk, flyback TV, atau charger hp.",
-      safetyNotice = "Keluaran AC menghasilkan tegangan tinggi mematikan di atas 220V-290V. Jaga jarak isolasi (clearance) minimal 6mm di PCB lubang."
+      safetyNotice = "Keluaran AC menghasilkan tegangan tinggi mematikan hingga target PRO 345V. Jaga jarak isolasi (clearance) minimal 6mm di PCB lubang."
     ),
     ComponentPinout(
       ref = "C_CENTER / C_SIDE",
@@ -586,7 +586,7 @@ object WiringDataProvider {
       verificationRequirement = "Sebelum soket harness dicolok ke motor, ukur resistansi ke ground pada J1.3. Saat diberi 5V, tegangan open-circuit di J1.3 harus terbaca 5.0V, dan pada PA4 harus terbaca ~3.21V.",
       verificationType = VerificationType.MULTIMETER_VOLT,
       expectedValue = "Open circuit PA4 = ~3.2V (Clamp bekerja)",
-      criticalSafetyWarning = "Sensor suhu melindungi mesin dari overheat. Jangan abaikan pemasangan BAT54S clamp!"
+      criticalSafetyWarning = "Firmware saat ini belum memakai suhu untuk proteksi overheat. Jangan abaikan BAT54S clamp dan gunakan proteksi termal motor yang independen."
     ),
     WiringStep(
       id = "step_2_4",
@@ -703,7 +703,7 @@ object WiringDataProvider {
       verificationRequirement = "Beri sinyal uji logika 3.3V ke Gate via kabel jumper: LED strobo harus menyala terang seketika. Lepas sinyal: LED harus mati total.",
       verificationType = VerificationType.VISUAL_INSPECTION,
       expectedValue = "LED Menyala Responsif saat Gate HIGH",
-      criticalSafetyWarning = "Driver strobo hanya aktif pada tahap Quick Setup TDC saat jumper JP_HV lepas demi keselamatan kerja dekat magnet spul!"
+      criticalSafetyWarning = "Driver strobo hanya aktif pada tahap Quick Setup TDC. Matikan kill switch dan buka SW_SERVICE/cabut FHV sebelum bekerja dekat magnet spul."
     ),
     WiringStep(
       id = "step_2_8",
@@ -743,15 +743,15 @@ object WiringDataProvider {
       targetPin = "Rel Daya VIN_HV & Sikring FHV 3A",
       components = listOf(
         StepComponent("FHV", "Sikring Jalur Charger HV", "Fuse Blade 3A + Holder", "Antara kabel suplai dari VIN_FILT dan rel VIN_HV"),
-        StepComponent("JP_HV_OPSIONAL", "Saklar Pemutus Fisik Servis (Opsional)", "Header 2-Pin 2.54mm Tebal / Saklar Toggle", "Pemutus daya fisik saat pemeliharaan bengkel"),
+        StepComponent("SW_SERVICE", "Saklar Pemutus Fisik Servis (Opsional)", "Saklar toggle berarus cukup / link servis", "Pemutus daya mekanis saat pemeliharaan; bukan input firmware"),
         StepComponent("KABEL_ANTAR_BOARD", "Kabel Penghubung Daya 18 AWG", "Kabel serabut silikon fleksibel 18 AWG", "Menghubungkan VIN_FILT PCB Logic ke FHV PCB Power")
       ),
       schematicTrace = "VIN_FILT (PCB Logic) ===> FHV 3A ===> [Saklar Servis / Link] ===> VIN_HV (Rel Suplai Trafo & TC4427)",
       perfboardTips = listOf(
         "Mulai pengerjaan pada PCB lubang kedua (PCB Power ukuran minimal 5x7 cm).",
         "Buat jarak aman (clearance) minimal 6mm antara area tegangan rendah 12V dan area tegangan tinggi 300V!",
-        "Catatan Firmware R8: Ketergantungan jumper fisik JP_HV lama telah dihapus dari firmware R8, digantikan dengan software interlock di aplikasi (Safe DIY Mode & First Start Protection).",
-        "Saklar/jumper pemutus fisik tetap sangat dianjurkan sebagai isolator daya mekanis demi keamanan teknisi saat perakitan atau penyolderan.",
+        "Firmware R8 tidak membaca JP_HV. SW_SERVICE di sini murni isolator mekanis opsional; keselamatan operasi tetap ditentukan mode, RPM, HV feedback, fault, dan output permission firmware.",
+        "Saklar pemutus fisik tetap sangat dianjurkan sebagai isolator daya mekanis saat perakitan atau penyolderan.",
         "Sikring FHV 3A melindungi aki dari bahaya arus berlebih jika terjadi hubung singkat pada push-pull MOSFET."
       ),
       pinLegGuide = "Kabel suplai masuk ke sikring FHV 3A, lalu keluar menuju rel daya charger VIN_HV.",
@@ -765,28 +765,26 @@ object WiringDataProvider {
       stageId = 3,
       stageTitle = "Tahap 3: Pemutus Fisik & Rangkaian Charger Push-Pull",
       stepNumber = "3.2",
-      title = "Penyolderan Pembagi Sensor Tegangan Jalur Daya (VIN_HV) ke PB2",
+      title = "Pembuatan Titik Uji Tegangan Rendah VIN_HV (Opsional)",
       board = PcbBoard.PCB_LOGIC,
       sourcePin = "Rel VIN_HV (PCB Power)",
-      targetPin = "WeAct H_BOTTOM.19 (PB2 / VIN_HV Sense)",
+      targetPin = "Test pad HV_PRESENT untuk multimeter (tidak ke MCU)",
       components = listOf(
         StepComponent("R_HV_PRES1", "Resistor Pembagi Atas", "100k Ohm 0.25W", "Dari VIN_HV ke simpul HV_PRESENT"),
-        StepComponent("R_HV_PRES2", "Resistor Pembagi Bawah", "27k Ohm 0.25W", "Dari HV_PRESENT ke GND_STAR"),
-        StepComponent("R_TO_PB2", "Resistor Pembatas Arus", "1k Ohm 0.25W", "Dari HV_PRESENT ke PB2"),
-        StepComponent("DBAT_PB2", "Dioda Pengaman Clamp", "BAT54S Schottky Dual", "Pin 1 GND, Pin 2 3V3, Pin 3 HV_PRESENT")
+        StepComponent("R_HV_PRES2", "Resistor Pembagi Bawah", "27k Ohm 0.25W", "Dari HV_PRESENT ke GND_STAR")
       ),
-      schematicTrace = "VIN_HV -> 100k -> HV_PRESENT -> 1k -> H_BOTTOM.19 (PB2) | HV_PRESENT -> 27k -> GND_STAR | BAT54S Clamp",
+      schematicTrace = "VIN_HV -> 100k -> HV_PRESENT (TEST PAD) -> 27k -> GND_STAR",
       perfboardTips = listOf(
-        "Rangkaian ini memantau ada tidaknya daya pada rel charger VIN_HV untuk dilaporkan ke mikrokontroler.",
-        "Solder komponen ini di PCB Logic, tarik satu kabel sensor dari rel VIN_HV di PCB Power.",
+        "Rangkaian ini hanya menyediakan titik ukur aman bagi multimeter saat servis; firmware R8 tidak membaca PB2 maupun input VIN_HV terpisah.",
+        "Solder komponen ini di PCB Logic bila titik servis dibutuhkan; tarik satu kabel sensor dari rel VIN_HV di PCB Power.",
         "Nilai pembagi 100k dan 27k menghasilkan tegangan ~2.55V saat aki 12V.",
-        "Pada Firmware R8, pin PB2 bertindak sebagai pemantau kehadiran daya charger (VIN_HV Presence Sense)."
+        "Jangan memakai titik ini sebagai syarat interlock. Firmware memakai VBAT, HV_CENTER/HV_SIDE, PA10/GPIO14 fault, mode, dan RPM."
       ),
-      pinLegGuide = "Dihubungkan ke pin H_BOTTOM nomor 19 (dua lubang dari tepi kanan WeAct).",
-      verificationRequirement = "Ukur tegangan pada H_BOTTOM.19 (PB2): Saat rel VIN_HV bertegangan 12V, harus terbaca ~2.5V (HIGH logika aman).",
+      pinLegGuide = "Beri label test pad HV_PRESENT dan jangan menghubungkannya ke pin MCU.",
+      verificationRequirement = "Ukur test pad HV_PRESENT: saat rel VIN_HV 12V, hasil pembagi harus sekitar 2.5V.",
       verificationType = VerificationType.MULTIMETER_VOLT,
-      expectedValue = "Tegangan PB2: ~2.5V saat 12V aktif (Rel Daya Terdeteksi)",
-      criticalSafetyWarning = "Pastikan BAT54S terpasang benar agar lonjakan tegangan transien aki tidak menembus port IO STM32."
+      expectedValue = "Test pad HV_PRESENT: ~2.5V saat VIN_HV 12V",
+      criticalSafetyWarning = "Test pad ini bukan input keselamatan firmware dan tidak boleh menggantikan feedback HV PA6/PA7 atau GPIO35/GPIO32."
     ),
     WiringStep(
       id = "step_3_3",
@@ -929,7 +927,7 @@ object WiringDataProvider {
       verificationRequirement = "Uji dioda jembatan dengan mode Diode Multitester: pastikan drop tegangan forward ~0.55V pada tiap dioda dan resistansi balik Open-Loop (OL). Pastikan BRIDGE_PLUS tidak korslet ke ground.",
       verificationType = VerificationType.MULTIMETER_CONTINUITY,
       expectedValue = "Drop Maju ~ 0.55V | Balik OL",
-      criticalSafetyWarning = "Tegangan pada simpul BRIDGE_PLUS mencapai 220V - 290V DC berbahaya! Jaga jarak aman minimal 6mm."
+      criticalSafetyWarning = "Tegangan pada simpul BRIDGE_PLUS dapat mencapai 220V–345V DC dan mematikan. Jaga jarak aman minimal 6mm."
     ),
     WiringStep(
       id = "step_4_2",
@@ -1109,7 +1107,7 @@ object WiringDataProvider {
         StepComponent("CHECK_CLEARANCE", "Jarak Celah Tegangan Tinggi", "PCB Power 5x7cm", "Clearance HV >= 6mm bebas serpihan timah"),
         StepComponent("CHECK_ANTENNA", "Area Bebas Logam Antena WeAct", "Ujung kanan board WeAct", "Tidak ada kabel HV, trafo, atau tembaga di radius 15mm")
       ),
-      schematicTrace = "Checklist Keselamatan Akhir: 1) Semua GND kembali ke GND_STAR. 2) Tidak ada kontinuitas 12V/HV ke pin ADC. 3) PA1/PA2 LOW saat reset. 4) JP_HV lepas memutus 100% VIN_HV.",
+      schematicTrace = "Checklist Keselamatan Akhir: 1) Semua GND kembali ke GND_STAR. 2) Tidak ada kontinuitas 12V/HV ke pin ADC. 3) PA1/PA2 atau GPIO25/GPIO26 LOW saat reset. 4) Cabut FHV/buka SW_SERVICE untuk memutus 100% VIN_HV saat servis.",
       perfboardTips = listOf(
         "Bersihkan sisa serpihan timah dan sisa pasta flux di bawah PCB menggunakan sikat gigi dan alkohol isopropil (IPA).",
         "Pastikan sambungan solder mengkilap (tidak ada cold joint / retak).",
@@ -1128,25 +1126,25 @@ object WiringDataProvider {
     QuickSetupStep(
       stepNumber = 1,
       stageName = "1. Flash Firmware",
-      connectionCondition = "Kabel USB ke PC; tahan tombol BOOT0 di board WeAct, tekan-lepas tombol NRST, pilih port USB1 di STM32CubeProgrammer.",
-      appAction = "Flash file firmware NS200_CDI_R7.bin / .elf ke alamat 0x08000000.",
-      outputCondition = "Download + Verify sukses 100%; start core.",
-      proceedCriteria = "Status terverifikasi di CubeProgrammer.",
+      connectionCondition = "Hubungkan kabel USB data. STM32: masuk DFU dengan BOOT0/NRST. ESP32: masuk bootloader dengan BOOT/EN bila auto-reset tidak bekerja.",
+      appAction = "STM32: flash image R8 ke 0x08000000 dengan STM32CubeProgrammer. ESP32: flash image ESP-IDF sesuai partition table proyek.",
+      outputCondition = "Penulisan dan verifikasi image target yang benar berhasil; perangkat reboot normal.",
+      proceedCriteria = "BLE mengiklankan NS200-CDI-R8 dan menjawab GET,CAPS.",
       stopHazard = "Gagal koneksi: periksa kabel USB Type-C data (bukan kabel charger saja)."
     ),
     QuickSetupStep(
       stepNumber = 2,
       stageName = "2. Logic & Tegangan Catu",
-      connectionCondition = "Saklar kill switch OFF (J1.5 = 0V); Kunci kontak motor ON; JUMPER JP_HV WAJIB LEPAS!",
-      appAction = "Buka aplikasi Android, scan BLE 'NS200-CDI-R7', hubungkan gatt.",
+      connectionCondition = "Kill switch OFF (J1.5 = 0V), kontak ON, dan jalur charger diisolasi dengan membuka SW_SERVICE atau mencabut FHV.",
+      appAction = "Buka aplikasi Android, scan BLE 'NS200-CDI-R8', lalu hubungkan GATT.",
       outputCondition = "Tegangan aki terbaca akal (11.8V - 12.8V); HV terbaca < 30V; Tahap aplikasi terbaca 'BARU'.",
       proceedCriteria = "Aki terbaca normal & BLE terhubung stabil.",
-      stopHazard = "STOP jika tegangan terbaca 0V atau HV > 50V saat jumper lepas."
+      stopHazard = "STOP jika VBAT tidak masuk akal atau HV > 30V saat jalur charger telah diisolasi."
     ),
     QuickSetupStep(
       stepNumber = 3,
       stageName = "3. Uji Pulser Pickup",
-      connectionCondition = "J1.10 terhubung ke pulser spul motor melalui LM339; JP_HV tetap lepas; putar starter mesin 2-3 detik.",
+      connectionCondition = "J1.10 terhubung ke input pickup terisolasi/komparator; SW_SERVICE tetap terbuka atau FHV dicabut; putar starter 2–3 detik.",
       appAction = "Perhatikan indikator Pulser di aplikasi: deteksi Edge (FALLING/RISING), PPR default 1.",
       outputCondition = "Charger dan Koil tetap OFF; Quality sinyal pulser terbaca >= 10.",
       proceedCriteria = "Pickup Quality >= 10 terdeteksi tanpa noise.",
@@ -1155,7 +1153,7 @@ object WiringDataProvider {
     QuickSetupStep(
       stepNumber = 4,
       stageName = "4. Kalibrasi Sudut TDC Strobo",
-      connectionCondition = "Hubungkan LED strobo 5V ke PB9; arahkan cahaya ke lubang intip kaca magnet spul motor.",
+      connectionCondition = "Hubungkan LED strobo 5V ke PB9 (STM32) atau GPIO27 (ESP32); arahkan cahaya ke tanda timing.",
       appAction = "Putar starter mesin; perhatikan garis tanda huruf 'T' pada kruk as motor.",
       outputCondition = "Garis 'T' terlihat diam sejajar tepat dengan garis penanda crankcase; tekan 'SAVE TDC'.",
       proceedCriteria = "Garis T sejajar sempurna dan tersimpan di flash.",
@@ -1164,7 +1162,7 @@ object WiringDataProvider {
     QuickSetupStep(
       stepNumber = 5,
       stageName = "5. Kalibrasi Sensor TPS",
-      connectionCondition = "Mesin dalam kondisi mati; kontak ON; JP_HV tetap lepas.",
+      connectionCondition = "Mesin mati, kontak ON, SW_SERVICE terbuka atau FHV dicabut.",
       appAction = "Buka menu TPS di aplikasi: tekan 'Simpan Gas Tertutup' (0%), lalu pelintir gas penuh dan tekan 'Simpan Gas Penuh' (100%).",
       outputCondition = "Rentang ADC terbaca proporsional dan diterima firmware.",
       proceedCriteria = "Grafik bukaan gas bergerak mulus 0% - 100%.",
@@ -1173,7 +1171,7 @@ object WiringDataProvider {
     QuickSetupStep(
       stepNumber = 6,
       stageName = "6. First Start Mesin (220V Center)",
-      connectionCondition = "Pilih mode FIRST START di aplikasi; PASANG JUMPER JP_HV; pastikan pemadam api/APD siap.",
+      connectionCondition = "Pilih FIRST START di aplikasi, pasang kembali FHV/tutup SW_SERVICE, dan pastikan APD serta pemadam siap.",
       appAction = "Pencet tombol starter motor. Tegangan HV diatur konservatif 220V, hanya busi CENTER yang memicu, advance maksimal 10 derajat, limiter 3.000 RPM.",
       outputCondition = "Mesin hidup stabil idle minimal 3 detik tanpa gejala backfire atau detonasi.",
       proceedCriteria = "Mesin hidup idle stasioner stabil >= 3 detik.",
@@ -1182,7 +1180,7 @@ object WiringDataProvider {
     QuickSetupStep(
       stepNumber = 7,
       stageName = "7. Konfirmasi READY & Simpan Map",
-      connectionCondition = "Matikan kontak motor; lepas JP_HV; pastikan tegangan kedua bank HV terkuras < 30V oleh bleeder.",
+      connectionCondition = "Matikan kontak, buka SW_SERVICE/cabut FHV, dan pastikan kedua bank HV telah turun < 30V oleh bleeder.",
       appAction = "Tekan 'SIMPAN READY CENTER' di aplikasi Android.",
       outputCondition = "Boot berikutnya langsung mengaktifkan pengapian sesuai kurva timing map.",
       proceedCriteria = "Status tersimpan permanen di Flash MCU dengan CRC valid.",
@@ -1192,10 +1190,10 @@ object WiringDataProvider {
       stepNumber = 8,
       stageName = "8. Tuning Lanjutan & Opsi 3-Busi",
       connectionCondition = "Operasi NORMAL (285V); aktifkan busi samping (SIDE J1.6) HANYA setelah offset derajat SIDE diukur dengan lampu strobo pada motor aktual.",
-      appAction = "Pantau live telemetry di aplikasi: RPM, suhu mesin, tegangan aki, tegangan HV Bank Center & Side.",
-      outputCondition = "Beda tegangan kedua bank < 50V; temperatur stabil di bawah 95°C; tidak ada reset.",
+      appAction = "Pantau telemetri langsung: RPM, TPS, tegangan aki, HV Center/Side, fault, dan limiter. Suhu tampil N/A sampai konversi NTC firmware tersedia.",
+      outputCondition = "Beda tegangan kedua bank < 50V, tidak ada fault/reset, dan limiter bekerja sesuai slot.",
       proceedCriteria = "Seluruh parameter hijau stabil pada pengetesan jalan bertahap.",
-      stopHazard = "Tegangan 345V diblokir mutlak oleh sistem. Batas maksimal mode PRO dengan JP_PRO adalah 290V."
+      stopHazard = "NORMAL menargetkan 285V dan PRO menargetkan 345V; firmware memicu fault di atas 360V. Jangan pernah menonaktifkan feedback atau clamp HV."
     )
   )
 
@@ -1265,12 +1263,12 @@ object WiringDataProvider {
     ),
     ModularDropInModule(
       id = "mod_hv_boost",
-      blockName = "Pengecas Kapasitor HV (12V ke 285V / 345V PRO)",
-      moduleName = "Modul High Voltage DC-DC Boost Converter 8V-32V ke 45V-390V (ZVS Cap Charger 40W/70W)",
-      replacesDiscrete = "Trafo ferit lilitan tangan diskrit + UC3843 PWM + MOSFET IRF3205 push-pull",
+      blockName = "DITOLAK: Modul Boost HV Generik",
+      moduleName = "TIDAK KOMPATIBEL dengan kontrol charger firmware R8",
+      replacesDiscrete = "Tidak boleh menggantikan trafo ATX, TC4427, IRF3205 push-pull, feedback HV, dan clamp hardware",
       estimatedPriceIdr = "Rp 45.000 - Rp 75.000",
-      keyFeatures = "Heatsink aluminium terpasang, trimpot multi-turn presisi, arus konstan aman untuk kapasitor discharge 1.5-2.2uF 450V",
-      wiringSummary = "VIN+ ke +12V kontak (via saklar pengaman), VIN- ke GND, VOUT+ diatur ke 285V/345V seri dioda ultrafast UF4007 ke Kapasitor HV & Koil"
+      keyFeatures = "Tidak memiliki input PWM dua-fasa, loop feedback firmware, dan perpindahan target 285V/345V yang diwajibkan R8",
+      wiringSummary = "JANGAN disambungkan. Gunakan blok charger push-pull sesuai langkah wiring dan feedback HV firmware."
     ),
     ModularDropInModule(
       id = "mod_pulser_comp",
@@ -1278,8 +1276,8 @@ object WiringDataProvider {
       moduleName = "Modul Komparator LM393 Speed Sensor / Voltage Comparator",
       replacesDiscrete = "IC LM339 diskrit + resistor pembagi tegangan perfboard + filter RC",
       estimatedPriceIdr = "Rp 6.000 - Rp 12.000",
-      keyFeatures = "Trimpot penyetel sensitivitas ambang batas tegangan (0.5V - 2.5V), LED kedip visual trigger tonjolan magnet",
-      wiringSummary = "VCC ke 3V3/5V WeAct, GND ke GND motor, Input ke J1.10 Pulser (Putih-Merah), Output langsung ke PA0 (TIM2_CH1) WeAct"
+      keyFeatures = "Trimpot penyetel ambang; output harus open-collector/pull-up 3.3V dan diverifikasi tidak pernah melebihi 3.3V",
+      wiringSummary = "VCC/pull-up output ke 3V3, GND ke GND motor, input J1.10 melalui pembatas/clamp, output melalui 1k ke PA0 STM32 atau GPIO4 ESP32"
     ),
     ModularDropInModule(
       id = "mod_fan_relay",

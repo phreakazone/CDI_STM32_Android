@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.WiringDataProvider
 import id.ns200.cdir7.CdiViewModel
 import id.ns200.cdir7.McuPlatform
 import id.ns200.cdir7.ScreenTab
@@ -187,7 +188,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
     val preflightMessage by viewModel.quickSetupMessage.collectAsState()
     val listState = rememberLazyListState()
     val visibleProgress = maxOf(t.setupStage, quickSetupUnlockedStage)
-    var strobeModeChoice by remember { mutableIntStateOf(1) } // 0 = Strobo LED PB9, 1 = Manual Tanpa Strobo (Default)
+    var strobeModeChoice by remember { mutableIntStateOf(1) } // 0 = Strobo MCU, 1 = Manual Tanpa Strobo (Default)
 
     LaunchedEffect(quickSetupPage) {
         listState.animateScrollToItem((2 + quickSetupPage).coerceIn(2, 7))
@@ -203,7 +204,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, if (t.isHvOver300) RaceRedline else BorderSubtle, RoundedCornerShape(12.dp)),
+                    .border(1.dp, if (t.isHvOverLimitWarning) RaceRedline else BorderSubtle, RoundedCornerShape(12.dp)),
                 colors = CardDefaults.cardColors(containerColor = CardBackground),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -214,7 +215,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "STATUS HARDWARE & INTERLOCK FISIK",
+                            text = "STATUS OUTPUT & PROTEKSI FIRMWARE",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = MotecOrange,
@@ -231,16 +232,13 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    val oemCenterBadge = if (selectedPlatform == McuPlatform.STM32WB55) "PB3 (OEM Center)" else "GPIO16 (OEM Center)"
-                    val oemSideBadge = if (selectedPlatform == McuPlatform.STM32WB55) "PB4 (OEM Side)" else "GPIO17 (OEM Side)"
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        InterlockBadge(oemCenterBadge, t.armed, RacingLime, TextMuted)
+                        InterlockBadge("OUTPUT DIY", t.armed, RacingLime, TextMuted)
                         InterlockBadge("HV AKTIF", t.hvEnabled, RacingLime, TextMuted)
-                        InterlockBadge(oemSideBadge, t.proJumper, ElectricCyan, TextMuted)
+                        InterlockBadge("PRO 345V", t.proEnabled, ElectricCyan, TextMuted)
                         InterlockBadge("CENTER KOIL", t.centerEnabled, RacingLime, TextMuted)
                         InterlockBadge("SIDE KOIL", t.sideEnabled, ElectricCyan, TextMuted)
                     }
@@ -372,7 +370,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                 onSelectStage = { viewModel.selectQuickSetupPage(SetupStage.PULSER.code) }
             ) {
                 Text(
-                    text = "• Hubungkan kabel pulser putih-merah (J1.10) via LM339 ke pin PA0.\n" +
+                    text = "• Hubungkan kabel pulser putih-merah (J1.10) via pengkondisi sinyal ke ${selectedPlatform.pulserPin}.\n" +
                             "• Kualitas Pulser Live: ${t.pickupQuality}/100 (Target >= 10).\n" +
                             "• Putar starter 2-3 detik untuk mendeteksi sinyal reluktor.",
                     fontSize = 11.sp,
@@ -468,7 +466,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                 if (strobeModeChoice == 0) {
                     // STROBE HARDWARE OPTION
                     Text(
-                        text = "• Hubungkan PB9 ke driver MOSFET FQP30N06L & LED strobo 1W.\n" +
+                        text = "• Hubungkan ${selectedPlatform.strobePin} ke driver MOSFET FQP30N06L & LED strobo 1W.\n" +
                                 "• Buka baut lubang intip magnet bak mesin kiri Pulsar 200NS.\n" +
                                 "• Aplikasi menggeser sudut trigger absolut; starter harus terus berputar saat tanda diamati.\n" +
                                 "• Starter mesin dan sesuaikan offset hingga garis 'T' sejajar takik merah.",
@@ -883,17 +881,17 @@ private fun HarnessJ1View(viewModel: CdiViewModel, confirmedMap: Map<String, Boo
 
     val j1Pins = listOf(
         HarnessPinItem("J1.1", "NC", "NC", "Tidak Disambung", "Jangan disambung", "KOSONG"),
-        HarnessPinItem("J1.2", "Hijau-putih", "TPS_A", if (isStm) "H_BOTTOM.12 (PA3) / H_BOTTOM.14 (PA5)" else "Pin 3 (GPIO36 / VP ADC1_CH0)", "J_TPS pin1+pin6 -> TPS_REF atau TPS_SIG", "CONFIRM TPS", isWarning = true),
-        HarnessPinItem("J1.3", "Hitam-putih", "TEMP", if (isStm) "H_BOTTOM.13 (PA4 ADC)" else "Pin 4 (GPIO39 / VN ADC1_CH3)", "+5V--4.7k--J1.3; 15k--TEMP_ADC; 27k ke GND; clamp BAT54S", "AKTIF"),
-        HarnessPinItem("J1.4", "Abu-abu", "TPS_B", if (isStm) "H_BOTTOM.12 (PA3) / H_BOTTOM.14 (PA5)" else "Pin 5 (GPIO34 ADC1_CH6)", "J_TPS pin3+pin4 -> TPS_REF atau TPS_SIG", "CONFIRM TPS", isWarning = true),
+        HarnessPinItem("J1.2", "Hijau-putih", "TPS_A", if (isStm) "H_BOTTOM.12 (PA3) / H_BOTTOM.14 (PA5)" else "LEFT.3 GPIO36 / LEFT.5 GPIO34", "J_TPS pin1+pin6 -> TPS_REF atau TPS_SIG", "CONFIRM TPS", isWarning = true),
+        HarnessPinItem("J1.3", "Hitam-putih", "TEMP", if (isStm) "H_BOTTOM.13 (PA4 ADC)" else "LEFT.4 GPIO39 / VN (ADC1_CH3)", "+5V--4.7k--J1.3; 15k--TEMP_ADC; 27k ke GND; clamp BAT54S", "FISIK AKTIF; TELEMETRI N/A"),
+        HarnessPinItem("J1.4", "Abu-abu", "TPS_B", if (isStm) "H_BOTTOM.12 (PA3) / H_BOTTOM.14 (PA5)" else "LEFT.3 GPIO36 / LEFT.5 GPIO34", "J_TPS pin3+pin4 -> TPS_REF atau TPS_SIG", "CONFIRM TPS", isWarning = true),
         HarnessPinItem("J1.5", "+12V kontak", "+12V Kontak", "VIN_PROT / FMAIN5A", "FMAIN5A--DREV--VIN_PROT--L47uH--VIN_FILT (ke FLOGIC dan FHV)", "AKTIF"),
-        HarnessPinItem("J1.6", "Hitam-merah", "COIL_SIDE", if (isStm) "H_BOTTOM.11 (PA2 via QNS/QPS)" else "Pin 10 (GPIO26 via Driver SCR2)", "Terminal B koil SIDE. SCR2 anode HV_SIDE, cathode GND", "OFFSET WAJIB", isWarning = true),
-        HarnessPinItem("J1.7", "Biru-kuning", "FAN_RELAY", if (isStm) "H_TOP.7 (PB5 via Modul Relay / BC547)" else "Pin 15 (GPIO13 via Modul Relay / BC547)", "Modul Relay 1-CH 5V pin IN / Kolektor QFAN; coil relay ke +12V kontak", "MODUL PASARAN / DISKRIT", isWarning = true),
-        HarnessPinItem("J1.8", "NC (Pabrik) / OEM_SIDE", "OEM_SIDE", if (isStm) "H_TOP.8 (PB4 via PC817)" else "Pin 30 (GPIO17 via PC817)", if (isStm) "Kabel tambahan probe OEM Side -> R 47k 2W -> Modul PC817 IN2+ -> PB4" else "Kabel tambahan probe OEM Side -> R 47k 2W -> Modul PC817 IN2+ -> GPIO17", "PROBE OEM SIDE R8"),
-        HarnessPinItem("J1.9", "NC (Pabrik) / OEM_CTR", "OEM_CTR", if (isStm) "H_TOP.9 (PB3 via PC817)" else "Pin 31 (GPIO16 via PC817)", if (isStm) "Kabel tambahan probe OEM Center -> R 47k 2W -> Modul PC817 IN1+ -> PB3" else "Kabel tambahan probe OEM Center -> R 47k 2W -> Modul PC817 IN1+ -> GPIO16", "PROBE OEM CENTER R8"),
-        HarnessPinItem("J1.10", "Putih-merah", "PULSER", if (isStm) "H_BOTTOM.9 (PA0 TIM2_CH1)" else "Pin 19 (GPIO4 via LM393 DOUT)", "39k--PICKUP_SENSE atau Modul Komparator LM393 DOUT ke MCU", "CONFIRM EDGE/OFFSET", isWarning = true),
-        HarnessPinItem("J1.11", "Hitam-kuning", "GND", if (isStm) "H_BOTTOM.1 G / H_TOP.1 G" else "Pin 14 / Pin 20 (GND)", "GND_STAR ke logic & power, modul opto/relay GND, dan G board", "AKTIF"),
-        HarnessPinItem("J1.12", "Koil Center", "COIL_CENTER", if (isStm) "H_BOTTOM.10 (PA1 via QNC/QPC)" else "Pin 9 (GPIO25 via Driver SCR1)", "Terminal B koil CENTER. SCR1 anode HV_CENTER, cathode GND", "FIRST START & READY")
+        HarnessPinItem("J1.6", "Hitam-merah", "COIL_SIDE", if (isStm) "H_BOTTOM.11 (PA2 via QNS/QPS)" else "LEFT.10 GPIO26 via Driver SCR2", "Terminal B koil SIDE. SCR2 anode HV_SIDE, cathode GND", "OFFSET WAJIB", isWarning = true),
+        HarnessPinItem("J1.7", "Biru-kuning", "FAN_RELAY", if (isStm) "H_TOP.7 (PB5 via Modul Relay / BC547)" else "LEFT.15 GPIO13 via Modul Relay / BC547", "Modul Relay 1-CH 5V pin IN / Kolektor QFAN; coil relay ke +12V kontak", "MODUL PASARAN / DISKRIT", isWarning = true),
+        HarnessPinItem("J1.8", "NC (Pabrik) / OEM_SIDE", "OEM_SIDE", if (isStm) "H_TOP.8 (PB4 via PC817)" else "RIGHT.11 GPIO17 via PC817", if (isStm) "Kabel tambahan probe OEM Side -> R 47k 2W -> Modul PC817 IN2+ -> PB4" else "Kabel tambahan probe OEM Side -> R 47k 2W -> Modul PC817 IN2+ -> GPIO17", "PROBE OEM SIDE R8"),
+        HarnessPinItem("J1.9", "NC (Pabrik) / OEM_CTR", "OEM_CTR", if (isStm) "H_TOP.9 (PB3 via PC817)" else "RIGHT.12 GPIO16 via PC817", if (isStm) "Kabel tambahan probe OEM Center -> R 47k 2W -> Modul PC817 IN1+ -> PB3" else "Kabel tambahan probe OEM Center -> R 47k 2W -> Modul PC817 IN1+ -> GPIO16", "PROBE OEM CENTER R8"),
+        HarnessPinItem("J1.10", "Putih-merah", "PULSER", if (isStm) "H_BOTTOM.9 (PA0 TIM2_CH1)" else "RIGHT.13 GPIO4 via LM393 DOUT", "39k--PICKUP_SENSE atau Modul Komparator LM393 DOUT ke MCU", "CONFIRM EDGE/OFFSET", isWarning = true),
+        HarnessPinItem("J1.11", "Hitam-kuning", "GND", if (isStm) "H_BOTTOM.1 G / H_TOP.1 G" else "LEFT.14 / RIGHT.1 GND", "GND_STAR ke logic & power, modul opto/relay GND, dan G board", "AKTIF"),
+        HarnessPinItem("J1.12", "Koil Center", "COIL_CENTER", if (isStm) "H_BOTTOM.10 (PA1 via QNC/QPC)" else "LEFT.9 GPIO25 via Driver SCR1", "Terminal B koil CENTER. SCR1 anode HV_CENTER, cathode GND", "FIRST START & READY")
     )
 
     LazyColumn(
@@ -1038,75 +1036,18 @@ private fun HarnessJ1View(viewModel: CdiViewModel, confirmedMap: Map<String, Boo
 private fun McuHeaderView(viewModel: CdiViewModel) {
     val selectedPlatform by viewModel.selectedPlatform.collectAsState()
 
-    val bottomPins = listOf(
-        WeActPinItem("1", "GND", "Input", "GND_STAR", "Board GND - AKTIF"),
-        WeActPinItem("2", "5V", "Input", "LM2596 logic OUT+ 5.00V", "Board 5V - AKTIF"),
-        WeActPinItem("3", "5V", "-", "Tidak dipakai", "CADANGAN"),
-        WeActPinItem("4", "VBAT", "-", "Jangan hubungkan ke aki motor", "DILARANG 12V!", isWarning = true),
-        WeActPinItem("5", "PH3", "-", "Tidak dipakai", "CADANGAN"),
-        WeActPinItem("6", "PB9", "Output", "PB9--100R--gate FQP30N06L LED strobo", "LED strobo TDC opsional - QUICK SETUP"),
-        WeActPinItem("7", "PB8", "Output", "PB8--1k--TC4427 pin4 INB / QHV2 gate", "TIM1_CH2N - AKTIF"),
-        WeActPinItem("8", "NRST", "Input", "Tombol NRST onboard & ST-Link NRST", "PROGRAM/DEBUG"),
-        WeActPinItem("9", "PA0", "Input", "LM339 pin2--1k--PA0 (pulser pickup)", "TIM2_CH1 pickup capture - AKTIF"),
-        WeActPinItem("10", "PA1", "Output", "PA1--4.7k--QNC/QPC--330R--BT151 SCR1", "Gate CENTER - FIRST START 220V lalu READY"),
-        WeActPinItem("11", "PA2", "Output", "PA2--4.7k--QNS/QPS--330R--BT151 SCR2", "Gate SIDE - HANYA SETELAH OFFSET TERUKUR"),
-        WeActPinItem("12", "PA3", "Input", "TPS_SIG--15k--TPS_ADC--1k--PA3 (clamp)", "ADC TPS - AKTIF setelah selector"),
-        WeActPinItem("13", "PA4", "Input", "J1.3 network--1k--PA4 (coolant temp)", "ADC TEMP - AKTIF"),
-        WeActPinItem("14", "PA5", "Input", "TPS_REF--15k--TPS_REF_MON--1k--PA5", "ADC TPS ref monitor - DIAGNOSTIK"),
-        WeActPinItem("15", "PA6", "Input", "HV_CENTER--4x270k--HV_C_FB--1k--PA6", "ADC HV CENTER - AKTIF"),
-        WeActPinItem("16", "PA7", "Input", "HV_SIDE--4x270k--HV_S_FB--1k--PA7", "ADC HV SIDE - AKTIF"),
-        WeActPinItem("17", "PA8", "-", "Tidak dipakai", "CADANGAN"),
-        WeActPinItem("18", "PA9", "Output", "PA9--1k--TC4427 pin2 INA / QHV1 gate", "TIM1_CH2 - AKTIF"),
-        WeActPinItem("19", "PB2", "Input", "VIN_HV Sense (pembagi 100k/1k)", "Software Interlock R8 - AKTIF"),
-        WeActPinItem("20", "GND", "Input", "GND_STAR", "Board GND - AKTIF")
-    )
-
-    val topPins = listOf(
-        WeActPinItem("1", "GND", "Input", "GND_STAR", "Board GND - AKTIF"),
-        WeActPinItem("3", "3V3", "Output", "Hanya pullup/clamp/interlock/modul", "Bukan sumber beban besar - AKTIF"),
-        WeActPinItem("7", "PB5", "Output", "PB5 -> IN Modul Relay 5V / QFAN base", "FAN relay driver (Modul/Diskrit) - AKTIF"),
-        WeActPinItem("8", "PB4", "Input", "PB4: Monitor OEM Side (OUT2 PC817)", "OEM Side monitor / timing pasif R8 - AKTIF"),
-        WeActPinItem("9", "PB3", "Input", "PB3: Monitor OEM Center (OUT1 PC817)", "OEM Center monitor / timing pasif R8 - AKTIF"),
-        WeActPinItem("11", "PA10", "Input", "PWM_CLAMP pullup 4.7k ke 3V3 (LOW=fault)", "Hardware fault - AKTIF"),
-        WeActPinItem("12", "PE4", "Output", "LED onboard aktif-low", "Status - AKTIF"),
-        WeActPinItem("14", "PB0", "Input", "VIN_FILT--100k--VBAT_ADC--1k--PB0", "ADC1_IN15 battery - AKTIF")
-    )
-
-    val esp32LeftPins = listOf(
-        WeActPinItem("1", "EN/RST", "Input", "Cap 10uF ke GND & tombol EN", "Reset hardware ESP32"),
-        WeActPinItem("2", "GPIO36 (VP)", "Input", "TPS_SIG -> R-Divider -> GPIO36", "ADC1_CH0 Sensor TPS - AKTIF"),
-        WeActPinItem("3", "GPIO39 (VN)", "Input", "Coolant Temp -> GPIO39", "ADC1_CH3 Sensor Suhu - AKTIF"),
-        WeActPinItem("4", "GPIO34", "Input", "HV_CENTER Sense -> GPIO34", "ADC1_CH6 Monitor HV Center - AKTIF"),
-        WeActPinItem("5", "GPIO35", "Input", "HV_SIDE Sense -> GPIO35", "ADC1_CH7 Monitor HV Side - AKTIF"),
-        WeActPinItem("6", "GPIO32", "Input", "VIN_HV Sense (Pembagi 100k/1k) -> GPIO32", "ADC1_CH4 Interlock Tegangan - AKTIF"),
-        WeActPinItem("7", "GPIO33", "Input", "VBAT Sense (Aki Motor) -> GPIO33", "ADC1_CH5 Monitor Aki 12V - AKTIF"),
-        WeActPinItem("8", "GPIO25", "Output", "GPIO25 -> Gate SCR1 (Center Coil)", "Jalur Koil Utama Center - AKTIF"),
-        WeActPinItem("9", "GPIO26", "Output", "GPIO26 -> Gate SCR2 (Side Coil)", "Jalur Koil Samping Side - AKTIF"),
-        WeActPinItem("10", "GPIO27", "Output", "Strobe Light Output", "LED Strobo Timing TDC"),
-        WeActPinItem("11", "GPIO14", "Input", "PWM_CLAMP pullup 4.7k ke 3V3 (LOW=fault)", "Hardware fault - AKTIF"),
-        WeActPinItem("12", "GPIO12", "Input", "Boot Strapping (DILARANG PULLUP SAAT BOOT)", "Hati-hati saat boot!"),
-        WeActPinItem("13", "GND", "Power", "GND_STAR Sistem CDI", "Ground Utama - AKTIF"),
-        WeActPinItem("14", "VIN (5V)", "Power", "LM2596 Logic Out 5.00V -> VIN", "Suplai Daya DevKit - AKTIF")
-    )
-
-    val esp32RightPins = listOf(
-        WeActPinItem("15", "GPIO13", "Output", "GPIO13 -> Driver Relay Kipas Radiator", "Relay FAN Cooler - AKTIF"),
-        WeActPinItem("16", "GPIO15", "Output", "LED Indikator Status R8", "Blink status aktif-low"),
-        WeActPinItem("17", "GPIO2", "Output", "LED Biru Onboard DevKit", "Boot Strapping - AKTIF"),
-        WeActPinItem("18", "GPIO0", "Input", "Tombol Boot ESP32", "Pemrograman USB"),
-        WeActPinItem("19", "GPIO4", "Input", "J1.10 (Pulser Pickup) -> LM393 -> GPIO4", "Pulser Pickup Capture (WAJIB 3.3V!)", isWarning = true),
-        WeActPinItem("20", "GPIO16 (RX2)", "Input", "J1.9 (OEM Center Tap) -> PC817 -> GPIO16", "OEM Center Timing Capture (WAJIB OPTOCOUPLER 3.3V!)", isWarning = true),
-        WeActPinItem("21", "GPIO17 (TX2)", "Input", "J1.8 (OEM Side Tap) -> PC817 -> GPIO17", "OEM Side Timing Capture (WAJIB OPTOCOUPLER 3.3V!)", isWarning = true),
-        WeActPinItem("22", "GPIO5", "Output", "Bench Test Pulse Output (Opsional)", "Loopback Uji Bangku SAJA"),
-        WeActPinItem("23", "GPIO18", "Output", "GPIO18 -> TC4427 INA (QHV1 Gate)", "Pengisi Kapasitor HV Step-Up MCPWM Push - AKTIF"),
-        WeActPinItem("24", "GPIO19", "Output", "GPIO19 -> TC4427 INB (QHV2 Gate)", "Pengisi Kapasitor HV Step-Up MCPWM Pull - AKTIF"),
-        WeActPinItem("25", "GPIO21", "Output", "I2C SDA / OLED Display (Opsional)", "Display Eksternal"),
-        WeActPinItem("26", "GPIO3 (RX0)", "Input", "UART RX Debug / Flashing", "USB CP2102"),
-        WeActPinItem("27", "GPIO1 (TX0)", "Output", "UART TX Debug / Flashing", "USB CP2102"),
-        WeActPinItem("28", "GPIO22", "Output", "I2C SCL / OLED Display (Opsional)", "Display Eksternal"),
-        WeActPinItem("29", "GPIO23", "-", "Jalur SPI MOSI (Cadangan)", "Cadangan"),
-        WeActPinItem("30", "GND", "Power", "GND_STAR Sistem CDI", "Ground - AKTIF")
-    )
+    val bottomPins = WiringDataProvider.weActPins.filter { it.header == "H_BOTTOM" }.map { pin ->
+        WeActPinItem(pin.pinNumber.toString(), pin.name, pin.direction, pin.fullPath, listOfNotNull(pin.finalDestination, pin.status, pin.warning).joinToString(" • "), pin.isCritical)
+    }
+    val topPins = WiringDataProvider.weActPins.filter { it.header == "H_TOP" }.map { pin ->
+        WeActPinItem(pin.pinNumber.toString(), pin.name, pin.direction, pin.fullPath, listOfNotNull(pin.finalDestination, pin.status, pin.warning).joinToString(" • "), pin.isCritical)
+    }
+    val esp32LeftPins = WiringDataProvider.esp32Pins.filter { it.headerSide == "LEFT" }.map { pin ->
+        WeActPinItem(pin.pinNumber.toString(), pin.name, pin.direction, pin.fullPath, listOfNotNull(pin.finalDestination, pin.status, pin.warning).joinToString(" • "), pin.isCritical)
+    }
+    val esp32RightPins = WiringDataProvider.esp32Pins.filter { it.headerSide == "RIGHT" }.map { pin ->
+        WeActPinItem(pin.pinNumber.toString(), pin.name, pin.direction, pin.fullPath, listOfNotNull(pin.finalDestination, pin.status, pin.warning).joinToString(" • "), pin.isCritical)
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -1262,7 +1203,7 @@ private fun McuHeaderView(viewModel: CdiViewModel) {
 
             item {
                 Text(
-                    text = "HEADER SISI KIRI (PIN 1 s/d 14 - ATAS KE BAWAH)",
+                    text = "HEADER SISI KIRI (LEFT.1 s/d LEFT.19 - ATAS KE BAWAH)",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = SparkAmber,
@@ -1276,7 +1217,7 @@ private fun McuHeaderView(viewModel: CdiViewModel) {
 
             item {
                 Text(
-                    text = "HEADER SISI KANAN (PIN 15 s/d 30 - ATAS KE BAWAH)",
+                    text = "HEADER SISI KANAN (RIGHT.1 s/d RIGHT.19 - ATAS KE BAWAH)",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = SparkAmber,
@@ -1361,7 +1302,7 @@ private fun PinRowCard(pin: WeActPinItem) {
 private fun BomShoppingView(selectedPlatform: McuPlatform = McuPlatform.STM32WB55) {
     val isStm = selectedPlatform == McuPlatform.STM32WB55
     val boms = listOf(
-        BomItem("LOGIC", "U1", "1", if (isStm) "WeAct STM32WB55CGU6" else "ESP32-WROOM-32 DevKitC (30/38 Pin)", "Sudah dimiliki", if (isStm) "WAJIB satu-satunya MCU ARM Cortex-M4 + BLE" else "MCU Utama 240MHz Dual-Core + BLE"),
+        BomItem("LOGIC", "U1", "1", if (isStm) "WeAct STM32WB55CGU6" else "ESP32-WROOM-32 DevKitC 38-Pin (19+19)", "Sudah dimiliki", if (isStm) "WAJIB satu-satunya MCU ARM Cortex-M4 + BLE" else "MCU Utama 240MHz Dual-Core + BLE"),
         BomItem("MODUL", "MOD_PC817", "1", "Modul Optocoupler PC817 4-Channel", "Beli baru (Rp12-18rb)", if (isStm) "OEM Learn (PB3 J1.9 & PB4 J1.8). Seri R 47k 2W" else "OEM Learn (GPIO16 J1.9 & GPIO17 J1.8). Seri R 47k 2W"),
         BomItem("MODUL", "MOD_RELAY", "1", "Modul Relay 1-Channel 5V + Opto (High/Low)", "Beli baru (Rp6-12rb)", if (isStm) "Driver Kipas Radiator J1.7 (PB5). Pengganti BC547 diskrit" else "Driver Kipas Radiator J1.7 (GPIO13). Pengganti BC547 diskrit"),
         BomItem("POWER", "PCB_POWER", "1", "PCB lubang minimal 5x7cm", "Beli baru", "Clearance HV >= 6mm, terpisah dari antena"),
@@ -1549,10 +1490,10 @@ private fun ModularGuideView(selectedPlatform: McuPlatform) {
                                 "  - IN2+ : Kabel tambahan J1.8 (OEM Side) > Resistor 47kΩ 2W\n" +
                                 "  - IN2- : Ground Motor / Frame (J1.11)\n" +
                                 "• Sisi Output (Mikro ESP32):\n" +
-                                "  - VCC  : 3.3V ESP32 (Pin 1)\n" +
-                                "  - GND  : GND ESP32 (Pin 14 / Pin 20)\n" +
-                                "  - OUT1 : GPIO16 ESP32 (Pin 31) > OEM Center Capture\n" +
-                                "  - OUT2 : GPIO17 ESP32 (Pin 30) > OEM Side Capture"
+                                "  - VCC  : 3.3V ESP32 (LEFT.1)\n" +
+                                "  - GND  : GND ESP32 (LEFT.14 / RIGHT.1)\n" +
+                                "  - OUT1 : GPIO16 ESP32 (RIGHT.12) > OEM Center Capture\n" +
+                                "  - OUT2 : GPIO17 ESP32 (RIGHT.11) > OEM Side Capture"
                             },
                             fontSize = 9.5.sp,
                             fontFamily = FontFamily.Monospace,
@@ -1611,8 +1552,8 @@ private fun ModularGuideView(selectedPlatform: McuPlatform) {
                                 "KONEKSI KABEL (ESP32-WROOM-32D):\n" +
                                 "• Sisi Kontrol:\n" +
                                 "  - VCC : 5.0V (dari LM2596 OUT+)\n" +
-                                "  - GND : GND_STAR ESP32 (Pin 14 / Pin 20)\n" +
-                                "  - IN  : Pin GPIO13 ESP32 (Pin 15) langsung\n" +
+                                "  - GND : GND_STAR ESP32 (LEFT.14 / RIGHT.1)\n" +
+                                "  - IN  : GPIO13 ESP32 (LEFT.15) langsung\n" +
                                 "• Sisi Kontak Relay (Terminal Blok):\n" +
                                 "  - COM : Pin J1.7 (Relay Kipas Radiator Motor)\n" +
                                 "  - NO  : GND Motor / Frame\n" +
@@ -1739,6 +1680,7 @@ private fun FanModeSettings(viewModel: CdiViewModel) {
     val fanMode by viewModel.fanMode.collectAsState()
     val telemetry by viewModel.telemetry.collectAsState()
     val setupCommandPending by viewModel.setupCommandPending.collectAsState()
+    val selectedPlatform by viewModel.selectedPlatform.collectAsState()
 
     val safeToChange =
         telemetry.rpm == 0 &&
@@ -1783,7 +1725,7 @@ private fun FanModeSettings(viewModel: CdiViewModel) {
             }
 
             Text(
-                "Kontrol relai kipas radiator J1.7 (PB5). Mode AUTO menyalakan kipas saat suhu melebihi ambang batas.",
+                "Kontrol relai J1.7 melalui ${selectedPlatform.fanRelayPin}. Firmware saat ini: OFF = output LOW; ON dan AUTO = output HIGH failsafe. AUTO berbasis suhu belum tersedia karena konversi NTC belum diimplementasikan.",
                 fontSize = 10.sp,
                 color = TextSecondary,
                 fontFamily = FontFamily.Monospace
