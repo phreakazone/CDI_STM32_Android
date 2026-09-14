@@ -272,6 +272,22 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     private val _mcuCapabilities = MutableStateFlow<Set<String>>(emptySet())
     val mcuCapabilities: StateFlow<Set<String>> = _mcuCapabilities.asStateFlow()
 
+    private val _firmwareCapabilities = MutableStateFlow(FirmwareCapabilities.legacyR8())
+    val firmwareCapabilities: StateFlow<FirmwareCapabilities> = _firmwareCapabilities.asStateFlow()
+
+    private val _fanOnCdeg = MutableStateFlow(9000)
+    val fanOnCdeg: StateFlow<Int> = _fanOnCdeg.asStateFlow()
+    private val _fanOffCdeg = MutableStateFlow(8500)
+    val fanOffCdeg: StateFlow<Int> = _fanOffCdeg.asStateFlow()
+
+    private val _engineProfile = MutableStateFlow(EngineProfile.universal())
+    val engineProfile: StateFlow<EngineProfile> = _engineProfile.asStateFlow()
+
+    private val _dynoActive = MutableStateFlow(false)
+    val dynoActive: StateFlow<Boolean> = _dynoActive.asStateFlow()
+    private val _dynoTrimDeg = MutableStateFlow(0f)
+    val dynoTrimDeg: StateFlow<Float> = _dynoTrimDeg.asStateFlow()
+
     val otaState: StateFlow<OtaState> = bleClient.otaState
     val connectedDeviceName: StateFlow<String?> = bleClient.connectedDeviceName
 
@@ -542,6 +558,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         _isSimulationMode.value = !_isSimulationMode.value
         if (_isSimulationMode.value) {
             if (bleClient.gattReady || bleClient.isBusy.value) bleClient.disconnect()
+            _firmwareCapabilities.value = FirmwareCapabilities.demoR9()
+            _engineProfile.value = EngineProfile.universal()
             _connectionStatus.value = "SIMULASI AKTIF • Telemetry 20Hz (MoTeC Mode)"
             _isConnected.value = true
             // Default simulasi: Mesin hidup stasioner idle ~1.420 RPM layaknya motor hidup normal
@@ -708,8 +726,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         val current = _customAdvancePoints.value.toMutableList()
         if (index in current.indices) {
             val rounded = (newAdvance * 10f).roundToInt() / 10f
-            // Enforce hard ceiling of 36.0° BTDC as per documentation
-            val bounded = rounded.coerceIn(0.0f, 36.0f)
+            val caps = _firmwareCapabilities.value
+            val bounded = rounded.coerceIn(caps.advanceMinDeg, caps.advanceMaxDeg)
             current[index] = current[index].copy(advanceDeg = bounded)
             _customAdvancePoints.value = current
             appendLog("Map Custom: ${current[index].rpm} RPM diubah ke ${bounded}° BTDC")
@@ -739,69 +757,53 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun saveCustomMapToMcu(): String? {
         val t = _telemetry.value
-        // Safety verification as per page 14: save/load only when RPM=0 and HV < 30V
-        if (t.rpm > 0) {
-            return "PERINGATAN KESELAMATAN: Mesin terdeteksi hidup (${t.rpm} RPM)! Simpan Flash MCU hanya diizinkan saat mesin mati (RPM = 0) untuk mencegah crash interrupt TIM2."
-        }
-        if ((t.hvEnabled || t.hvCenter >= 30 || t.hvSide >= 30) && _isConnected.value) {
-            return "PERINGATAN KESELAMATAN: Tegangan tinggi kapasitor CDI masih aktif (CENTER: ${t.hvCenter}V, SIDE: ${t.hvSide}V)! Tunggu hingga tegangan < 30 V sebelum menulis flash."
-        }
-
+        if (t.rpm > 0) return "Simpan map ditolak: mesin harus mati (RPM 0)."
+        if ((t.hvEnabled || t.hvCenter >= 30 || t.hvSide >= 30) && _isConnected.value)
+            return "Simpan map ditolak: charger OFF dan kedua bank HV harus <30 V."
         if (!bleClient.gattReady) return "CDI belum terhubung. Map tidak diklaim tersimpan ke MCU."
-        val currentPoints = _customAdvancePoints.value
-        val slot = _selectedMapSlot.value
-        val isProSlot = slot == 3
 
-        // Firmware R8 Target Grid Specs:
-        // Slots 0-2 (Standard): 8 RPM points x 4 TPS rows
-        // Slot 3 (PRO): 16 RPM points x 8 TPS rows
-        val targetAxis = if (isProSlot) {
-            listOf(500, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 11000, 11500)
-        } else {
-            listOf(500, 1000, 1500, 2500, 4000, 6000, 8000, 10000)
+        val caps = _firmwareCapabilities.value
+        val slot = _selectedMapSlot.value.coerceIn(0, caps.mapSlots - 1)
+        val input = _customAdvancePoints.value.sortedBy { it.rpm }
+        val rpmAxis = input.take(caps.maxRpmPoints).map { it.rpm.coerceIn(caps.rpmMin, caps.rpmMax) }
+        if (rpmAxis.size < 2) return "Map minimal memerlukan dua titik RPM."
+        val loadAxis = listOf(0, 25, 50, 75, 100).take(caps.maxLoadPoints)
+
+        fun sample(target: Int): Float {
+            if (target <= input.first().rpm) return input.first().advanceDeg
+            if (target >= input.last().rpm) return input.last().advanceDeg
+            val right = input.indexOfFirst { it.rpm >= target }
+            val p0 = input[right - 1]
+            val p1 = input[right]
+            return p0.advanceDeg + (p1.advanceDeg - p0.advanceDeg) *
+                (target - p0.rpm).toFloat() / (p1.rpm - p0.rpm).toFloat()
         }
-        val tpsRows = if (isProSlot) 8 else 4
 
-        // Deterministic Resampling onto target firmware RPM axis
-        val sortedInput = currentPoints.sortedBy { it.rpm }
-        val resampledAdvanceList = targetAxis.map { targetRpm ->
-            val advance = when {
-                sortedInput.isEmpty() -> 0f
-                targetRpm <= sortedInput.first().rpm -> sortedInput.first().advanceDeg
-                targetRpm >= sortedInput.last().rpm -> sortedInput.last().advanceDeg
-                else -> {
-                    val rightIdx = sortedInput.indexOfFirst { it.rpm >= targetRpm }
-                    if (rightIdx <= 0) sortedInput.first().advanceDeg
-                    else {
-                        val pA = sortedInput[rightIdx - 1]
-                        val pB = sortedInput[rightIdx]
-                        val span = (pB.rpm - pA.rpm).toFloat()
-                        if (span <= 0f) pA.advanceDeg
-                        else pA.advanceDeg + (pB.advanceDeg - pA.advanceDeg) * ((targetRpm - pA.rpm) / span)
-                    }
+        if (caps.protocolVersion >= 5) {
+            bleClient.send("MAP,BEGIN,${rpmAxis.size},${loadAxis.size}")
+            rpmAxis.forEachIndexed { index, rpm -> bleClient.send("MAP,RPM,$index,$rpm") }
+            loadAxis.forEachIndexed { index, load -> bleClient.send("MAP,LOAD,$index,$load") }
+            loadAxis.indices.forEach { loadIndex ->
+                rpmAxis.forEachIndexed { rpmIndex, rpm ->
+                    val value = (sample(rpm).coerceIn(caps.advanceMinDeg, caps.advanceMaxDeg) * 10f).roundToInt()
+                    bleClient.send("MAP,CELL,$rpmIndex,$loadIndex,$value")
                 }
             }
-            advance.coerceIn(0.0f, 36.0f)
-        }
-
-        val pointsPayload = currentPoints.joinToString(";") { "${it.rpm}:${(it.advanceDeg * 10).toInt()}" }
-
-        bleClient.send("FEATURE,PRO,${if (isProSlot) "ON" else "OFF"}")
-        bleClient.send("LOAD,$slot")
-        repeat(tpsRows) { tpsIndex ->
-            resampledAdvanceList.forEachIndexed { rpmIndex, advanceDeg ->
-                val centiDeg = (advanceDeg * 100f).roundToInt()
-                bleClient.send("LIVE,$tpsIndex,$rpmIndex,$centiDeg")
+            bleClient.send("MAP,SAVE,$slot")
+            bleClient.send("GET,PROFILE")
+        } else {
+            val legacyAxis = if (slot == 3) 16 else 8
+            val legacyRows = if (slot == 3) 8 else 4
+            bleClient.send("FEATURE,PRO,${if (slot == 3) "ON" else "OFF"}")
+            bleClient.send("LOAD,$slot")
+            repeat(legacyRows) { loadIndex ->
+                input.take(legacyAxis).forEachIndexed { rpmIndex, point ->
+                    bleClient.send("LIVE,$loadIndex,$rpmIndex,${(point.advanceDeg * 100f).roundToInt()}")
+                }
             }
+            bleClient.send("SAVE,$slot")
         }
-        bleClient.send("SAVE,$slot")
-        bleClient.send("GET,META")
-        appendLog("BLE Queue R8: FEATURE PRO ${if (isProSlot) "ON" else "OFF"} -> LOAD -> ${tpsRows * targetAxis.size} sel LIVE -> SAVE -> readback")
-
-        context.getSharedPreferences("cdi_r7_prefs", Context.MODE_PRIVATE).edit()
-            .putString("custom_map_points", pointsPayload)
-            .apply()
-
+        appendLog("Map slot ${slot + 1}: ${rpmAxis.size}x${loadAxis.size} dikirim via v${caps.protocolVersion}")
         return null
     }
 
@@ -842,7 +844,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     }
 
     fun selectMapSlot(slot: Int) {
-        val bounded = slot.coerceIn(0, 3)
+        val bounded = slot.coerceIn(0, _firmwareCapabilities.value.mapSlots - 1)
         val preset = mapPresets[bounded]
         if (bleClient.gattReady) {
             val t = _telemetry.value
@@ -850,10 +852,15 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 Toast.makeText(context, "LOAD ditolak: mesin harus mati dan HV < 30 V", Toast.LENGTH_LONG).show()
                 return
             }
-            bleClient.send("FEATURE,PRO,${if (bounded == 3) "ON" else "OFF"}")
-            bleClient.send("LOAD,$bounded")
-            bleClient.send("GET,MODE")
-            appendLog("BLE Send R8: FEATURE PRO ${if (bounded == 3) "ON" else "OFF"} -> LOAD,$bounded (${preset.name})")
+            if (_firmwareCapabilities.value.protocolVersion >= 5) {
+                bleClient.send("MAP,SELECT,$bounded")
+                bleClient.send("GET,PROFILE")
+            } else {
+                bleClient.send("FEATURE,PRO,${if (bounded == 3) "ON" else "OFF"}")
+                bleClient.send("LOAD,$bounded")
+                bleClient.send("GET,MODE")
+            }
+            appendLog("Map slot $bounded dipilih: ${preset.name}")
         } else if (_isSimulationMode.value) {
             _selectedMapSlot.value = bounded
             _softRevLimiterRpm.value = preset.revLimit
@@ -864,12 +871,12 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     }
 
     fun setSoftRevLimiter(rpm: Int) {
-        val firmwareMax = if (_selectedMapSlot.value == 3) 11500 else 10500
-        _softRevLimiterRpm.value = rpm.coerceIn(3000, firmwareMax)
+        val caps = _firmwareCapabilities.value
+        _softRevLimiterRpm.value = rpm.coerceIn(caps.rpmMin, caps.rpmMax)
     }
 
     fun setSoftBand(band: Int) {
-        _softBandRpm.value = band.coerceIn(100, 1000)
+        _softBandRpm.value = band.coerceIn(50, 3000)
     }
 
     fun setLimiterType(type: String) {
@@ -877,9 +884,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     }
 
     fun syncCurveToBle() {
-        val slot = _selectedMapSlot.value
-        val firmwareMax = if (slot == 3) 11500 else 10500
-        val rpm = _softRevLimiterRpm.value.coerceIn(3000, firmwareMax)
+        val slot = _selectedMapSlot.value.coerceIn(0, _firmwareCapabilities.value.mapSlots - 1)
+        val caps = _firmwareCapabilities.value
+        val rpm = _softRevLimiterRpm.value.coerceIn(caps.rpmMin, caps.rpmMax)
         _softRevLimiterRpm.value = rpm
         val band = _softBandRpm.value
 
@@ -889,12 +896,17 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 Toast.makeText(context, "SYNC ditolak: mesin harus mati dan HV < 30 V", Toast.LENGTH_LONG).show()
                 return
             }
-            bleClient.send("FEATURE,PRO,${if (slot == 3) "ON" else "OFF"}")
-            bleClient.send("LOAD,$slot")
-            bleClient.send("LIMIT,${_limiterType.value},$rpm,$band")
-            bleClient.send("SAVE,$slot")
-            bleClient.send("GET,MODE")
-            appendLog("BLE Sync R8: FEATURE PRO ${if (slot == 3) "ON" else "OFF"} -> LOAD,$slot -> LIMIT,${_limiterType.value},$rpm,$band -> SAVE,$slot")
+            if (caps.protocolVersion >= 5) {
+                bleClient.send("SET,LIMIT,$rpm")
+                bleClient.send("GET,PROFILE")
+            } else {
+                bleClient.send("FEATURE,PRO,${if (slot == 3) "ON" else "OFF"}")
+                bleClient.send("LOAD,$slot")
+                bleClient.send("LIMIT,${_limiterType.value},$rpm,$band")
+                bleClient.send("SAVE,$slot")
+                bleClient.send("GET,MODE")
+            }
+            appendLog("Limiter $rpm RPM tersinkron via protokol v${caps.protocolVersion}")
         } else if (_isSimulationMode.value) {
             appendLog("Sync Kurva Map $slot (Limiter: $rpm RPM, Band: $band RPM) Disimpan Lokal.")
         } else {
@@ -1218,13 +1230,14 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     fun setPulserPpr(ppr: Int) {
         if (!requireMcuOrDemo("pengaturan PPR")) return
         if (!checkSetupWriteSafety("Pengaturan PPR")) return
+        val bounded = ppr.coerceIn(1, _firmwareCapabilities.value.maxPulserPpr)
         if (bleClient.gattReady) {
             markSetupCommandPending()
-            bleClient.send("SETUP,PPR,$ppr")
-            appendLog("BLE Send: SETUP,PPR,$ppr")
+            bleClient.send("SETUP,PPR,$bounded")
+            appendLog("BLE Send: SETUP,PPR,$bounded")
         } else {
-            _pulserPpr.value = ppr
-            appendLog("Pulser PPR diatur ke: $ppr")
+            _pulserPpr.value = bounded
+            appendLog("Pulser PPR diatur ke: $bounded (Demo)")
         }
     }
 
@@ -1551,17 +1564,87 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         Toast.makeText(context, if (bleClient.gattReady) "RESET setup masuk antrean" else "Setup Demo kembali ke BARU", Toast.LENGTH_SHORT).show()
     }
 
-    fun setFanMode(mode: String) { // "OFF", "ON", "AUTO"
+    fun setFanMode(mode: String) {
         if (!requireMcuOrDemo("pengaturan kipas")) return
-        if (!checkSetupWriteSafety("Perubahan mode fan")) return
+        val normalized = ThermalFanPolicy.normalize(mode, _fanOnCdeg.value, _fanOffCdeg.value)
+        _fanMode.value = normalized.mode
+        _fanOnCdeg.value = normalized.onCdeg
+        _fanOffCdeg.value = normalized.offCdeg
         if (bleClient.gattReady) {
-            markSetupCommandPending()
-            bleClient.send("SETUP,FAN,$mode")
-            appendLog("BLE Send: SETUP,FAN,$mode")
-        } else {
-            _fanMode.value = mode
-            appendLog("Fan mode: $mode (Simulasi)")
+            bleClient.send(if (_firmwareCapabilities.value.protocolVersion >= 5)
+                "SET,FAN,${normalized.mode},${normalized.onCdeg / 10},${normalized.offCdeg / 10}"
+            else "SETUP,FAN,${normalized.mode}")
+            bleClient.send("GET,TEMP")
         }
+        appendLog("Fan ${normalized.mode}: ON ${normalized.onCdeg / 100f}°C / OFF ${normalized.offCdeg / 100f}°C")
+    }
+
+    fun setFanThresholds(onCdeg: Int, offCdeg: Int) {
+        val normalized = ThermalFanPolicy.normalize(_fanMode.value, onCdeg, offCdeg)
+        _fanOnCdeg.value = normalized.onCdeg
+        _fanOffCdeg.value = normalized.offCdeg
+        if (bleClient.gattReady) {
+            if (!checkSetupWriteSafety("Simpan ambang fan")) return
+            bleClient.send("SET,FAN,${normalized.mode},${normalized.onCdeg / 10},${normalized.offCdeg / 10}")
+            bleClient.send("GET,TEMP")
+        }
+    }
+
+    fun setDemoTemperature(celsius: Float) {
+        if (_isSimulationMode.value) {
+            _telemetry.value = _telemetry.value.copy(tempCdeg = (celsius * 100f).roundToInt())
+        }
+    }
+
+    fun saveTemperatureCalibration(points: List<Pair<Int, Float>>) {
+        if (points.size != 3 || !requireMcuOrDemo("kalibrasi suhu") ||
+            !checkSetupWriteSafety("Kalibrasi suhu")) return
+        if (bleClient.gattReady) {
+            val payload = points.joinToString(",") {
+                "${it.first.coerceIn(1, 4094)},${(it.second * 10f).roundToInt()}"
+            }
+            bleClient.send("TEMP,CAL,$payload")
+            bleClient.send("GET,TEMP")
+        } else appendLog("Kalibrasi suhu 3 titik disimpan pada Demo")
+    }
+
+    fun setEngineProfile(profile: EngineProfile) {
+        if (!requireMcuOrDemo("profil mesin") || !checkSetupWriteSafety("Profil mesin")) return
+        val safe = profile.clamped(_firmwareCapabilities.value)
+        _engineProfile.value = safe
+        _pulserPpr.value = safe.pulserPpr
+        if (bleClient.gattReady) {
+            bleClient.send("SET,PROFILE,${safe.name},${safe.rpmMin},${safe.rpmMax}," +
+                "${(safe.advanceMinDeg * 10).roundToInt()},${(safe.advanceMaxDeg * 10).roundToInt()}," +
+                "${safe.pulserPpr},${(safe.triggerAngleDeg * 10).roundToInt()}")
+            bleClient.send("GET,PROFILE")
+        }
+        appendLog("Profil aktif: ${safe.name}; PPR ${safe.pulserPpr}; trigger ${safe.triggerAngleDeg}°")
+    }
+
+    fun beginDynoTune() {
+        if (!requireMcuOrDemo("live remap dyno") || !checkSetupWriteSafety("Mulai dyno")) return
+        _dynoActive.value = true
+        _dynoTrimDeg.value = 0f
+        if (bleClient.gattReady) bleClient.send("DYNO,BEGIN")
+    }
+
+    fun setDynoTrim(degrees: Float) {
+        if (!_dynoActive.value) return
+        val trim = degrees.coerceIn(-10f, 10f)
+        _dynoTrimDeg.value = trim
+        if (bleClient.gattReady) bleClient.send("DYNO,TRIM,${(trim * 10f).roundToInt()}")
+    }
+
+    fun finishDynoTune(commit: Boolean) {
+        if (!_dynoActive.value) return
+        if (bleClient.gattReady) {
+            if (!checkSetupWriteSafety(if (commit) "Commit dyno" else "Batalkan dyno")) return
+            bleClient.send(if (commit) "DYNO,COMMIT" else "DYNO,ABORT")
+        }
+        _dynoActive.value = false
+        _dynoTrimDeg.value = 0f
+        appendLog(if (commit) "Live trim dyno dikomit ke map" else "Live trim dyno dibatalkan")
     }
 
     fun sendRawCommand(cmd: String) {
@@ -1628,6 +1711,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 }
             }
             bleClient.send("GET,CAPS")
+            bleClient.send("GET,PROFILE")
+            bleClient.send("GET,TEMP")
             bleClient.send("GET,STATUS")
             bleClient.send("GET,META")
             bleClient.send("GET,SETUP")
@@ -1749,12 +1834,28 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         val f = value.split(',')
         when (f.firstOrNull()) {
             "CAPS" -> {
-                val caps = f.drop(1).map { it.trim().uppercase() }.filter { it.isNotEmpty() }.toSet()
-                _mcuCapabilities.value = caps
-                appendLog("MCU Capabilities R8: ${caps.joinToString(", ")}")
+                val parsed = FirmwareCapabilities.parse(f)
+                _firmwareCapabilities.value = parsed
+                _mcuCapabilities.value = parsed.features
+                _selectedMapSlot.value = _selectedMapSlot.value.coerceIn(0, parsed.mapSlots - 1)
+                _softRevLimiterRpm.value = _softRevLimiterRpm.value.coerceIn(parsed.rpmMin, parsed.rpmMax)
+                appendLog("MCU CAPS v${parsed.protocolVersion}: ${parsed.rpmMin}-${parsed.rpmMax} RPM, " +
+                    "${parsed.advanceMinDeg}..${parsed.advanceMaxDeg}°, ${parsed.maxRpmPoints}x${parsed.maxLoadPoints}")
+            }
+            "TEMP" -> if (f.size >= 5) {
+                f[2].toIntOrNull()?.let { code ->
+                    _fanMode.value = when (code) { 0 -> "OFF"; 1 -> "ON"; else -> "AUTO" }
+                }
+                f[3].toIntOrNull()?.let { _fanOnCdeg.value = it * 10 }
+                f[4].toIntOrNull()?.let { _fanOffCdeg.value = it * 10 }
+            }
+            "PROFILE" -> EngineProfile.parse(f)?.let {
+                _engineProfile.value = it
+                _pulserPpr.value = it.pulserPpr
+                _softRevLimiterRpm.value = _softRevLimiterRpm.value.coerceIn(it.rpmMin, it.rpmMax)
             }
             "STATUS" -> if (f.size >= 9) {
-                val slot = f[5].toIntOrNull()?.coerceIn(0, 3) ?: _selectedMapSlot.value
+                val slot = f[5].toIntOrNull()?.coerceIn(0, _firmwareCapabilities.value.mapSlots - 1) ?: _selectedMapSlot.value
                 _selectedMapSlot.value = slot
                 _telemetry.value = _telemetry.value.copy(
                     rpm = f[1].toIntOrNull() ?: _telemetry.value.rpm,
@@ -1769,8 +1870,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             }
             "META" -> if (f.size >= 10) {
                 _limiterType.value = if (f[3].toIntOrNull() == 1) "HARD" else "SOFT"
-                _softRevLimiterRpm.value = f[4].toIntOrNull()?.coerceIn(3000, 11500) ?: _softRevLimiterRpm.value
-                _softBandRpm.value = f[5].toIntOrNull()?.coerceIn(100, 1000) ?: _softBandRpm.value
+                _softRevLimiterRpm.value = f[4].toIntOrNull()?.coerceIn(_firmwareCapabilities.value.rpmMin, _firmwareCapabilities.value.rpmMax) ?: _softRevLimiterRpm.value
+                _softBandRpm.value = f[5].toIntOrNull()?.coerceIn(50, 3000) ?: _softBandRpm.value
                 _targetHvVoltage.value = f[6].toIntOrNull()
                     ?.coerceIn(CdiProtocol.VOLTAGE_FIRST_START, CdiProtocol.VOLTAGE_PRO)
                     ?: _targetHvVoltage.value
@@ -1809,7 +1910,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     ?: _telemetry.value.triggerCdeg
 
                 val sideOffset = f[4].toIntOrNull() ?: 0
-                val ppr = f[5].toIntOrNull()?.coerceIn(1, 4) ?: 1
+                val ppr = f[5].toIntOrNull()?.coerceIn(1, _firmwareCapabilities.value.maxPulserPpr) ?: 1
                 val gateUs = f[6].toIntOrNull()?.coerceIn(40, 150) ?: 80
                 val tpsClosed = f[7].toIntOrNull() ?: 0
                 val tpsOpen = f[8].toIntOrNull() ?: 0
@@ -2150,7 +2251,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     }
                     val simTelemetry = Telemetry(
                         sequence = seq,
-                        rpm = simRpm.toInt().coerceIn(0, 13000),
+                        rpm = simRpm.toInt().coerceIn(0, _firmwareCapabilities.value.rpmMax),
                         tps = (simTps * 1000).toInt(),
                         advanceCdeg = (finalAdvance * 100).toInt(),
                         batteryCv = if (isRunning) 1380 + (sin(seq * 0.1) * 20).toInt() else 1260,

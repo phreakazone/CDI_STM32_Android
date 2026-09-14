@@ -1,7 +1,7 @@
 package id.ns200.cdir7
 
 /**
- * Pilihan platform mikrokontroler hardware CDI NS200 R8.
+ * Pilihan platform mikrokontroler hardware CDI Universal R9.
  * Menghindari salah sambung pengkabelan antara WeAct STM32WB55 dan ESP32-WROOM-32 DevKit.
  */
 enum class McuPlatform(

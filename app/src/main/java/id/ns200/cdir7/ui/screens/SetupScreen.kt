@@ -100,6 +100,7 @@ fun SetupScreen(viewModel: CdiViewModel) {
             .fillMaxSize()
             .background(CarbonDark)
     ) {
+        ThermalFanQuickAccess(viewModel)
         CompactSetupHeader(
             stage = stage,
             visibleProgress = visibleProgress,

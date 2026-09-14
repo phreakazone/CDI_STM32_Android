@@ -34,9 +34,9 @@ object WiringDataProvider {
       direction = "Input Sensor",
       completePath = "+5V -- 4.7k -- J1.3; J1.3 -- 15k -- TEMP_ADC; TEMP_ADC -- 27k || 10nF -- GND; TEMP_ADC -- 1k -- PA4; BAT54S clamp",
       destination = "H_BOTTOM.13 (PA4 ADC)",
-      status = "RANGKAIAN SIAP; TELEMETRI N/A",
+      status = "AKTIF • KALIBRASI 3 TITIK",
       isConnected = true,
-      detailGuide = "Rangkaian menyiapkan ADC sensor coolant. Resistor pull-up 4.7k ke 5V membentuk pembagi dengan NTC dan BAT54S melindungi input; firmware saat ini belum mengonversi ADC ke suhu sehingga telemetri menampilkan N/A."
+      detailGuide = "Rangkaian menyiapkan ADC sensor coolant. Resistor pull-up 4.7k ke 5V membentuk pembagi dengan NTC dan BAT54S melindungi input; firmware R9 mengonversi ADC memakai kalibrasi NTC 3 titik dan mengaktifkan fan fail-safe bila sensor putus/korslet."
     ),
     HarnessPin(
       pinNumber = 4,
@@ -80,7 +80,7 @@ object WiringDataProvider {
       destination = "H_TOP.7 (PB5)",
       status = "CONFIRM polaritas relay",
       isConnected = true,
-      detailGuide = "Transistor NPN BC547 menarik ground relay kipas saat output MCU HIGH. Firmware saat ini memakai HIGH untuk ON dan AUTO (failsafe); AUTO berbasis suhu menunggu konversi NTC."
+      detailGuide = "Transistor NPN BC547 menarik ground relay kipas saat output MCU HIGH. Firmware saat ini memakai HIGH untuk ON dan AUTO (failsafe); AUTO memakai suhu NTC terkalibrasi dengan histeresis; fault sensor memaksa fan ON."
     ),
     HarnessPin(
       pinNumber = 8,
@@ -1190,7 +1190,7 @@ object WiringDataProvider {
       stepNumber = 8,
       stageName = "8. Tuning Lanjutan & Opsi 3-Busi",
       connectionCondition = "Operasi NORMAL (285V); aktifkan busi samping (SIDE J1.6) HANYA setelah offset derajat SIDE diukur dengan lampu strobo pada motor aktual.",
-      appAction = "Pantau telemetri langsung: RPM, TPS, tegangan aki, HV Center/Side, fault, dan limiter. Suhu tampil N/A sampai konversi NTC firmware tersedia.",
+      appAction = "Pantau telemetri langsung: RPM, TPS, tegangan aki, HV Center/Side, fault, dan limiter. Suhu dan status fan harus tampil; lakukan kalibrasi NTC 3 titik sebelum test jalan.",
       outputCondition = "Beda tegangan kedua bank < 50V, tidak ada fault/reset, dan limiter bekerja sesuai slot.",
       proceedCriteria = "Seluruh parameter hijau stabil pada pengetesan jalan bertahap.",
       stopHazard = "NORMAL menargetkan 285V dan PRO menargetkan 345V; firmware memicu fault di atas 360V. Jangan pernah menonaktifkan feedback atau clamp HV."

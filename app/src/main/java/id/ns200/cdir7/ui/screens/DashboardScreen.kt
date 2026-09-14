@@ -59,7 +59,7 @@ fun DashboardScreen(viewModel: CdiViewModel) {
 
     val currentRpm = telemetry.rpm
     val isAtLimiter = telemetry.limiter > 0 || currentRpm >= revLimit
-    val isBleConnected = viewModel.bleClient.gattReady && currentRpm > 100
+    val isBleConnected = viewModel.bleClient.gattReady
 
     // Slider tacho interaktif: mengikuti RPM aktual secara dinamis (live BLE maupun simulasi demo)
     var userDragFraction by remember { mutableStateOf<Float?>(null) }
@@ -87,7 +87,7 @@ fun DashboardScreen(viewModel: CdiViewModel) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // R7.2 hardware/software limit: fault at 300 V.
+        // Over-voltage warning is driven by firmware telemetry; target follows the active profile.
         if (telemetry.isHvOverLimitWarning) {
             Card(
                 modifier = Modifier
@@ -377,7 +377,7 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                         color = SensorAmber
                     )
                     Text(
-                        text = "TARGET: 250V",
+                        text = "TARGET: ${targetHv}V",
                         fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
                         color = TextMuted

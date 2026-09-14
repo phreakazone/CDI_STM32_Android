@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.cdiwiring.nxwkqz"
     minSdk = 24
     targetSdk = 36
-    versionCode = 832
-    versionName = "8.3.2"
+    versionCode = 900
+    versionName = "9.0.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
