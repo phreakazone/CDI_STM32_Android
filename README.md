@@ -136,66 +136,97 @@ Modul ini digunakan HANYA pada Fase 1 (OEM_LEARN) untuk membaca sinyal timing ko
 
 ---
 
-## 🛒 Daftar Belanja Komponen Lengkap (BOM) & Persamaan Substitusi Identik
+## 🛒 Daftar Belanja Komponen Lengkap (BOM) & Panduan Bebas Salah Beli
 
-Daftar berikut merangkum seluruh komponen perangkat keras yang dibutuhkan untuk membangun unit CDI R8 (Bajaj Pulsar 200NS Triple Spark), lengkap dengan **komponen persamaan/substitusi identik** agar proses belanja tetap lancar meskipun stok komponen utama di toko lokal/online sedang kosong:
+> 💡 **PRINSIP PENTING (BEBAS KOMPONEN DOBEL)**:
+> CDI R8 menggabungkan **Modul Jadi Siap Pakai di Pasaran** untuk blok yang rumit, dan **Komponen Diskrit Khusus** untuk blok pengapian tegangan tinggi (HV & SCR).
+> 
+> Komponen yang **SUDAH ADA di dalam modul jadi TIDAK PERLU dibeli terpisah**. Jangan membeli transistor, dioda, atau kapasitor untuk rangkaian yang sudah tertanam rapi di modul!
 
-### 1. Blok Otak & Kendali (Mikrokontroler / Logic MCU)
+---
 
-| Ref BOM | Komponen Utama | Spesifikasi Inti | Komponen Persamaan / Substitusi Identik | Catatan Teknis & Kompatibilitas |
-| :--- | :--- | :--- | :--- | :--- |
-| **U1** | **WeAct STM32WB55CGU6** | ARM Cortex-M4 64MHz + Cortex-M0+ BLE 5.0, Flash 1MB, 3.3V Logic | **ESP32-WROOM-32D / 32E DevKitC V4 (38-Pin)** | Arsitektur aplikasi & firmware sudah memiliki konfigurasi pin native untuk ESP32 (38-pin). Jika STM32WB55 kosong, ESP32 adalah pengganti terbaik karena sudah memiliki BLE onboard. |
-| **U1 (Alt 2)** | *Opsional ST-Micro* | ARM Cortex-M4 | **WeAct STM32F411CEU6 (Black Pill) + Modul BLE JDY-33 / CC2541** | Menggunakan pinout TIM dan ADC yang serupa, komunikasi BLE ditangani modul eksternal via UART. |
-| **ST-LINK** | **ST-Link V2 Mini** | Dongle USB SWD Programmer 3.3V | **Kabel Data USB-C DFU Mode** | STM32WB55 mendukung flash firmware langsung via port USB Type-C bawaan board (DFU mode) tanpa perlu beli ST-Link. |
+### 📦 BAGIAN A: Modul Jadi Siap Pakai di Pasaran (Drop-In Modules)
+*Beli modul-modul ini utuh. Seluruh komponen internalnya (IC, transistor driver, dioda pengaman, LED, resistor pendukung, dan terminal baut) **SUDAH LENGKAP** di atas modul papan pabrikan, sehingga Anda **TIDAK PERLU** membelinya lagi secara terpisah.*
 
-### 2. Saklar Pelepasan Pengapian Koil Busi (Discharge SCR)
+| Ref BOM | Jumlah | Modul Jadi Siap Pakai | Fungsi di Rangkaian CDI | Komponen yang SUDAH TERTANAM di Modul *(JANGAN Beli Terpisah!)* |
+| :--- | :---: | :--- | :--- | :--- |
+| **MOD_MCU** | **1 pcs** | **ESP32-WROOM-32D / 32E DevKitC (38-Pin)** *(atau WeAct STM32WB55CGU6)* | Otak kendali timing pengapian, kalkulasi kurva map, pembaca pulser, dan konektivitas BLE Android. | • Mikrokontroler Dual-Core + BLE onboard<br>• Regulator LDO 3.3V onboard<br>• Osilator Kristal onboard<br>• Tombol EN & BOOT onboard<br>• Port USB Type-C / Micro + IC Serial CH340/CP2102<br>• Kapasitor decoupling & filter daya |
+| **MOD_BUCK** | **1 pcs** | **Modul Mini DC-DC Buck MP1584EN** *(atau Modul LM2596 Step Down)* | Menurunkan tegangan aki 12V motor menjadi **5.00V DC stabil & dingin** untuk menyuplai pin 5V board MCU. | • IC Switching Buck Converter<br>• Induktor Choke Ferrite onboard<br>• Kapasitor filter elko / keramik in-out<br>• Trimpot potensiometer pengatur voltase<br>• Dioda freewheeling |
+| **MOD_RELAY** | **1 pcs** | **Modul Relay 1-Channel 5V dengan Optocoupler** | Menyalakan / mematikan kipas radiator motor (J1.7) secara otomatis berdasarkan suhu mesin (NTC). | • Relay 5V 10A<br>• **Transistor Driver Relay (BC547 / SS8050)**<br>• **Dioda Flyback peredam lonjakan induktif koil relay (1N4007)**<br>• Optocoupler pengaman isolasi sinyal MCU<br>• LED indikator Relay ON/OFF<br>• Terminal sekrup baut untuk kabel motor kipas |
+| **MOD_LEARN** | **1 pcs** | **Modul Optocoupler PC817 4-Channel Isolation Board** | Menyadap pulsa timing CDI bawaan pabrik (OEM Learn) secara pasif tanpa mengganggu CDI asli (J1.12 Center & J1.6 Side). | • **4 buah IC Optocoupler PC817**<br>• 4 buah LED indikator kedip pulsa<br>• Resistor bias & pull-up onboard<br>• Jumper selektor level tegangan output<br>• Terminal sekrup baut (screw terminal) kabel sadapan |
 
-| Ref BOM | Komponen Utama | Rating Listrik | Komponen Persamaan / Substitusi Identik (Drop-in TO-220) | Catatan Penting |
-| :--- | :--- | :--- | :--- | :--- |
-| **SCR1, SCR2** (Koil Center & Side) | **BT151-600R** | 600V, 12A RMS (Peak Surge 120A), IGT sekitar 15mA | • **BT151-800R** (800V 12A — *lebih tahan lonjakan*!)<br>• **BT152-600R / BT152-800R** (16A, peak 200A — *sangat disarankan*)<br>• **TYN612 / TYN612M / TYN812** (600V-800V, 12A)<br>• **2N6507 / 2N6509** (600V-800V, 25A) | Urutan pin TO-220: **1 = Katoda (GND), 2 = Anoda (HV), 3 = Gate**.<br>⚠️ **DILARANG memakai TRIAC AC** (BTA12/BT136/BT137) karena triac menghantarkan dua arah dan akan memicu korsleting DC. |
-| **C_CENTER, C_SIDE** | **1.0 uF 630V MKP / MPP** | Kapasitor Film Polypropylene Pulse Grade, pitch 22.5/27.5mm | • **1.5 uF 630V MKP** (*percikan api lebih padat & biru*)<br>• **1.0 uF 1000V DC MKP10 (WIMA / Epcos / KEMET)**<br>• **CBB21 / CBB22 105J 630V Polypropylene** | ⚠️ **MUTLAK DILARANG** memakai Elko (Elektrolit) atau kapasitor X2 275VAC karena dV/dt rendah dan mudah meledak terkena pulsa kejut CDI. |
-| **RBLEED_C, RBLEED_S** | **4x 470k Ohm 0.5W seri** (Total 1.88 Mega Ohm) | Tegangan kerja per resistor minimal 200 Volt | • **2x 1 Mega Ohm 1W seri**<br>• **4x 510k Ohm 0.5W seri**<br>• **3x 680k Ohm 0.5W seri** | Berfungsi membuang muatan sisa tegangan tinggi di kapasitor saat kontak mati demi keselamatan teknisi. |
+---
 
-### 3. Pembangkit Tegangan Tinggi HV Converter (Inverter Step-Up)
+### ⚡ BAGIAN B: Komponen Diskrit yang WAJIB Dibeli Terpisah
+*Mengapa komponen ini tidak memakai modul jadi? Karena modul boost / inverter DC-DC 400V generik di pasaran arusnya terlalu kecil (hanya 2–20mA, tidak kuat melayani 3 busi di 10.000 RPM yang butuh 80–120mA), dan modul dimmer AC di pasaran tidak responsif terhadap pulsa mikrodetik CDI. Oleh karena itu, blok pengapian dan sensor di bawah ini **TIDAK ADA di modul mana pun** dan wajib dirakit diskrit di papan PCB:*
 
-| Ref BOM | Komponen Utama | Spesifikasi Inti | Komponen Persamaan / Substitusi Identik | Catatan & Tips |
-| :--- | :--- | :--- | :--- | :--- |
-| **QHV1, QHV2** | **IRF3205** (TO-220) | MOSFET N-Ch, 55V, 110A, hambatan aktif RDS(on) 8 mili Ohm | • **IRFB3077** (75V 120A, 3.3 mili Ohm — *jauh lebih dingin*)<br>• **IRFB3206** (60V 120A, 3 mili Ohm)<br>• **IRF1404** (40V 162A, 4 mili Ohm)<br>• **STP75NF75** (75V 80A, 11 mili Ohm) | Bisa diambil dari donor sekunder PSU komputer bekas jika multimeter mendeteksi kondisi sehat (tidak korslet Drain-Source). |
-| **U4** | **TC4427A / TC4427CPA** (DIP-8) | Dual High-Speed MOSFET Gate Driver, Non-Inverting, 1.5A | • **TC4427** (standar non-inverting)<br>• **MIC4427 / MIC4427YN** (Microchip/Micrel)<br>• **UCC27524 / UCC27424** (TI, Dual 4A-5A Non-Inverting)<br>• **MCP1407 / MCP1406** | ⚠️ **DILARANG memakai TC4426** karena tipe ini inverting (gerbang MOSFET akan terbuka penuh saat booting dan membakar trafo). |
-| **T1 (Trafo)** | **Trafo Utama ATX PC (EI-33 / EE-35)** | Lilitan 5V Center-Tap dijadikan input primer Push-Pull | **Modul Jadi Pasaran: High Voltage Boost Converter 8-32V to 45-390V (ZVS Cap Charger 40W/70W)** | Jika malas merakit trafo bekas PC, modul ZVS 45-390V seharga ~Rp 50.000 dapat langsung menggantikan blok inverter dan menghasilkan 285V DC stabil. |
-| **DREC1 - DREC4, DCH_C, DCH_S** | **UF4007** (DO-41) | 1A, 1000V Ultrafast Rectifier (Waktu pemulihan Trr < 75ns) | • **HER108** (1A, 1000V, 75ns)<br>• **SF18** (1A, 600V-1000V Superfast)<br>• **MUR1100 / MUR160** (1A, 1000V Ultrafast)<br>• **FR107** (1A, 1000V Fast Recovery — *toleransi darurat*) | ⚠️ **JANGAN gunakan 1N4007 biasa**, karena 1N4007 lambat (50Hz) dan akan langsung mendidih pada frekuensi switching trafo 50-100 kHz. |
-| **TVS_Q1, TVS_Q2** | **1.5KE33A** (Through-hole) | Transient Voltage Suppressor 1500W, 33V Unidirectional | • **P6KE33A** (600W 33V)<br>• **1.5KE36A / P6KE36A** (36V)<br>• **SMBJ33A** (tipe SMD) | Melindungi pin Drain MOSFET dari lonjakan induktansi bocor trafo. |
-| **RSENSE** | **0.05 Ohm 5W Non-Induktif** | Shunt Resistor pembaca arus trafo | • **2x 0.1 Ohm 3W/5W disolder paralel** (menghasilkan 0.05 Ohm 6W-10W)<br>• **5x 0.22 Ohm 2W paralel** | Komponen ini menjadi sensor deteksi arus berlebih untuk proteksi instan (PWM Clamp). |
+#### 1. Pelepasan Pengapian Koil Busi (Discharge SCR)
+| Ref BOM | Jumlah | Komponen Utama | Rating Listrik | Persamaan / Substitusi Identik | Fungsi Khusus |
+| :--- | :---: | :--- | :--- | :--- | :--- |
+| **SCR1, SCR2** | **2 pcs** | **BT151-600R** (TO-220) | 600V, 12A RMS, IGT ~15mA | • **BT151-800R** (800V 12A)<br>• **BT152-800R** (16A 800V)<br>• **TYN612 / TYN812** | Saklar pelepasan tegangan tinggi ke koil busi. (1 pcs untuk Busi Tengah, 1 pcs untuk Busi Samping). |
+| **C_CENTER, C_SIDE** | **2 pcs** | **1.0 uF 630V MKP / MPP** | Kapasitor Film Polypropylene Pulse Grade | • **1.5 uF 630V MKP** (*api lebih padat*)<br>• **1.0 uF 1000V DC MKP10**<br>• **CBB21 / CBB22 105J 630V** | Penampung energi percikan api busi. (1 pcs untuk Busi Tengah, 1 pcs untuk Busi Samping). |
+| **RBLEED_C, RBLEED_S** | **8 pcs** | **470k Ohm 0.5W** | Metal Film / Carbon 0.5W | • 4 pcs **1 Mega Ohm 1W** seri (2 seri per bank)<br>• 8 pcs **510k Ohm 0.5W** | Disolder 4 seri per bank (total 1.88 MΩ) untuk mengosongkan sisa muatan kapasitor saat kontak mati demi keselamatan teknisi. |
+| **QNC, QNS** | **2 pcs** | **BC547B** (TO-92 NPN) | 45V 100mA NPN | BC548B / 2N3904 / 2SC1815 | Driver pemicu gate SCR pengapian (1 pcs Center, 1 pcs Side). *Bukan untuk relay kipas!* |
+| **QPC, QPS** | **2 pcs** | **BC557B** (TO-92 PNP) | 45V 100mA PNP | BC558B / 2N3906 / 2SA1015 | Penguat arus pemicu gate SCR pengapian (1 pcs Center, 1 pcs Side). |
 
-### 4. Pengkondisi Sinyal Pulser, Proteksi & Sensor (Input / Logic)
+#### 2. Pembangkit Tegangan Tinggi HV Inverter (Pengecas Kapasitor 285V / 345V)
+| Ref BOM | Jumlah | Komponen Utama | Spesifikasi Listrik | Persamaan / Alternatif Donor | Fungsi Khusus |
+| :--- | :---: | :--- | :--- | :--- | :--- |
+| **QHV1, QHV2** | **2 pcs** | **IRF3205** (TO-220) | MOSFET N-Ch, 55V 110A, RDS(on) 8 mΩ | • **IRFB3077** (75V 120A 3.3 mΩ)<br>• **IRFB3206** (60V 120A)<br>• **IRF1404** (40V 162A) | Pasangan transistor switching push-pull primer trafo (bisa didonor dari sekunder PSU PC bekas). |
+| **U4** | **1 pcs** | **TC4427A / TC4427CPA** (DIP-8) | Dual High-Speed MOSFET Driver Non-Inverting 1.5A | • **MIC4427**<br>• **UCC27524 / UCC27424** (TI Dual 4A-5A)<br>• **MCP1407** | Menggerakkan gerbang MOSFET QHV1 & QHV2 secara cepat dan presisi. |
+| **T1 (Trafo)** | **1 pcs** | **Trafo ATX PC (EI-33 / EE-35)** | Lilitan sekunder 5V CT dijadikan input primer push-pull | Trafo bekas catu daya komputer ATX | Menaikkan 12V aki menjadi 285V / 345V AC frekuensi tinggi (~50–100 kHz). |
+| **DREC1 – DREC4** | **4 pcs** | **UF4007** (DO-41) | 1A 1000V Ultrafast Rectifier (Trr < 75ns) | • **HER108** (1A 1000V 75ns)<br>• **SF18** (1A 1000V)<br>• **MUR1100** | Dioda penyearah jembatan (bridge rectifier) sekunder trafo. *(Dilarang pakai 1N4007 biasa karena akan mendidih di frekuensi tinggi).* |
+| **DCH_C, DCH_S** | **2 pcs** | **UF4007** (DO-41) | 1A 1000V Ultrafast Rectifier | HER108 / SF18 / MUR1100 | Dioda pemisah isolasi pengisian Bank Center dan Bank Side agar letupan busi tengah tidak menguras kapasitor busi samping. |
+| **TVS_Q1, TVS_Q2** | **2 pcs** | **1.5KE33A** (Through-hole) | TVS Diode 1500W 33V Unidirectional | • **P6KE33A** (600W 33V)<br>• **1.5KE36A / P6KE36A** (36V) | Meredam lonjakan tegangan induktansi bocor di kaki Drain MOSFET. *(Jangan gunakan 27V karena tegangan kerja normal push-pull mencapai ~30V).* |
+| **RSENSE** | **1 pcs** | **0.05 Ohm 5W Non-Induktif** | Shunt Resistor pembaca arus trafo | • 2 pcs **0.1 Ohm 5W** paralel<br>• 5 pcs **0.22 Ohm 2W** paralel | Sensor deteksi arus berlebih untuk proteksi instan trafo (PWM Current Limiter). |
 
-| Ref BOM | Komponen Utama | Fungsi Rangkaian | Komponen Persamaan / Substitusi Identik | Catatan Praktis |
-| :--- | :--- | :--- | :--- | :--- |
-| **U2** | **LM339N / KA339** (DIP-14) | Quad Comparator (Pulser pickup + Proteksi arus & overvoltage) | • **LM239 / LM139**<br>• **HA17339 / UPC339**<br>• **Modul Komparator LM393 Dual** (*Modul jadi pasaran untuk Pulser J1.10*) | Bisa diambil dari bekas PSU komputer. Jika memakai modul LM393 jadi, sensitivitas trigger bisa disetel langsung via trimpot onboard. |
-| **DBAT (8 pcs)** | **BAT54S** (SOT-23 SMD) | Dual Schottky Diode Clamp pelindung semua pin ADC MCU | • **2x Dioda 1N5711 (Through-hole)** disolder seri per channel<br>• **2x Dioda BAT42 / BAT43 / BAT85 (DO-35)**<br>• **1N5817 / 1N5819 Schottky** | Bertindak sebagai tameng pengaman 3.3V dan GND. Sangat mudah menggantinya dengan dioda Schottky through-hole BAT43/BAT85 di PCB bolong. |
-| **DCL_A, DCL_B** | **1N4148** (DO-35) | Dioda Fast Switching 100V 200mA | • **1N4448**<br>• **LL4148** (SMD)<br>• **1N914** | Dioda standar sejuta umat, sangat mudah ditemukan di semua toko elektronik. |
-| **DREV** | **SB560** (DO-201AD) | 5A, 60V Schottky Diode (Anti aki terbalik) | • **SR560 / SS56** (5A 60V)<br>• **SB5100 / SR5100** (5A 100V)<br>• **MBR745 / MBR1045 / MBR1060** (10A 45-60V Schottky TO-220 bekas PSU PC) | Mencegah kerusakan fatal jika kutub aki motor salah pasang. |
-| **TVS_IN** | **SMBJ33A / P6KE33A** | TVS Diode 33V Unidirectional pelindung input kontak J1.5 | • **1.5KE33A / 1.5KE36A**<br>• **SA33A** | Menyerap lonjakan voltase dari spul/kiprok regulator motor. |
-| **U_BUCK_LOGIC** | **Modul LM2596 Step Down** | Penurun tegangan 12V aki ke stabil 5.00V | • **Modul Mini DC-DC MP1584EN** (*ukuran sangat kecil 22x17mm, dingin & hemat ruang*)<br>• **Modul Mini-360 Step Down**<br>• **XL4015 Step Down** | Wajib disetel tepat **5.00V** dengan multimeter sebelum dicolokkan ke pin 5V (VIN) board MCU. |
+#### 3. Rangkaian Masukan Sinyal Pulser, Proteksi & Sensor Analog (Input ADC)
+| Ref BOM | Jumlah | Komponen Utama | Rating / Tipe | Persamaan / Alternatif | Fungsi Khusus |
+| :--- | :---: | :--- | :--- | :--- | :--- |
+| **U2** | **1 pcs** | **LM339N** (DIP-14) | Quad Comparator | • **LM239 / LM139**<br>• **KA339 / HA17339** | Mengubah sinyal sinus AC pulser magnet pickup kruk as (J1.10) menjadi pulsa digital kotak untuk pin input MCU. |
+| **DBAT** | **8 pcs** *(atau 16 pcs)* | **BAT54S** (SOT-23 SMD) | Dual Schottky Diode Clamp 30V 200mA | • Jika pakai through-hole: **16 pcs 1N5819 / BAT43 / 1N5711** | Membatasi tegangan seluruh pin ADC MCU agar tidak pernah melebihi 3.3V atau drop di bawah GND saat ada lonjakan kabel bodi motor. |
+| **DCL_A, DCL_B** | **2 pcs** | **1N4148** (DO-35) | Dioda Fast Switching 100V 200mA | 1N4448 / 1N914 | Pengaman klem logika proteksi arus trafo ke IC driver. |
+| **DREV** | **1 pcs** | **SB560** (DO-201AD) | 5A 60V Schottky Diode | SR560 / SS56 / SB5100 | Pengaman kutub aki terbalik di jalur input daya 12V (J1.5). |
+| **TVS_IN** | **1 pcs** | **SMBJ33A / P6KE33A** | TVS Diode 33V Unidirectional | 1.5KE33A / 1.5KE36A | Menyerap lonjakan voltase transien dari spul / regulator kiprok motor. |
+| **R_LEARN_EXT** | **2 pcs** | **47k Ohm 2 Watt** *(atau 8 pcs 12k 0.25W seri)* | Resistor Daya Khusus | Disolder seri pada kabel sadapan luar | Dipasang pada kabel sadapan koil motor (J1.12 & J1.6) **SEBELUM** masuk ke terminal input modul optocoupler untuk menahan tegangan kejut 300V. |
 
-### 5. Penggerak Transistor Driver, Relay Kipas & OEM Learn
+#### 4. Resistor Pembagi Tegangan & Bias (Metal Film 1% 0.25W)
+| Nilai Resistor | Jumlah Butuh | Penempatan / Rangkaian |
+| :--- | :---: | :--- |
+| **270k Ohm 1%** | **8 pcs** | Feedback pembacaan tegangan tinggi HV (4 seri untuk Center, 4 seri untuk Side ke ADC MCU). *(Bisa diganti 8 pcs 220k atau 8 pcs 330k).* |
+| **10 Ohm** | **2 pcs** | Snubber gerbang driver. |
+| **100 Ohm** | **4 pcs** | Proteksi gerbang MOSFET dan filter sinyal pulser. |
+| **330 Ohm** | **4 pcs** | Pembatas arus transistor pemicu gate SCR. |
+| **1k Ohm** | **4 pcs** | Pulldown gate-katoda SCR1 & SCR2 (mencegah pemicuan liar dari noise). |
+| **2.2k Ohm** | **2 pcs** | Jalur kolektor NPN ke basis PNP pemicu SCR. |
+| **4.7k Ohm** | **4 pcs** | Resistor basis NPN & pullup pulser. |
+| **8.2k Ohm** | **2 pcs** | Pembagi tegangan sensor suhu NTC. |
+| **10k Ohm** | **6 pcs** | Pullup basis PNP & pulldown referensi ADC. |
+| **15k Ohm** | **2 pcs** | Pembagi tegangan sensor bukaan gas TPS. |
+| **22k Ohm** | **2 pcs** | Pembagi tegangan pembaca voltase aki (VBAT). |
+| **27k Ohm** | **2 pcs** | Pembagi tegangan pembaca voltase aki (VBAT). |
+| **39k Ohm** | **2 pcs** | Histeresis komparator pulser LM339. |
+| **100k Ohm** | **2 pcs** | Pembagi ambang batas proteksi komparator. |
+| **120k Ohm** | **2 pcs** | Feedback komparator proteksi tegangan lebih (OVP). |
 
-| Ref BOM | Komponen Utama | Konfigurasi | Komponen Persamaan / Substitusi Identik | Perhatian Pinout Kaki |
-| :--- | :--- | :--- | :--- | :--- |
-| **QNC, QNS** | **BC547B** (TO-92 NPN) | Driver pulsa gate SCR | • **BC548B / BC546B** (*pinout C-B-E identik*)<br>• **2N3904** (*Perhatian: pinout E-B-C*)<br>• **2SC1815** (*Perhatian: pinout E-C-B*)<br>• **S8050** (*Perhatian: pinout E-B-C*) | Pastikan orientasi kaki Base dan Collector tidak terbalik jika menggunakan seri 2N3904 atau 2SC1815. |
-| **QPC, QPS** | **BC557B** (TO-92 PNP) | Pemicu tegangan tinggi gate SCR | • **BC558B / BC556B** (*pinout C-B-E identik*)<br>• **2N3906** (*Perhatian: pinout E-B-C*)<br>• **2SA1015** (*Perhatian: pinout E-C-B*)<br>• **S8550** (*Perhatian: pinout E-B-C*) | Kaki Emitter terhubung ke jalur 12V aki, jangan sampai tersambung ke pin 3.3V logic. |
-| **QFAN / MOD_RELAY** | **Modul Relay 1-Channel 5V Opto** | Kendali Kipas Radiator (J1.7) | • **Transistor NPN BC547B + Dioda 1N4007**<br>• **Modul MOSFET Driver LR7843 / FR120N** | Menggunakan modul relay jadi berisolasi optocoupler jauh lebih aman dari kejutan induktif motor kipas. |
-| **OEM_LEARN** | **Modul Optocoupler PC817 4-Channel + 2x Resistor 47k 2W** | Penyadapan pulsa pasif koil CDI OEM (J1.12 dan J1.6) | • **2x IC PC817 / EL817 DIP-4 diskrit**<br>• **4N25 / 4N35 / PC814** | Wajib menggunakan resistor pembatas daya 2 Watt (47k Ohm) sebelum masuk ke anoda LED optocoupler. |
+#### 5. Kapasitor Filter & Bypass Diskrit
+| Nilai Kapasitor | Jumlah Butuh | Penempatan / Rangkaian |
+| :--- | :---: | :--- |
+| **4.7nF (472)** | **2 pcs** | Filter derau frekuensi tinggi pada sinyal pulser pickup. |
+| **10nF (103)** | **2 pcs** | Filter masukan ADC sensor analog. |
+| **100nF / 0.1 uF (104)** | **8 pcs** | Kapasitor bypass VCC IC LM339, TC4427, dan rel tegangan IC. |
+| **470 uF 35V / 50V Low-ESR** | **1 pcs** | Elko peredam ripple arus besar pada jalur input daya 12V aki (bisa didonor dari PSU PC). |
 
-### 6. Kabel, Soket Harness & Komponen Pasif Pendukung
-
-1. **Soket Pigtail J1:** Soket CDI 12-pin pigtail khusus Bajaj Pulsar 200NS / Kawasaki Bajaj NS200 (gunakan kabel pigtail sambungan, jangan potong kabel harness bodi motor).
-2. **Kabel Daya & HV:** Kabel tembaga berisolasi tahan 600V (AWG 18-20) untuk jalur koil busi J1.12, J1.6, dan output trafo.
-3. **Resistor Pembagi Tegangan HV (RHV_C, RHV_S):** 8 buah resistor **270k Ohm 1% 0.25W** (disolder 4 seri per channel feedback ADC). *Persamaan identik:* 4x **220k Ohm** atau 4x **330k Ohm** 1% metal film.
-4. **Paket Resistor Standar (Metal Film 1% 0.25W):** 10 Ohm, 100 Ohm, 330 Ohm, 1k Ohm, 2.2k Ohm, 4.7k Ohm, 8.2k Ohm, 10k Ohm, 15k Ohm, 22k Ohm, 27k Ohm, 39k Ohm, 100k Ohm, 120k Ohm.
-5. **Paket Kapasitor Keramik / Film:** 4.7nF, 10nF, 100nF (104), serta Elko Low-ESR 470 uF 35V / 50V (bisa didonor dari PSU komputer).
-6. **Fuse & Holder:** Fuse tancap blade 5A (Utama), 1A (Logic), dan 3A (HV Converter) beserta rumah sikring.
-7. **Papan PCB:** PCB lubang Matrix (Donut Ring / Stripboard) ukuran 7 x 9 cm (Logic) dan 5 x 7 cm (Power HV terpisah) dengan jarak clearance minimum 6mm untuk jalur tegangan tinggi.
+#### 6. Soket, Sikring & Aksesoris Perakitan
+| Komponen Aksesoris | Jumlah Butuh | Keterangan & Catatan |
+| :--- | :---: | :--- |
+| **Soket Pigtail J1** | **1 pcs** | Soket 12-pin sambungan CDI khusus NS200 (gunakan kabel sambungan pigtail, jangan memotong kabel asli bodi motor). |
+| **Kabel Busi & HV AWG 18-20** | **1 set (~2 meter)** | Kabel tembaga serabut tebal berisolasi tahan tegangan 600V untuk jalur koil busi J1.12, J1.6, dan output sekunder trafo. |
+| **Rumah Sikring + Sekring Blade** | **3 set** | 1x **5A** (Sikring Utama FMAIN), 1x **1A** (Sikring Logic MCU FLOGIC), dan 1x **3A** (Sikring Inverter FHV). |
+| **Induktor Choke Input (L_IN)** | **1 pcs** | Toroid ferit 47 uH dengan rating arus minimal 5A (bisa diambil langsung dari donor PSU PC). |
+| **Pin Header Male 2.54mm** | **1 strip (40 pin)** | Untuk soket jumper konfigurasi, probe uji titik ukur (test point), dan kabel interkoneksi antar modul. |
+| **Jumper Shunt 2.54mm** | **4 pcs** | Jumper setting mode & uji kalibrasi. |
+| **Papan PCB Lubang Matrix** | **2 keping** | 1 keping ukuran **7 x 9 cm** (Papan Logic MCU & Sensor) dan 1 keping ukuran **5 x 7 cm** (Papan Khusus Power Inverter HV terpisah dengan celah isolasi 6mm). |
 
 ---
 
