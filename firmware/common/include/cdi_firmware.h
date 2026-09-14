@@ -132,6 +132,10 @@ void cdi_tick(cdi_context_t *ctx);
 cdi_trigger_result_t cdi_on_reference_pulse(cdi_context_t *ctx, uint32_t now_us);
 size_t cdi_handle_command(cdi_context_t *ctx, const char *line, char *reply, size_t reply_size);
 size_t cdi_protocol_exchange(cdi_context_t *ctx, const char *frame, char *reply, size_t reply_size);
+void cdi_build_telemetry_packet(const cdi_context_t *ctx, uint8_t kind, uint16_t sequence, uint8_t out[20]);
+bool cdi_ota_data(cdi_context_t *ctx, uint32_t offset, const uint8_t *data, size_t size);
+bool cdi_ota_commit(cdi_context_t *ctx);
+void cdi_build_ota_status(const cdi_context_t *ctx, uint8_t out[16]);
 uint16_t cdi_crc16(const uint8_t *data, size_t size);
 uint32_t cdi_crc32(const uint8_t *data, size_t size);
 

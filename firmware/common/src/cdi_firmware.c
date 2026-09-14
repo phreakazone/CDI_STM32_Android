@@ -551,9 +551,11 @@ size_t cdi_handle_command(cdi_context_t *ctx, const char *line, char *reply, siz
     if (strcmp(token, "OTA") == 0) {
         char *op=strtok(NULL,",");
         if(op && strcmp(op,"BEGIN")==0) {
-            char *size=strtok(NULL,","), *crc=strtok(NULL,",");
+            char *first=strtok(NULL,","), *second=strtok(NULL,","), *third=strtok(NULL,",");
+            char *size=third?second:first;
+            char *crc=third?third:second;
             if(!size||!crc||!command_safe(ctx)) return replyf(reply,reply_size,"ERR,UNSAFE",0,0,0,0,0,0);
-            ctx->ota_size=strtoul(size,NULL,10); ctx->ota_crc32=strtoul(crc,NULL,16); ctx->ota_offset=0u;
+            ctx->ota_size=strtoul(size,NULL,10); ctx->ota_crc32=strtoul(crc,NULL,10); ctx->ota_offset=0u;
             if(!ctx->hal.ota_begin || !ctx->hal.ota_begin(ctx->ota_size,ctx->ota_crc32))
                 return replyf(reply,reply_size,"ERR,OTA_BEGIN",0,0,0,0,0,0);
             ctx->telemetry.ota_active=true; ctx->boot_state=CDI_BOOT_OTA; outputs_safe(ctx);
@@ -563,16 +565,12 @@ size_t cdi_handle_command(cdi_context_t *ctx, const char *line, char *reply, siz
             char *offset=strtok(NULL,","), *hex=strtok(NULL,","); uint8_t data[96];
             if(!offset||!hex||strtoul(offset,NULL,10)!=ctx->ota_offset) return replyf(reply,reply_size,"ERR,OTA_OFFSET",0,0,0,0,0,0);
             size_t count=decode_hex(hex,data,sizeof(data));
-            if(count==0u||!ctx->hal.ota_write||!ctx->hal.ota_write(ctx->ota_offset,data,count))
+            if(count==0u||!cdi_ota_data(ctx,ctx->ota_offset,data,count))
                 return replyf(reply,reply_size,"ERR,OTA_WRITE",0,0,0,0,0,0);
-            ctx->ota_offset+=(uint32_t)count;
             return replyf(reply,reply_size,"OK,OTA_DATA,%ld",ctx->ota_offset,0,0,0,0,0);
         }
-        if(op && strcmp(op,"END")==0 && ctx->telemetry.ota_active) {
-            if(ctx->ota_offset!=ctx->ota_size||!ctx->hal.ota_finish||!ctx->hal.ota_finish()) {
-                ctx->telemetry.faults|=CDI_FAULT_OTA; return replyf(reply,reply_size,"ERR,OTA_END",0,0,0,0,0,0);
-            }
-            ctx->telemetry.ota_active=false; ctx->boot_state=CDI_BOOT_SAFE;
+        if(op && (strcmp(op,"END")==0||strcmp(op,"COMMIT")==0) && ctx->telemetry.ota_active) {
+            if(!cdi_ota_commit(ctx)) return replyf(reply,reply_size,"ERR,OTA_END",0,0,0,0,0,0);
             return replyf(reply,reply_size,"OK,OTA_END",0,0,0,0,0,0);
         }
         if(op && strcmp(op,"ABORT")==0) {
@@ -583,6 +581,63 @@ size_t cdi_handle_command(cdi_context_t *ctx, const char *line, char *reply, siz
     }
 
     return replyf(reply, reply_size, "ERR,UNKNOWN",0,0,0,0,0,0);
+}
+
+static void put_u16(uint8_t *out,uint16_t value){out[0]=(uint8_t)value;out[1]=(uint8_t)(value>>8);}
+static void put_u32(uint8_t *out,uint32_t value){
+    out[0]=(uint8_t)value;out[1]=(uint8_t)(value>>8);out[2]=(uint8_t)(value>>16);out[3]=(uint8_t)(value>>24);
+}
+
+bool cdi_ota_data(cdi_context_t *ctx,uint32_t offset,const uint8_t *data,size_t size){
+    if(!ctx||!ctx->telemetry.ota_active||offset!=ctx->ota_offset||!data||size==0u||
+       offset+size>ctx->ota_size||!ctx->hal.ota_write)return false;
+    if(!ctx->hal.ota_write(offset,data,size)){ctx->telemetry.faults|=CDI_FAULT_OTA;return false;}
+    ctx->ota_offset+=(uint32_t)size;
+    return true;
+}
+
+bool cdi_ota_commit(cdi_context_t *ctx){
+    if(!ctx||!ctx->telemetry.ota_active||ctx->ota_offset!=ctx->ota_size||!ctx->hal.ota_finish||
+       !ctx->hal.ota_finish()){
+        if(ctx)ctx->telemetry.faults|=CDI_FAULT_OTA;
+        return false;
+    }
+    ctx->telemetry.ota_active=false;
+    ctx->boot_state=CDI_BOOT_SAFE;
+    return true;
+}
+
+void cdi_build_telemetry_packet(const cdi_context_t *ctx,uint8_t kind,uint16_t sequence,uint8_t out[20]){
+    memset(out,0,20u);
+    put_u16(out,0xcd15u);out[2]=4u;out[3]=(uint8_t)(kind?1u:0u);put_u16(out+4,sequence);
+    if(kind==0u){
+        put_u16(out+6,ctx->telemetry.rpm);
+        put_u16(out+8,(uint16_t)ctx->telemetry.load_pct*10u);
+        put_u16(out+10,(uint16_t)((int32_t)ctx->telemetry.advance_x10*10));
+        put_u16(out+14,ctx->telemetry.hv_volts_x10/10u);
+        put_u16(out+16,ctx->telemetry.hv_volts_x10/10u);
+    }else{
+        put_u16(out+6,(uint16_t)((int32_t)ctx->telemetry.temperature_x10*10));
+        out[8]=ctx->config.active_map_slot;
+        out[9]=(ctx->telemetry.rpm>=ctx->config.limiter_rpm)?1u:0u;
+        out[10]=(ctx->boot_state==CDI_BOOT_READY?0x20u:0u)|
+            (ctx->telemetry.charger_enabled?0x04u:0u)|0x10u;
+        out[11]=(ctx->telemetry.ignition_enabled?0x01u:0u)|
+            (ctx->telemetry.fan_enabled?0x08u:0u);
+        put_u16(out+12,(uint16_t)ctx->telemetry.faults);
+        put_u16(out+14,(uint16_t)((int32_t)ctx->config.profile.trigger_angle_x10*10));
+        out[16]=ctx->telemetry.rpm?100u:0u;
+    }
+    put_u16(out+18,cdi_crc16(out,18u));
+}
+
+void cdi_build_ota_status(const cdi_context_t *ctx,uint8_t out[16]){
+    memset(out,0,16u);put_u16(out,0xcd18u);out[2]=1u;
+    out[3]=(ctx->telemetry.faults&CDI_FAULT_OTA)?4u:
+        ctx->telemetry.ota_active?2u:ctx->ota_size&&ctx->ota_offset==ctx->ota_size?3u:0u;
+    put_u32(out+4,ctx->ota_offset);put_u32(out+8,ctx->ota_size);
+    put_u16(out+12,(ctx->telemetry.faults&CDI_FAULT_OTA)?1u:0u);
+    put_u16(out+14,cdi_crc16(out,14u));
 }
 
 uint16_t cdi_crc16(const uint8_t *data,size_t size){

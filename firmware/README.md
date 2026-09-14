@@ -41,7 +41,8 @@ application.
 - `TEMP,CAL,adc1,temp1X10,adc2,temp2X10,adc3,temp3X10`
 - `MAP,BEGIN,rpmCount,loadCount`, `MAP,RPM`, `MAP,LOAD`, `MAP,CELL`, `MAP,SAVE,slot|ABORT`
 - `DYNO,BEGIN|TRIM|COMMIT|ABORT`
-- `OTA,BEGIN,size,crc32`, `OTA,DATA,offset,hex`, `OTA,END|ABORT`
+- `OTA,BEGIN,imageVersion,size,crc32`, data characteristic `1004`, `OTA,COMMIT|ABORT`; status characteristic `1005`
+- Telemetry characteristic `1001`: frame v4 20-byte CORE/DIAGNOSTIC bergantian pada 20 Hz
 - `SETUP,DONE`
 
 ## Port notes

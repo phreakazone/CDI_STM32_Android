@@ -23,11 +23,14 @@ static uint16_t s_line_len;
 extern TIM_HandleTypeDef htim1;
 extern TIM_HandleTypeDef htim2;
 extern void CDI_BLE_Notify(const uint8_t *data, uint16_t size);
+extern void CDI_BLE_NotifyTelemetry(const uint8_t *data, uint16_t size);
+extern void CDI_BLE_NotifyOtaStatus(const uint8_t *data, uint16_t size);
 extern bool CDI_NVM_Load(void *data, size_t size);
 extern bool CDI_NVM_Save(const void *data, size_t size);
 extern void CDI_SetIgnitionEnable(bool enabled);
 extern void CDI_SetChargerEnable(bool enabled);
 extern void CDI_SetFanEnable(bool enabled);
+extern void CDI_PulseIgnitionGate(uint16_t gate_us);
 extern uint8_t CDI_ADC_LoadPercent(void);
 extern uint16_t CDI_ADC_TemperatureRaw(void);
 extern uint16_t CDI_ADC_HvMaximumX10(void);
@@ -77,6 +80,8 @@ static void schedule_fire(uint32_t delay_us) {
 }
 
 void cdi_stm32_process(void) {
+    static uint32_t last_telemetry_us;
+    static uint16_t telemetry_sequence;
     if(!s_ctx) return;
     if(s_pulse_pending) {
         __disable_irq();
@@ -88,6 +93,24 @@ void cdi_stm32_process(void) {
     }
     cdi_set_inputs(s_ctx,CDI_ADC_LoadPercent(),CDI_ADC_TemperatureRaw(),CDI_ADC_HvMaximumX10());
     cdi_tick(s_ctx);
+    uint32_t now=port_micros();
+    if(now-last_telemetry_us>=50000u){
+        uint8_t packet[20];last_telemetry_us=now;
+        cdi_build_telemetry_packet(s_ctx,(uint8_t)(telemetry_sequence&1u),telemetry_sequence++,packet);
+        CDI_BLE_NotifyTelemetry(packet,sizeof(packet));
+    }
+}
+
+void cdi_stm32_ota_data_rx(const uint8_t *packet,uint16_t size){
+    if(!s_ctx||!packet||size<8u)return;
+    uint32_t offset=(uint32_t)packet[0]|((uint32_t)packet[1]<<8)|((uint32_t)packet[2]<<16)|((uint32_t)packet[3]<<24);
+    uint8_t count=packet[4];
+    if((uint16_t)(count+7u)!=size)return;
+    uint16_t supplied=(uint16_t)packet[size-2u]|((uint16_t)packet[size-1u]<<8);
+    if(cdi_crc16(packet,size-2u)!=supplied)return;
+    cdi_ota_data(s_ctx,offset,packet+5u,count);
+    uint8_t status[16];cdi_build_ota_status(s_ctx,status);
+    CDI_BLE_NotifyOtaStatus(status,sizeof(status));
 }
 
 void cdi_stm32_ble_rx(const uint8_t *data,uint16_t size) {
@@ -110,6 +133,5 @@ void cdi_stm32_ble_rx(const uint8_t *data,uint16_t size) {
 /* Call from HAL_TIM_OC_DelayElapsedCallback for TIM1 channel 1. */
 void cdi_stm32_fire_compare_callback(void) {
     if(!s_ctx||s_ctx->telemetry.ota_active) return;
-    CDI_SetIgnitionEnable(true);
-    /* Board code must create the specified short gate pulse and then clear it. */
+    CDI_PulseIgnitionGate(80u);
 }

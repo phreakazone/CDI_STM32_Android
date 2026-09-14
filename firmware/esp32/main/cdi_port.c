@@ -34,6 +34,8 @@ static adc_oneshot_unit_handle_t s_adc;
 
 extern void cdi_ble_init(void (*rx)(const uint8_t*,size_t));
 extern void cdi_ble_notify(const uint8_t *data,size_t size);
+extern void cdi_ble_notify_telemetry(const uint8_t *data,size_t size);
+extern void cdi_ble_notify_ota_status(const uint8_t *data,size_t size);
 
 static uint32_t port_micros(void){ return (uint32_t)esp_timer_get_time(); }
 static void set_ignition(bool v){
@@ -90,6 +92,13 @@ static void trigger_task(void *arg){
     }
 }
 
+void cdi_esp32_ota_data_rx(const uint8_t *data,size_t size){
+    uint8_t status[16];
+    cdi_ota_data(&s_cdi,s_cdi.ota_offset,data,size);
+    cdi_build_ota_status(&s_cdi,status);
+    cdi_ble_notify_ota_status(status,sizeof(status));
+}
+
 static char s_line[196];
 static size_t s_line_len;
 static void ble_rx(const uint8_t *data,size_t size){
@@ -133,6 +142,8 @@ void app_main(void){
     gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
     gpio_isr_handler_add(CDI_GPIO_REFERENCE,reference_isr,NULL);
     cdi_ble_init(ble_rx);
+    uint16_t telemetry_sequence=0u;
+    uint8_t telemetry_divider=0u;
     for(;;){
         int tps=0,temp=0,hvc=0,hvs=0;
         adc_oneshot_read(s_adc,CDI_ADC_TPS,&tps);
@@ -143,6 +154,11 @@ void app_main(void){
         uint16_t hv=(uint16_t)((uint32_t)(hvc>hvs?hvc:hvs)*CDI_HV_FULL_SCALE_X10/4095u);
         cdi_set_inputs(&s_cdi,load,(uint16_t)temp,hv);
         cdi_tick(&s_cdi);
+        if(++telemetry_divider>=5u){
+            uint8_t packet[20];telemetry_divider=0u;
+            cdi_build_telemetry_packet(&s_cdi,(uint8_t)(telemetry_sequence&1u),telemetry_sequence++,packet);
+            cdi_ble_notify_telemetry(packet,sizeof(packet));
+        }
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }

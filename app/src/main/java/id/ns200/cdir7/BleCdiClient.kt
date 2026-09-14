@@ -627,7 +627,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
     fun release() = disconnect()
 
     /**
-     * Memulai pengunggahan image aplikasi target melalui BLE OTA R8.
+     * Memulai pengunggahan image aplikasi target melalui BLE OTA R9.
      * Karakteristik Data: ...1004 (chunk sequential maks 208 byte)
      * Karakteristik Status: ...1005 (notifikasi / status flash)
      */
@@ -643,7 +643,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             return false
         }
         if (!gattReady || otaDataChar == null || otaStatusChar == null) {
-            _otaState.value = OtaState.Error("BLE/karakteristik OTA R8 belum siap")
+            _otaState.value = OtaState.Error("BLE/karakteristik OTA R9 belum siap")
             return false
         }
         otaCancelled = false
@@ -662,7 +662,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         otaBytesAcknowledged = 0
 
         _otaState.value = OtaState.Preparing(
-            "Inisialisasi OTA R8 (%d B, %d chunk, CRC32: %08X)...".format(data.size, otaTotalChunks, crc32Val)
+            "Inisialisasi OTA R9 (%d B, %d chunk, CRC32: %08X)...".format(data.size, otaTotalChunks, crc32Val)
         )
         return send("OTA,BEGIN,$imageVersion,${data.size},$crc32Val")
     }
@@ -700,8 +700,8 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
                 return
             }
         } else {
-            // Port ESP32 R8 meneruskan payload karakteristik 1004 langsung ke
-            // cdi_r8_ota_write(received,...), tanpa header offset/CRC16 STM32.
+            // Port ESP32 R9 meneruskan payload karakteristik 1004 langsung ke
+            // cdi_esp32_ota_data_rx(received,...), tanpa header offset/CRC16 STM32.
             chunk
         }
         val owner = gatt
