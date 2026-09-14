@@ -1,306 +1,144 @@
-# Integrasi firmware STM32WB55 dengan STM32Cube
+# Build STM32WB55 di VS Code + STM32Cube
 
-Target referensi: **WeAct STM32WB55CGU6**. Folder ini berisi core-port HAL, bukan proyek
-STM32Cube mandiri. Karena belum ada `.ioc`, startup, linker script, HAL, dan stack
-STM32_WPAN, folder `firmware/stm32wb55` tidak dapat langsung dibuka lalu dibuild.
+## Source yang harus dibuka
 
-Panduan ini menjelaskan cara membuat proyek Cube yang membungkus source tersebut tanpa
-menduplikasi logika CDI di `../common`.
+Gunakan repository lengkap:
 
-## Status sumber saat ini
+[https://github.com/phreakazone/Firmware_CDI_NS200](https://github.com/phreakazone/Firmware_CDI_NS200)
 
-Tersedia:
-
-- `Core/Inc/cdi_port.h`;
-- `Core/Src/cdi_port.c`;
-- core C99 bersama di `../common/include` dan `../common/src`.
-
-Harus dibuat oleh proyek Cube:
-
-- file `.ioc`, clock tree, startup dan linker script;
-- HAL GPIO, TIM1, TIM2 dan ADC1;
-- STM32_WPAN BLE untuk CPU1 dan wireless stack untuk CPU2;
-- custom GATT service;
-- implementasi GPIO/ADC/NVM untuk semua hook `CDI_*`;
-- konfigurasi flash/NVM yang aman;
-- callback timer dan BLE ke port CDI.
-
-OTA STM32 dinonaktifkan secara default. Jangan mengubah
-`CDI_STM32_OTA_ENABLE=1` sebelum ada bootloader dual-slot yang tervalidasi.
-
-## Prasyarat
-
-- STM32CubeMX atau STM32CubeIDE.
-- VS Code dengan extension STM32 yang menggunakan STM32CubeCLT/CMake, bila ingin build
-  dari VS Code.
-- Paket **STM32CubeWB** yang cocok dengan versi generator.
-- STM32CubeProgrammer.
-- ST-LINK dan koneksi SWD.
-- Firmware wireless CPU2 STM32WB yang sesuai dengan stack BLE dari CubeWB.
-- Board dilepas dari gate, charger, koil, fan dan kelistrikan kendaraan.
-
-## 1. Buat proyek Cube
-
-1. Buat proyek baru untuk **STM32WB55CGU6**, jangan hanya memilih keluarga generik.
-2. Simpan proyek pada folder kerja tersendiri; contoh nama `CDI_STM32WB55_R9`.
-3. Pilih toolchain STM32CubeIDE atau CMake sesuai extension VS Code yang dipakai.
-4. Gunakan SWD untuk debug. PB3/PB4 dipakai fitur OEM Learn, jadi nonaktifkan full JTAG.
-5. Aktifkan generation option agar user code dipertahankan saat CubeMX melakukan
-   regenerasi.
-6. Commit file `.ioc` dan seluruh source generated ke repository setelah konfigurasi
-   hardware sudah benar; file tersebut saat ini memang belum tersedia.
-
-## 2. Konfigurasikan clock dan peripheral
-
-Gunakan sumber clock yang memenuhi persyaratan STM32WB BLE. LSE/HSE dan clock RF harus
-mengikuti oscillator nyata pada board WeAct; jangan menyalin nilai board lain tanpa
-memeriksa skematik.
-
-### Timer
-
-| Peripheral | Konfigurasi minimum | Fungsi |
-|---|---|---|
-| TIM2 | counter bebas 32-bit, 1 MHz | timestamp pulser dalam mikrodetik |
-| TIM2 CH1 / PA0 | input capture rising edge atau EXTI yang membaca TIM2 | referensi pulser |
-| TIM1 CH1 | output compare interrupt, counter 1 MHz | jadwal delay ignition |
-
-Dengan timer clock `Ftimer`, atur prescaler menjadi
-`(Ftimer / 1.000.000) - 1`. Pastikan hasilnya bilangan bulat dan verifikasi clock timer
-setelah konfigurasi APB.
-
-### ADC dan GPIO
-
-| Fungsi | Pin | Mode |
-|---|---|---|
-| Pulser/reference | PA0 | TIM2_CH1 atau GPIO EXTI rising |
-| Gate Center | PA1 | GPIO output ke driver |
-| Gate Side | PA2 | GPIO output ke driver |
-| Charger A | PA9 | GPIO output ke driver |
-| Charger B | PB8 | GPIO output ke driver |
-| Fan relay | PB5 | GPIO output ke driver |
-| OEM Learn Center | PB3 | GPIO input |
-| OEM Learn Side | PB4 | GPIO input |
-| TPS | PA3 | ADC1 |
-| Suhu | PA4 | ADC1 |
-| HV Center | PA6 | ADC1 |
-| HV Side | PA7 | ADC1 |
-| Input tambahan | PB0 | ADC1 bila dipakai board |
-
-Tetapkan output ignition, charger, dan fan ke kondisi **OFF** sedini mungkin pada startup.
-Pin MCU tidak boleh langsung menggerakkan primer koil, kapasitor CDI, relay tanpa driver,
-atau sinyal pulser kendaraan.
-
-## 3. Aktifkan BLE STM32WB
-
-Di CubeMX aktifkan middleware STM32_WPAN BLE peripheral dan komponen pendukung yang
-dihasilkan CubeWB, termasuk IPCC/HSEM/RTC sesuai template BLE. CPU2 harus berisi wireless
-coprocessor firmware yang kompatibel.
-
-Buat custom service berikut:
-
-| Nama | UUID | Properti |
-|---|---|---|
-| CDI service | `7a8f1000-6c9d-4e40-a45f-0b4b4e533230` | primary service |
-| Telemetry | `7a8f1001-6c9d-4e40-a45f-0b4b4e533230` | notify, 20 byte |
-| Command | `7a8f1002-6c9d-4e40-a45f-0b4b4e533230` | write |
-| Response | `7a8f1003-6c9d-4e40-a45f-0b4b4e533230` | notify |
-| OTA data | `7a8f1004-6c9d-4e40-a45f-0b4b4e533230` | write without response |
-| OTA status | `7a8f1005-6c9d-4e40-a45f-0b4b4e533230` | notify, 16 byte |
-
-Arahkan event write Command ke:
-
-```c
-cdi_stm32_ble_rx(data, length);
-```
-
-Arahkan write OTA Data ke:
-
-```c
-cdi_stm32_ota_data_rx(data, length);
-```
-
-Implementasikan tiga fungsi notify yang dipakai port:
-
-```c
-void CDI_BLE_Notify(const uint8_t *data, uint16_t size);
-void CDI_BLE_NotifyTelemetry(const uint8_t *data, uint16_t size);
-void CDI_BLE_NotifyOtaStatus(const uint8_t *data, uint16_t size);
-```
-
-Fungsi harus memeriksa status koneksi dan subscription sebelum mengirim notify. Proses
-event BLE generated, misalnya `MX_APPE_Process()`, harus tetap dipanggil di main loop.
-
-## 4. Masukkan source CDI ke proyek
-
-Pilihan paling mudah:
-
-1. Salin `firmware/stm32wb55/Core/Inc/cdi_port.h` ke `Core/Inc`.
-2. Salin `firmware/stm32wb55/Core/Src/cdi_port.c` ke `Core/Src`.
-3. Tambahkan `firmware/common/include/cdi_firmware.h` ke include path atau salin ke
-   `Core/Inc`.
-4. Tambahkan `firmware/common/src/cdi_firmware.c` ke target build. Jangan hanya
-   menambahkan header.
-5. Pastikan project compiler menggunakan C11/C99-compatible mode.
-
-Lebih baik menautkan folder `common` sebagai source/include path agar core ESP32 dan
-STM32 tetap satu sumber kebenaran.
-
-## 5. Implementasikan hook board
-
-Buat `Core/Src/cdi_board.c` dan implementasikan seluruh simbol berikut:
-
-| Hook | Kontrak |
-|---|---|
-| `CDI_SetIgnitionEnable(bool)` | enable/disable jalur ignition dengan kondisi awal OFF |
-| `CDI_SetChargerEnable(bool)` | kendalikan kedua charger melalui driver |
-| `CDI_SetFanEnable(bool)` | kendalikan transistor/MOSFET/relay fan |
-| `CDI_PulseIgnitionGate(uint16_t)` | hasilkan pulsa gate berdurasi mikrodetik tanpa blocking panjang |
-| `CDI_ADC_LoadPercent()` | kembalikan TPS/load 0–100% |
-| `CDI_ADC_TemperatureRaw()` | kembalikan nilai ADC mentah sensor suhu |
-| `CDI_ADC_HvMaximumX10()` | maksimum feedback HV dalam satuan 0,1 V |
-| `CDI_NVM_Load(void *, size_t)` | muat blob konfigurasi lengkap atau return false |
-| `CDI_NVM_Save(const void *, size_t)` | simpan blob secara atomik dan return status |
-| `CDI_BLE_Notify(...)` | notify characteristic Response |
-| `CDI_BLE_NotifyTelemetry(...)` | notify characteristic Telemetry |
-| `CDI_BLE_NotifyOtaStatus(...)` | notify characteristic OTA Status |
-
-Jangan menulis flash internal setiap iterasi loop. Sediakan minimal 8 KiB untuk konfigurasi
-dan gunakan dua page/record dengan CRC serta sequence number agar listrik mati saat save
-tidak merusak kedua salinan. Perhatikan page flash yang dipakai wireless stack dan
-bootloader.
-
-## 6. Hubungkan callback timer
-
-Jika PA0 memakai TIM2 input capture:
-
-```c
-void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
-{
-    if (htim->Instance == TIM2 &&
-        htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
-        cdi_stm32_reference_isr(
-            HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1));
-    }
-}
-```
-
-Mulai input capture setelah `cdi_stm32_port_init()`:
-
-```c
-HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
-```
-
-Hubungkan compare TIM1:
-
-```c
-void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim)
-{
-    if (htim->Instance == TIM1 &&
-        htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
-        cdi_stm32_fire_compare_callback();
-    }
-}
-```
-
-Jangan memanggil kedua jalur EXTI dan input capture untuk satu pulsa, karena RPM akan
-terhitung dua kali.
-
-## 7. Inisialisasi dan main loop
-
-Tambahkan context dengan lifetime statis:
-
-```c
-static cdi_context_t g_cdi;
-```
-
-Setelah HAL, clock, GPIO, ADC, timer, dan BLE selesai diinisialisasi:
-
-```c
-cdi_stm32_port_init(&g_cdi);
-HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
-```
-
-Di loop utama:
-
-```c
-while (1)
-{
-    MX_APPE_Process();
-    cdi_stm32_process();
-}
-```
-
-Jangan menaruh delay panjang dalam loop. `cdi_stm32_process()` mengurus input, state
-machine, dan telemetry periodik.
-
-## 8. Build di VS Code
-
-Untuk proyek Cube yang digenerate sebagai CMake:
-
-1. Buka root proyek hasil CubeMX, bukan hanya folder
-   `firmware/stm32wb55/Core`.
-2. Pilih kit/toolchain ARM dari STM32CubeCLT.
-3. Jalankan CMake Configure.
-4. Jalankan CMake Build untuk konfigurasi Debug atau Release.
-
-Contoh terminal hanya jika generator proyek memang menyediakan preset CMake:
+Folder `firmware/stm32wb55` di repository Android hanya lapisan integrasi R9, bukan
+proyek mandiri.
 
 ```bash
-cmake --preset Debug
-cmake --build --preset Debug
+git clone https://github.com/phreakazone/Firmware_CDI_NS200.git
+cd Firmware_CDI_NS200
 ```
 
-Nama preset berbeda antar versi generator. Bila tidak ada `CMakePresets.json`, gunakan
-tombol Build extension STM32 atau buka proyek dengan STM32CubeIDE. Jangan memaksakan
-perintah di atas pada proyek Makefile.
+Repository lengkap sudah berisi bootloader, startup, linker script, CMSIS/HAL, WPAN,
+source CDI, CMake, generator factory image, dan release R8. Proyek sengaja tidak memakai
+`.ioc`; jangan menjalankan **Generate Code** dari CubeMX karena dapat menimpa integrasi
+khusus CDI/WPAN.
 
-Artefak biasanya berupa:
+## Tools
+
+Dari extension **STM32Cube for Visual Studio Code** / Bundle Manager, pasang:
+
+- GNU Arm Embedded toolchain; build R8 tercatat memakai 13.2.1;
+- CMake 3.22 atau lebih baru;
+- Ninja;
+- STM32CubeProgrammer;
+- CMake Tools.
+
+Restart VS Code setelah toolchain ditambahkan ke PATH.
+
+## Buka proyek
+
+**File → Open Folder** lalu buka root `Firmware_CDI_NS200`, yaitu folder yang berisi:
 
 ```text
-build/Debug/CDI_STM32WB55_R9.elf
-build/Debug/CDI_STM32WB55_R9.bin
+CMakeLists.txt
+STM32WB55CGUX_FLASH.ld
+Bootloader/
+Core/
+CDI/
+STM32_WPAN/
+Startup/
+ThirdParty/
+cmake/
 ```
 
-Lokasi tepat mengikuti generator/toolchain yang dipilih.
+Bukan hanya folder `Core` atau `CDI`.
 
-## 9. Flash
+## Configure dan build
 
-1. Pastikan firmware wireless CPU2 yang kompatibel sudah terpasang menggunakan
-   STM32CubeProgrammer sesuai petunjuk release CubeWB.
-2. Hubungkan ST-LINK: SWDIO, SWCLK, GND, 3V3 reference, dan NRST bila tersedia.
-3. Flash ELF/BIN aplikasi CPU1 melalui extension STM32 atau STM32CubeProgrammer.
-4. Jangan mass erase CPU2 tanpa rencana memulihkan wireless stack.
-5. Jalankan pertama kali tanpa power stage CDI.
+Repository saat ini tidak menyimpan `CMakePresets.json`, jadi gunakan perintah eksplisit
+berikut dari terminal root proyek:
 
-## 10. Verifikasi bench
+```bash
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi-gcc.cmake
+cmake --build build
+```
 
-1. Pastikan output ignition, charger, dan fan tetap OFF saat reset.
-2. Pastikan device BLE advertising dan dapat tersambung.
-3. Uji `PING`, `GET,CAPS`, dan `GET,PROFILE`.
-4. Verifikasi telemetry 20 byte.
-5. Uji ADC dengan tegangan rendah yang diketahui.
-6. Uji fan OFF/ON/AUTO dengan LED atau beban dummy.
-7. Berikan pulser terisolasi dan cocokkan RPM terhadap frekuensi serta pulses/rev.
-8. Ukur delay dan lebar pulsa gate menggunakan osiloskop.
-9. Uji limiter dan FIRST START sebelum menaikkan RPM.
-10. Sambungkan power stage hanya setelah semua kondisi gagal/boot menghasilkan output OFF.
+Untuk Release:
 
-## Masalah umum
+```bash
+cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi-gcc.cmake
+cmake --build build-release
+```
 
-| Gejala | Penyebab yang mungkin |
+Jika CMake masih memakai compiler PC, hapus hanya folder build yang gagal lalu configure
+ulang dengan `CMAKE_TOOLCHAIN_FILE` di atas.
+
+## Hasil build
+
+Konfigurasi Debug menghasilkan file berikut di folder `build`:
+
+```text
+NS200_CDI_R8_BOOT.elf
+NS200_CDI_R8_BOOT.hex
+NS200_CDI_R8_BOOT.bin
+NS200_CDI_R8_APP.elf
+NS200_CDI_R8_APP.hex
+NS200_CDI_R8_APP.bin
+NS200_CDI_R8_FACTORY.hex
+NS200_CDI_R8_FACTORY.bin
+```
+
+- Flash pertama: `NS200_CDI_R8_FACTORY.bin` pada `0x08000000`, atau factory HEX.
+- Update lewat BLE Android: hanya `NS200_CDI_R8_APP.bin`.
+- Jangan upload `FACTORY.bin` melalui OTA.
+
+## Flash pertama melalui USB DFU
+
+1. Lepaskan harness kendaraan dan seluruh catu selain USB.
+2. Tahan **BOOT0**.
+3. Tekan-lepas **NRST**.
+4. Lepaskan **BOOT0**.
+5. Sambungkan USB data.
+6. Buka STM32CubeProgrammer → pilih **USB** → Refresh → **USB1** → Connect.
+7. Pilih `build/NS200_CDI_R8_FACTORY.bin`.
+8. Isi alamat `0x08000000`, aktifkan Verify, lalu Download.
+9. Putuskan USB, pastikan BOOT0 LOW, lalu tekan-lepas NRST.
+
+CLI:
+
+```bash
+STM32_Programmer_CLI -c port=USB1 -w build/NS200_CDI_R8_FACTORY.bin 0x08000000 -v -s 0x08000000
+```
+
+## Flash lewat ST-LINK bila DFU tidak terdeteksi
+
+Hubungkan:
+
+| ST-LINK | STM32WB55 |
 |---|---|
-| `main.h: No such file` | port dibuild tanpa proyek Cube generated |
-| `htim1/htim2 undefined` | nama instance berbeda atau timer belum digenerate |
-| `CDI_* undefined reference` | `cdi_board.c`/adapter BLE belum diimplementasikan |
-| header `cdi_firmware.h` tidak ditemukan | include path `common/include` belum ditambahkan |
-| simbol core CDI undefined | `common/src/cdi_firmware.c` belum masuk target |
-| BLE tidak advertising | CPU2 wireless firmware, clock RF, IPCC, atau WPAN belum benar |
-| RPM dua kali nilai sebenarnya | EXTI dan input capture sama-sama memanggil ISR |
-| fan/advance tidak sesuai | sensor/calibration/profile belum dikonfigurasi dari aplikasi |
+| GND | GND |
+| SWCLK | PA14 |
+| SWDIO | PA13 |
+| VTREF | 3V3 |
 
-## Batas kesiapan
+Jangan sambungkan pin 5 V ST-LINK ketika board sudah diberi daya dari USB/buck.
+Programmer USBasp HW-437 bukan programmer STM32 dan tidak dapat menggantikan ST-LINK.
 
-Source dalam repository sekarang adalah **integration layer**, bukan file Cube lengkap.
-Firmware STM32 baru siap build setelah proyek Cube generated dan semua hook board di atas
-ada. Firmware baru siap kendaraan setelah BLE, timer, ADC, NVM, fail-safe, dan output daya
-lulus pengujian bench.
+## Wireless stack CPU2
+
+Aplikasi CPU1 tidak akan advertising bila CPU2 kosong atau wireless stack tidak cocok.
+Gunakan menu **Wireless Stack** STM32CubeProgrammer untuk memasang BLE full stack dari
+paket STM32CubeWB yang sesuai. Jangan mass erase CPU2 tanpa menyiapkan image stack untuk
+memulihkannya.
+
+Nama BLE tetap `NS200-CDI-R7` untuk kompatibilitas; versi/fitur dibaca aplikasi melalui
+`GET,CAPS`.
+
+## Verifikasi aman
+
+1. Flash pertama tanpa harness, gate, charger, dan koil.
+2. Pastikan board boot dan advertising.
+3. Uji koneksi serta characteristic menggunakan nRF Connect/LightBlue.
+4. Uji Android: `PING`, `GET,CAPS`, telemetry, mode, dan map.
+5. Uji output pulser/gate/charger dengan logic analyzer atau osiloskop.
+6. Pakai `NS200_CDI_R8_APP.bin` hanya setelah preflight OTA menunjukkan RPM 0,
+   output OFF, dan HV di bawah 30 V.
+
+Panduan asli proyek tersedia di
+[README_BUILD.md](https://github.com/phreakazone/Firmware_CDI_NS200/blob/main/README_BUILD.md).
