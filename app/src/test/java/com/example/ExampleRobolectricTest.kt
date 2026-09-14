@@ -9,7 +9,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+// Keep JVM tests on a Robolectric-supported platform image. This does not
+// change compileSdk/targetSdk (36); it only selects the simulated Android SDK.
+@Config(sdk = [35])
 class ExampleRobolectricTest {
 
   @Test
