@@ -1,6 +1,7 @@
 #include "cdi_firmware.h"
 
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -246,10 +247,12 @@ cdi_trigger_result_t cdi_on_reference_pulse(cdi_context_t *ctx, uint32_t now_us)
     return result;
 }
 
-static size_t replyf(char *reply, size_t size, const char *fmt,
-                     long a, long b, long c, long d, long e, long f) {
+static size_t replyf(char *reply, size_t size, const char *fmt, ...) {
     if (!reply || size == 0u) return 0u;
-    int n = snprintf(reply, size, fmt, a, b, c, d, e, f);
+    va_list args;
+    va_start(args, fmt);
+    int n = vsnprintf(reply, size, fmt, args);
+    va_end(args);
     return n < 0 ? 0u : (size_t)(n < (int)size ? n : (int)size - 1);
 }
 
