@@ -1,141 +1,73 @@
-# Firmware CDI Universal R9
+# Panduan build firmware CDI
 
-Dokumen ini khusus firmware. Panduan Android tetap berada di [README utama](../README.md).
+## Pilih source yang benar
 
-## Jawaban singkat: kenapa source firmware terlihat sedikit?
+Firmware lengkap yang sudah pernah dibuild berada pada dua repository yang sejak awal
+ditautkan oleh aplikasi:
 
-R9 memakai **satu core C99 bersama**, bukan menyalin seluruh logika dua kali:
-
-- `common/src/cdi_firmware.c`: map, limiter, advance, FIRST START, suhu/fan,
-  telemetry, protokol, dyno, dan state OTA.
-- `esp32/main/cdi_port.c`: timer, GPIO, ADC, NVS dan OTA khusus ESP32.
-- `stm32wb55/Core/Src/cdi_port.c`: penghubung core ke HAL STM32.
-
-Karena itu adapter per MCU memang pendek. Namun ukuran yang sedikit bukan berarti kedua
-folder saat ini sudah merupakan proyek firmware lengkap.
-
-## Status build saat ini
-
-| Bagian | Status | Keterangan |
+| Target | Source lengkap | Status yang tercatat |
 |---|---|---|
-| Core C99 | Ada | Dapat dikompilasi setelah dimasukkan ke target MCU |
-| ESP32 CMake/partition/port | Ada | Struktur ESP-IDF tersedia |
-| ESP32 BLE GATT | **Belum ada** | Empat fungsi `cdi_ble_*` masih berupa `extern` |
-| STM32 port HAL | Ada | Jalur pemanggilan core tersedia |
-| STM32 CubeMX `.ioc`, startup, linker, HAL dan wireless stack | **Belum ada** | Folder ini belum proyek STM32Cube mandiri |
-| STM32 implementasi board/NVM/BLE | **Belum ada** | Fungsi `CDI_*` masih berupa hook `extern` |
-| STM32 bootloader OTA | **Belum ada** | Sengaja dinonaktifkan dengan `CDI_STM32_OTA_ENABLE=0` |
-| Android CI | Lulus | Workflow Android **tidak mengompilasi firmware** |
+| WeAct STM32WB55CGU6 | [Firmware_CDI_NS200](https://github.com/phreakazone/Firmware_CDI_NS200) | R8: CMake, bootloader, startup, linker, HAL/WPAN, release binary; build GNU Arm 13.2.1 terverifikasi |
+| ESP32-WROOM-32 | [Firmware_CDI_NS200_ESP32](https://github.com/phreakazone/Firmware_CDI_NS200_ESP32) | R8 port: NimBLE, board layer, GPTimer/MCPWM, OTA source; build ESP-IDF v6.1 terverifikasi |
 
-**Kesimpulan:** pada commit R9 saat ini, menekan tombol Build langsung pada folder
-`firmware/stm32wb55` belum akan menghasilkan firmware. ESP-IDF juga akan berhenti pada
-linker sampai adapter BLE ditambahkan. Hal ini sekarang dinyatakan terbuka agar file yang
-belum ada tidak disangka sudah siap flash.
+**Jangan build folder kecil `firmware/stm32wb55` atau `firmware/esp32` di repository
+Android ini sebagai firmware produksi.** Folder tersebut adalah pekerjaan integrasi core
+R9 dan memang hanya berisi core/port ringkas, bukan pengganti proyek lengkap yang sudah
+ada pada dua tautan di atas.
 
-## Struktur direktori
+Itulah sebabnya source tampak sangat sedikit: yang terbuka adalah lapisan integrasi R9,
+bukan paket firmware R8 lengkap.
 
-```text
-firmware/
-├── README.md
-├── common/
-│   ├── include/cdi_firmware.h
-│   └── src/cdi_firmware.c
-├── esp32/
-│   ├── CMakeLists.txt
-│   ├── partitions.csv
-│   ├── sdkconfig.defaults
-│   ├── README.md
-│   └── main/
-│       ├── CMakeLists.txt
-│       └── cdi_port.c
-└── stm32wb55/
-    ├── README.md
-    └── Core/
-        ├── Inc/cdi_port.h
-        └── Src/cdi_port.c
+## Panduan sesuai VS Code Anda
+
+- [Build ESP32 dengan extension ESP-IDF](esp32/README.md)
+- [Build STM32WB55 dengan STM32Cube/CMake](stm32wb55/README.md)
+
+## Ringkasan paling cepat
+
+### ESP32
+
+```bash
+git clone https://github.com/phreakazone/Firmware_CDI_NS200_ESP32.git
+cd Firmware_CDI_NS200_ESP32
+idf.py set-target esp32
+idf.py build
+idf.py -p COM7 flash monitor
 ```
 
-## Pilih target
+Gunakan ESP-IDF **v6.1**, karena versi itu yang dicatat sudah berhasil membuild seluruh
+source termasuk `cdi_ble_nimble.c`.
 
-- Untuk **ESP32-WROOM-32**, baca [panduan ESP-IDF](esp32/README.md).
-- Untuk **WeAct STM32WB55CGU6**, baca [panduan STM32Cube](stm32wb55/README.md).
-- Jangan mencampur file port ESP32 ke proyek STM32 atau sebaliknya.
-- `common/include` dan `common/src` dipakai oleh keduanya.
+### STM32WB55
 
-## Pin yang menjadi kontrak aplikasi dan firmware
+```bash
+git clone https://github.com/phreakazone/Firmware_CDI_NS200.git
+cd Firmware_CDI_NS200
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi-gcc.cmake
+cmake --build build
+```
 
-| Fungsi | STM32WB55 | ESP32-WROOM-32 |
-|---|---|---|
-| Pulser | PA0 / TIM2 | GPIO4 |
-| Gate Center | PA1 | GPIO25 |
-| Gate Side | PA2 | GPIO26 |
-| Charger A/B | PA9 / PB8 | GPIO18 / GPIO19 |
-| TPS | PA3 | GPIO36 |
-| Suhu | PA4 | GPIO39 |
-| HV Center/Side | PA6 / PA7 | GPIO35 / GPIO32 |
-| Fan relay | PB5 | GPIO13 |
-| OEM Learn Center/Side | PB3 / PB4 | GPIO16 / GPIO17 |
+Flash pertama memakai:
 
-Pin MCU hanya menuju rangkaian conditioner/driver. Pulser, primer koil, aki 12 V,
-kapasitor CDI dan motor fan **tidak boleh** disambungkan langsung ke pin MCU.
+```text
+build/NS200_CDI_R8_FACTORY.bin @ 0x08000000
+```
 
-## Kontrak BLE R9
+Update BLE berikutnya memakai:
 
-UUID dasar yang harus dibuat oleh adapter BLE:
+```text
+build/NS200_CDI_R8_APP.bin
+```
 
-| Characteristic | UUID akhir | Arah |
-|---|---|---|
-| Service | `...1000` | service |
-| Telemetry | `...1001` | notify, 20 byte |
-| Command | `...1002` | write |
-| Response | `...1003` | notify |
-| OTA data | `...1004` | write without response |
-| OTA status | `...1005` | notify, 16 byte |
+Jangan mengirim `FACTORY.bin` melalui menu OTA Android.
 
-UUID lengkap memakai bentuk
-`7a8f100X-6c9d-4e40-a45f-0b4b4e533230`.
+## Perbedaan build dan siap kendaraan
 
-Android mengirim command dalam frame
-`@sequence,COMMAND*CRC16\n`. Adapter port menyerahkan frame ke
-`cdi_protocol_exchange()`; response harus dikirim kembali melalui characteristic
-Response. Paket telemetry dibuat oleh `cdi_build_telemetry_packet()`.
+Kedua proyek memiliki bukti build source. Itu tidak otomatis membuktikan rangkaian fisik
+aman. Sebelum ke kendaraan tetap diperlukan pemeriksaan BLE nyata, pin output, charger,
+pulser, sensor, brownout, serta timing/jitter di bench.
 
-## Batas format, bukan batas aman mesin
-
-| Data | Rentang format |
-|---|---:|
-| RPM | 0–30.000 |
-| Advance | -30,0° sampai 80,0° |
-| Map | maksimum 32 × 16 |
-| Slot | 4 |
-| Pulser | 1–12 pulsa/rev |
-
-Nilai tersebut hanya kapasitas penyimpanan/protokol. Batas sebenarnya mengikuti profil,
-geometri pulser, koil, rangkaian charger dan kemampuan mekanis mesin.
-
-## Urutan aman setelah firmware target benar-benar berhasil dibuat
-
-1. Lepaskan rangkaian gate SCR/IGBT dan charger dari MCU.
-2. Flash MCU hanya melalui USB/SWD dengan catu daya terbatas.
-3. Pastikan BLE terdeteksi dan `PING`, `GET,CAPS`, `GET,PROFILE` bekerja.
-4. Uji pulser memakai sumber sinyal rendah/terisolasi.
-5. Uji telemetry, TPS, suhu dan fan tanpa memasang koil.
-6. Uji output gate memakai osiloskop/logic analyzer.
-7. Baru sambungkan power stage pada bench supply ber-current-limit.
-8. FIRST START tetap memakai limiter 3.000 RPM dan advance maksimum 10°.
-9. Jangan melakukan flashing pertama dengan sistem terpasang langsung pada kendaraan.
-
-## Artefak yang nanti dihasilkan
-
-Jika target sudah lengkap:
-
-- ESP32:
-  - `build/bootloader/bootloader.bin`
-  - `build/partition_table/partition-table.bin`
-  - `build/cdi_universal_r9.bin`
-- STM32:
-  - `Debug/<nama-proyek>.elf`
-  - `Debug/<nama-proyek>.bin`
-  - atau lokasi serupa sesuai generator CubeMX/CMake.
-
-Tidak ada file firmware siap flash yang dihasilkan oleh workflow Android saat ini.
+Khusus ESP32, konfigurasi `sdkconfig` saat ini tercatat memakai single-app partition.
+Build/flash USB tetap dapat dilakukan, tetapi jalur BLE OTA perlu tabel partisi OTA sebelum
+boleh dianggap berfungsi. Jangan menganggap keberadaan file `cdi_r8_ota.c` saja sudah
+membuat partisi OTA tersedia.

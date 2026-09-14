@@ -1,10 +1,12 @@
 # CDI Universal R9 (v9.0.0) — Android Tuning, Dual-MCU Firmware & OTA
 
 
-> **Kontrak R9 yang berlaku:** seluruh firmware sekarang berada di repository ini:
-> [core bersama](firmware/common), [STM32WB55](firmware/stm32wb55), dan
-> [ESP32](firmware/esp32). Tautan/prosedur R8 di bagian historis hanya untuk
-> kompatibilitas perangkat lama dan bukan sumber firmware R9.
+> **Sumber firmware lengkap yang dapat dibuild:** gunakan
+> [STM32WB55](https://github.com/phreakazone/Firmware_CDI_NS200) atau
+> [ESP32-WROOM-32](https://github.com/phreakazone/Firmware_CDI_NS200_ESP32).
+> Folder [firmware](firmware) di repository Android adalah lapisan pengembangan/integrasi
+> R9, bukan pengganti kedua paket firmware lengkap tersebut.
+> Lihat [panduan build firmware khusus](firmware/README.md).
 
 ## Alur integrasi R9
 
@@ -27,7 +29,7 @@
 
 Aplikasi Android kendali terpadu untuk unit pengapian **CDI Programmable NS200-CDI-R8** (Bajaj Pulsar 200 DTS-i & Modifikasi Dual/Triple Spark). Menggabungkan kokpit telemetri balap gaya MoTeC, pemetaan kurva pengapian 4-slot dinamis, kalibrasi strobo pulser TDC, mode pembelajaran kurva asli (**OEM Learn Mode**), sistem pengunggah firmware nirkabel (**BLE OTA Firmware Uploader**), alur aktivasi mandiri aman (**Safe DIY Mode**), katalog modul jadi pasaran (*Commercial Off-the-Shelf Drop-in Modules*), bengkel panduan kabel interaktif, diagnostik paket data biner BLE, serta simulator akustik mesin knalpot multi-silinder (*Live Audio Engine Test Bench*).
 
-Mendukung Arsitektur Lintas Platform (*Dual-Platform*): [**WeAct STM32WB55**](https://github.com/phreakazone/Firmware_CDI_NS200) dan [**ESP32 WROOM**](firmware/esp32).
+Mendukung Arsitektur Lintas Platform (*Dual-Platform*): [**WeAct STM32WB55**](https://github.com/phreakazone/Firmware_CDI_NS200) dan [**ESP32 WROOM**](https://github.com/phreakazone/Firmware_CDI_NS200_ESP32). Panduan build keduanya ada di [firmware/README.md](firmware/README.md).
 
 ---
 
