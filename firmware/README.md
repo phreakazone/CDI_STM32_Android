@@ -1,14 +1,24 @@
 # Panduan Build Firmware CDI R9 (STM32WB55 & ESP32)
 
+### Konvensi Identitas Bluetooth BLE Permanen
+Nama broadcast BLE (*Device Advertising Name*) telah distandardisasi menjadi:
+```c
+#define DEVICE_NAME "NS200-CDI"
+```
+Tanpa embel-embel kode versi (`R7`, `R8`, dll.), baik di firmware ESP32 (`main/cdi_ble.c`) maupun STM32WB55. Aplikasi Android memindai dan mengenali perangkat ini secara otomatis.
+
+---
+
 Perlu dipahami:
-- Repository di GitHub (`phreakazone/Firmware_CDI_NS200` dan `phreakazone/Firmware_CDI_NS200_ESP32`) adalah baseline **R8**.
-- Kode yang sudah diselaraskan ke **R9 Protocol (v5)** ada di folder `/firmware` pada repository Android ini:
+- Repository di GitHub (`phreakazone/Firmware_CDI_NS200` dan `phreakazone/Firmware_CDI_NS200_ESP32`) telah ditingkatkan ke **Engine R9 v5.0**:
+  - `CDI_R5_RPM_POINTS = 32` dan `CDI_R5_TPS_POINTS = 16` (Grid 32x16).
+  - `CDI_R5_STORE_VERSION = 5`.
+  - Dukungan penuh Dyno Live Trim, Profil Universal, kalibrasi suhu NTC 3-titik, dan partisi dual OTA A/B.
+- Kode lapisan bersama R9 ada di folder `/firmware` pada repository Android ini:
   - `firmware/common/include/cdi_firmware.h` (Data model R9 & Protocol v5)
   - `firmware/common/src/cdi_firmware.c` (Core Engine R9, Dyno Trim, Setup Wizard, Strobe, Map 32x16)
   - `firmware/esp32/` (Port ESP32 mandiri dengan NimBLE R9 UUIDs & Partisi OTA)
   - `firmware/stm32wb55/Core/` (Port STM32WB55 R9)
-
-Jika Anda hanya meng-clone repo GitHub tanpa menambal file dari folder `/firmware` ini, firmware yang ter-build masih berupa versi lama R8.
 
 ---
 
