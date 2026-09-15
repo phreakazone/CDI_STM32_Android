@@ -146,25 +146,15 @@ fun QuickSetupGuideScreen(viewModel: CdiViewModel) {
                 "5. Modul"
             ).forEachIndexed { index, title ->
                 val isSel = selectedTab == index
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(if (isSel) MotecOrange.copy(alpha = 0.25f) else SurfacePanel.copy(alpha = 0.4f))
-                        .border(1.dp, if (isSel) MotecOrange else BorderSubtle, RoundedCornerShape(3.dp))
-                        .clickable { selectedTab = index }
-                        .padding(vertical = 5.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = title,
-                        fontSize = 10.sp,
-                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isSel) MotecOrange else TextSecondary,
-                        fontFamily = FontFamily.Monospace,
-                        maxLines = 1
-                    )
-                }
+                MotecButton(
+                    text = title,
+                    onClick = { selectedTab = index },
+                    color = if (isSel) MotecOrange else TextMuted,
+                    height = 28.dp,
+                    fontSize = 9.5.sp,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 2.dp)
+                )
             }
         }
 
@@ -1043,42 +1033,22 @@ private fun McuHeaderView(viewModel: CdiViewModel) {
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         val isStm = selectedPlatform == McuPlatform.STM32WB55
-                        Surface(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .clickable { viewModel.setMcuPlatform(McuPlatform.STM32WB55) },
-                            color = if (isStm) ElectricCyan.copy(alpha = 0.2f) else CardBackground,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, if (isStm) ElectricCyan else BorderSubtle),
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            Text(
-                                text = "STM32WB55",
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                color = if (isStm) ElectricCyan else TextMuted
-                            )
-                        }
+                        MotecButton(
+                            text = "STM32WB55",
+                            onClick = { viewModel.setMcuPlatform(McuPlatform.STM32WB55) },
+                            color = if (isStm) ElectricCyan else TextMuted,
+                            height = 26.dp,
+                            fontSize = 9.5.sp
+                        )
 
                         val isEsp = selectedPlatform == McuPlatform.ESP32_WROOM
-                        Surface(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .clickable { viewModel.setMcuPlatform(McuPlatform.ESP32_WROOM) },
-                            color = if (isEsp) SparkAmber.copy(alpha = 0.2f) else CardBackground,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, if (isEsp) SparkAmber else BorderSubtle),
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            Text(
-                                text = "ESP32-WROOM",
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                color = if (isEsp) SparkAmber else TextMuted
-                            )
-                        }
+                        MotecButton(
+                            text = "ESP32-WROOM",
+                            onClick = { viewModel.setMcuPlatform(McuPlatform.ESP32_WROOM) },
+                            color = if (isEsp) SparkAmber else TextMuted,
+                            height = 26.dp,
+                            fontSize = 9.5.sp
+                        )
                     }
                 }
             }

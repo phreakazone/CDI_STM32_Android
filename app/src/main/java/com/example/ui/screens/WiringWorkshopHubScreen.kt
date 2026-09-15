@@ -36,6 +36,7 @@ import id.ns200.cdir7.ui.theme.MotecOrange
 import id.ns200.cdir7.ui.theme.RacingLime
 import id.ns200.cdir7.ui.theme.SensorAmber
 import id.ns200.cdir7.ui.theme.TextMuted
+import id.ns200.cdir7.ui.components.MotecButton
 
 enum class WorkshopSubTab(
     val title: String,
@@ -182,57 +183,23 @@ fun WiringWorkshopHubScreen(
                         WorkshopSubTab.PINOUT_LIB -> ElectricCyan
                         WorkshopSubTab.COMMISSION -> RacingLime
                     }
-
-                    Surface(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(3.dp))
-                            .clickable { activeSubTab = subTab }
-                            .testTag("subtab_${subTab.name.lowercase()}"),
-                        color = if (isSelected) pillColor.copy(alpha = 0.22f) else CardBackground,
-                        shape = RoundedCornerShape(3.dp),
-                        border = BorderStroke(
-                            1.dp,
-                            if (isSelected) pillColor else BorderSubtle
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = subTab.icon,
-                                contentDescription = null,
-                                tint = if (isSelected) pillColor else TextSecondaryDark,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = subTab.title,
-                                fontSize = 10.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) TextPrimaryDark else TextSecondaryDark,
-                                fontFamily = FontFamily.Monospace
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Surface(
-                                shape = RoundedCornerShape(2.dp),
-                                color = if (isSelected) pillColor.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.3f)
-                            ) {
-                                Text(
-                                    text = when (subTab) {
-                                        WorkshopSubTab.STEPS -> "${verificationProgress.first}/${verificationProgress.second}"
-                                        WorkshopSubTab.MCU_PINOUT -> if (activePlatform == McuPlatform.STM32WB55) "35 PIN" else "38 PIN"
-                                        else -> subTab.badge
-                                    },
-                                    fontSize = 7.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = if (isSelected) pillColor else TextMuted,
-                                    modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
-                                )
-                            }
-                        }
+                    val badgeText = when (subTab) {
+                        WorkshopSubTab.STEPS -> "${verificationProgress.first}/${verificationProgress.second}"
+                        WorkshopSubTab.MCU_PINOUT -> if (activePlatform == McuPlatform.STM32WB55) "35 PIN" else "38 PIN"
+                        else -> subTab.badge
                     }
+
+                    MotecButton(
+                        text = subTab.title,
+                        onClick = { activeSubTab = subTab },
+                        color = if (isSelected) pillColor else TextMuted,
+                        icon = subTab.icon,
+                        height = 28.dp,
+                        fontSize = 9.5.sp,
+                        badge = badgeText,
+                        testTag = "subtab_${subTab.name.lowercase()}",
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                    )
                 }
             }
         }

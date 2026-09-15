@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.model.WiringStep
 import com.example.ui.theme.*
+import id.ns200.cdir7.ui.components.MotecButton
 
 @Composable
 fun StepVerificationDialog(
@@ -189,13 +190,19 @@ fun StepVerificationDialog(
         // Action Buttons
         Row(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.End
+          horizontalArrangement = Arrangement.End,
+          verticalAlignment = Alignment.CenterVertically
         ) {
-          TextButton(onClick = onDismiss) {
-            Text("Batal", color = TextSecondaryDark)
-          }
+          MotecButton(
+            text = "BATAL",
+            onClick = onDismiss,
+            color = TextSecondaryDark,
+            height = 32.dp,
+            fontSize = 11.sp
+          )
           Spacer(modifier = Modifier.width(8.dp))
-          Button(
+          MotecButton(
+            text = "VERIFIKASI & LANJUT",
             onClick = {
               onConfirmVerification(
                 measuredValueInput.ifBlank { step.expectedValue },
@@ -203,17 +210,11 @@ fun StepVerificationDialog(
               )
             },
             enabled = isPhysicalChecked,
-            colors = ButtonDefaults.buttonColors(
-              containerColor = SafetyGreen,
-              contentColor = Color.Black,
-              disabledContainerColor = Color(0xFF223040),
-              disabledContentColor = Color(0xFF64748B)
-            )
-          ) {
-            Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("Verifikasi & Lanjut", fontWeight = FontWeight.Bold)
-          }
+            color = SafetyGreen,
+            icon = Icons.Default.CheckCircle,
+            height = 32.dp,
+            fontSize = 11.sp
+          )
         }
       }
     }

@@ -43,6 +43,7 @@ import androidx.core.location.LocationManagerCompat
 import com.example.ui.screens.WiringWorkshopHubScreen
 import com.example.viewmodel.WiringViewModel
 import id.ns200.cdir7.CdiViewModel
+import id.ns200.cdir7.ui.components.MotecButton
 import id.ns200.cdir7.McuPlatform
 import id.ns200.cdir7.ScreenTab
 import id.ns200.cdir7.Telemetry
@@ -373,65 +374,47 @@ fun MotorsportTopBar(
                     }
                 }
 
-                // Action buttons: DEMO and CONNECT (Spacious, fixed minimum widths to prevent squeezing)
+                // Action buttons: DEMO and CONNECT (Motec square semi-transparent style)
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Demo Mode Toggle
-                    OutlinedButton(
+                    MotecButton(
+                        text = if (isSimulation) "SIM ON" else "DEMO",
                         onClick = onDemoClick,
-                        shape = RoundedCornerShape(6.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = if (isSimulation) MotecOrange else TextSecondary
-                        ),
-                        modifier = Modifier
-                            .heightIn(min = 36.dp)
-                            .testTag("topbar_demo_btn")
-                    ) {
-                        Text(
-                            text = if (isSimulation) "SIM ON" else "DEMO",
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
+                        color = if (isSimulation) MotecOrange else TextSecondary,
+                        height = 30.dp,
+                        fontSize = 11.sp,
+                        testTag = "topbar_demo_btn"
+                    )
 
-                    // BLE Connect Button (Generous minWidth so KONEK is never cramped)
-                    Button(
-                        onClick = onConnectClick,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = when {
-                                isConnected -> RaceRedline
-                                isBleScanning || isBleBusy -> ElectricCyan
-                                else -> RacingLime
-                            }
-                        ),
-                        shape = RoundedCornerShape(6.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                        modifier = Modifier
-                            .defaultMinSize(minWidth = 76.dp)
-                            .heightIn(min = 36.dp)
-                            .testTag("topbar_connect_btn")
-                    ) {
-                        Text(
-                            text = when {
-                                isConnected -> "PUTUS"
-                                isBleScanning -> "SCAN"
-                                isBleBusy -> "BATAL"
-                                else -> "KONEK"
-                            },
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Black,
-                            color = CarbonDark,
-                            fontFamily = FontFamily.Monospace,
-                            maxLines = 1,
-                            softWrap = false
-                        )
+                    // BLE Connect Button (Motec crisp semi-transparent)
+                    val connectColor = when {
+                        isConnected -> RaceRedline
+                        isBleScanning || isBleBusy -> ElectricCyan
+                        else -> RacingLime
                     }
+                    val connectText = when {
+                        isConnected -> "PUTUS"
+                        isBleScanning -> "SCAN"
+                        isBleBusy -> "BATAL"
+                        else -> "KONEK"
+                    }
+                    val connectIcon = when {
+                        isConnected -> Icons.Default.BluetoothConnected
+                        isBleScanning || isBleBusy -> Icons.Default.Refresh
+                        else -> Icons.Default.Bluetooth
+                    }
+                    MotecButton(
+                        text = connectText,
+                        onClick = onConnectClick,
+                        color = connectColor,
+                        icon = connectIcon,
+                        height = 30.dp,
+                        fontSize = 11.sp,
+                        testTag = "topbar_connect_btn"
+                    )
                 }
             }
 

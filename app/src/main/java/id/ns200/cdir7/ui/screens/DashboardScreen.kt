@@ -661,32 +661,6 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                     }
                 }
 
-                if (!isBleConnected && (!demoEngineRunning || currentRpm <= 50)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(SurfacePanel)
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Mesin simulasi mati (0 RPM)",
-                            fontSize = 10.sp,
-                            color = SensorAmber,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        MotecButton(
-                            text = "STARTER",
-                            onClick = { viewModel.simulateStartEngine() },
-                            color = RacingLime,
-                            icon = Icons.Default.PlayArrow,
-                            height = 26.dp
-                        )
-                    }
-                }
-
                 // Interactive Slider
                 Slider(
                     value = displaySliderValue,
@@ -721,7 +695,7 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                     Text("$revLimit REDLINE", fontSize = 9.sp, color = RaceRedline, fontFamily = FontFamily.Monospace)
                 }
 
-                // Quick Preset RPM Buttons & Momentary Blip
+                // Quick Preset RPM Buttons & Momentary Blip (Motec styling)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -759,13 +733,15 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                         modifier = Modifier.weight(1.2f)
                     )
 
-                    // Momentary Quick Blip & Hold Gas Button (Simulasi Putar Tuas Gas)
+                    // Momentary Quick Blip & Hold Gas Button (Motec Box semi-transparan bergaya balap)
+                    val blipColor = if (isRevving) RacingLime else MotecOrange
                     Box(
                         modifier = Modifier
                             .weight(1.3f)
-                            .height(34.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isRevving) RacingLime else MotecOrange)
+                            .height(30.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(blipColor.copy(alpha = if (isRevving) 0.35f else 0.14f))
+                            .border(1.dp, blipColor, RoundedCornerShape(3.dp))
                             .pointerInput(Unit) {
                                 detectTapGestures(
                                     onTap = {
@@ -789,13 +765,25 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                             .testTag("hold_to_rev_blip_button"),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = if (isRevving) "GAS!!" else "BLIP GAS",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Black,
-                            color = CarbonDark,
-                            fontFamily = FontFamily.Monospace
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = if (isRevving) Icons.Default.Bolt else Icons.Default.TouchApp,
+                                contentDescription = null,
+                                tint = blipColor,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(Modifier.width(3.dp))
+                            Text(
+                                text = if (isRevving) "GAS!!" else "BLIP GAS",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = blipColor,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
                     }
                 }
             }
@@ -813,26 +801,14 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                 color = TextSecondary,
                 fontFamily = FontFamily.Monospace
             )
-            TextButton(
+            MotecButton(
+                text = "RESET RPM / IDLE",
                 onClick = { viewModel.resetVirtualEngine() },
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                modifier = Modifier.testTag("reset_engine_btn")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = "Reset Engine",
-                    tint = SensorAmber,
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "RESET RPM / IDLE",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = SensorAmber,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
+                color = SensorAmber,
+                icon = Icons.Default.Refresh,
+                height = 26.dp,
+                testTag = "reset_engine_btn"
+            )
         }
 
         // TECHNICAL DATA GRID & HARDWARE DIAGNOSTICS (MoTeC / AIM Race Studio Style)

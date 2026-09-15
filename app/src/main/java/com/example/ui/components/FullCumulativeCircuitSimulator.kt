@@ -34,6 +34,8 @@ import com.example.model.PcbBoard
 import com.example.model.WiringStep
 import com.example.ui.theme.*
 import id.ns200.cdir7.McuPlatform
+import id.ns200.cdir7.ui.components.MotecButton
+import id.ns200.cdir7.ui.theme.TextMuted
 import kotlinx.coroutines.launch
 
 /**
@@ -123,46 +125,29 @@ fun FullCumulativeCircuitSimulator(
 
       Spacer(modifier = Modifier.height(10.dp))
 
-      // Mode Selector Tabs
+      // Mode Selector Tabs (Motec square semi-transparent style)
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
       ) {
-        Button(
+        MotecButton(
+          text = "HINGGA LANGKAH INI (${currentStep.stepNumber})",
           onClick = { showFinal100Percent = false },
-          colors = ButtonDefaults.buttonColors(
-            containerColor = if (!showFinal100Percent) TechPrimary else Color(0xFF1E293B),
-            contentColor = if (!showFinal100Percent) Color.Black else TextPrimaryDark
-          ),
-          shape = RoundedCornerShape(8.dp),
-          modifier = Modifier.weight(1f),
-          contentPadding = PaddingValues(vertical = 8.dp)
-        ) {
-          Text(
-            text = "Hingga Langkah Ini (${currentStep.stepNumber})",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold
-          )
-        }
+          color = if (!showFinal100Percent) ElectricCyan else TextMuted,
+          height = 32.dp,
+          fontSize = 10.sp,
+          modifier = Modifier.weight(1f)
+        )
 
-        Button(
+        MotecButton(
+          text = "RANGKAIAN FINAL (100%)",
           onClick = { showFinal100Percent = true },
-          colors = ButtonDefaults.buttonColors(
-            containerColor = if (showFinal100Percent) SafetyGreen else Color(0xFF1E293B),
-            contentColor = if (showFinal100Percent) Color.Black else TextPrimaryDark
-          ),
-          shape = RoundedCornerShape(8.dp),
-          modifier = Modifier.weight(1f),
-          contentPadding = PaddingValues(vertical = 8.dp)
-        ) {
-          Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(14.dp))
-          Spacer(modifier = Modifier.width(4.dp))
-          Text(
-            text = "Rangkaian Final (100%)",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold
-          )
-        }
+          color = if (showFinal100Percent) SafetyGreen else TextMuted,
+          icon = Icons.Default.CheckCircle,
+          height = 32.dp,
+          fontSize = 10.sp,
+          modifier = Modifier.weight(1f)
+        )
       }
 
       Spacer(modifier = Modifier.height(12.dp))

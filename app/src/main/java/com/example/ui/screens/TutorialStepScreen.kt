@@ -104,18 +104,15 @@ fun TutorialStepScreen(
           horizontalArrangement = Arrangement.SpaceBetween
         ) {
           // Left: Prev Step Button
-          IconButton(
+          MotecButton(
+            text = "PREV",
             onClick = { viewModel.prevStep() },
             enabled = uiState.selectedStepIndex > 0,
-            modifier = Modifier.size(34.dp)
-          ) {
-            Icon(
-              imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-              contentDescription = "Sebelumnya",
-              tint = if (uiState.selectedStepIndex > 0) ElectricCyan else TextTertiaryDark,
-              modifier = Modifier.size(18.dp)
-            )
-          }
+            color = if (uiState.selectedStepIndex > 0) ElectricCyan else TextMuted,
+            icon = Icons.AutoMirrored.Filled.ArrowBack,
+            height = 26.dp,
+            fontSize = 9.sp
+          )
 
           // Center: Step Title & Badges
           Column(
@@ -171,18 +168,15 @@ fun TutorialStepScreen(
           }
 
           // Right: Next Step Button
-          IconButton(
+          MotecButton(
+            text = "NEXT",
             onClick = { viewModel.nextStep() },
             enabled = uiState.selectedStepIndex < viewModel.allSteps.size - 1,
-            modifier = Modifier.size(34.dp)
-          ) {
-            Icon(
-              imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-              contentDescription = "Selanjutnya",
-              tint = if (uiState.selectedStepIndex < viewModel.allSteps.size - 1) ElectricCyan else TextTertiaryDark,
-              modifier = Modifier.size(18.dp)
-            )
-          }
+            color = if (uiState.selectedStepIndex < viewModel.allSteps.size - 1) ElectricCyan else TextMuted,
+            icon = Icons.AutoMirrored.Filled.ArrowForward,
+            height = 26.dp,
+            fontSize = 9.sp
+          )
         }
 
         Spacer(modifier = Modifier.height(6.dp))
@@ -266,74 +260,32 @@ fun TutorialStepScreen(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
       ) {
         // Button 1: Mode Wiring Pin-ke-Pin (Default)
-        Surface(
-          shape = RoundedCornerShape(8.dp),
-          color = if (!uiState.showFullCircuitSimulator) TechPrimary else Color(0xFF172333),
-          border = BorderStroke(1.dp, if (!uiState.showFullCircuitSimulator) TechPrimary else Color(0xFF26374D)),
-          modifier = Modifier
-            .weight(1f)
-            .height(32.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .clickable {
-              viewModel.setFullCircuitSimulator(false)
-              isCanvasExpanded = true
-            }
-        ) {
-          Row(
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Icon(
-              imageVector = Icons.Default.Cable,
-              contentDescription = null,
-              tint = if (!uiState.showFullCircuitSimulator) Color.Black else ElectricCyan,
-              modifier = Modifier.size(14.dp)
-            )
-            Spacer(modifier = Modifier.width(5.dp))
-            Text(
-              text = "Diagram Pin-ke-Pin",
-              fontSize = 11.sp,
-              fontWeight = FontWeight.Bold,
-              color = if (!uiState.showFullCircuitSimulator) Color.Black else TextPrimaryDark
-            )
-          }
-        }
+        MotecButton(
+          text = "DIAGRAM PIN-KE-PIN",
+          onClick = {
+            viewModel.setFullCircuitSimulator(false)
+            isCanvasExpanded = true
+          },
+          color = if (!uiState.showFullCircuitSimulator) ElectricCyan else TextMuted,
+          icon = Icons.Default.Cable,
+          height = 30.dp,
+          fontSize = 10.sp,
+          modifier = Modifier.weight(1f)
+        )
 
         // Button 2: Simulator PCB Kumulatif
-        Surface(
-          shape = RoundedCornerShape(8.dp),
-          color = if (uiState.showFullCircuitSimulator) ElectricCyan else Color(0xFF172333),
-          border = BorderStroke(1.dp, if (uiState.showFullCircuitSimulator) ElectricCyan else Color(0xFF26374D)),
-          modifier = Modifier
-            .weight(1f)
-            .height(32.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .clickable {
-              viewModel.setFullCircuitSimulator(true)
-              isCanvasExpanded = true
-            }
-        ) {
-          Row(
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Icon(
-              imageVector = Icons.Default.Layers,
-              contentDescription = null,
-              tint = if (uiState.showFullCircuitSimulator) Color.Black else ElectricCyan,
-              modifier = Modifier.size(14.dp)
-            )
-            Spacer(modifier = Modifier.width(5.dp))
-            Text(
-              text = "PCB Kumulatif Full",
-              fontSize = 11.sp,
-              fontWeight = FontWeight.Bold,
-              color = if (uiState.showFullCircuitSimulator) Color.Black else TextPrimaryDark
-            )
-          }
-        }
+        MotecButton(
+          text = "PCB KUMULATIF FULL",
+          onClick = {
+            viewModel.setFullCircuitSimulator(true)
+            isCanvasExpanded = true
+          },
+          color = if (uiState.showFullCircuitSimulator) ElectricCyan else TextMuted,
+          icon = Icons.Default.Layers,
+          height = 30.dp,
+          fontSize = 10.sp,
+          modifier = Modifier.weight(1f)
+        )
       }
     }
 
@@ -877,19 +829,17 @@ fun TutorialStepScreen(
       }
     }
 
-    // 5. DOCKED BOTTOM ACTION BAR
+    // 5. DOCKED BOTTOM ACTION BAR (Directly flush above main navigation bar, zero wasted space)
     Surface(
       color = TechSurfaceElevated,
-      tonalElevation = 8.dp,
-      modifier = Modifier
-        .fillMaxWidth()
-        .windowInsetsPadding(WindowInsets.navigationBars)
+      tonalElevation = 6.dp,
+      modifier = Modifier.fillMaxWidth()
     ) {
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 8.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+          .padding(horizontal = 6.dp, vertical = 3.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
       ) {
         // Prev Step
@@ -899,8 +849,9 @@ fun TutorialStepScreen(
           enabled = uiState.selectedStepIndex > 0,
           color = if (uiState.selectedStepIndex > 0) ElectricCyan else TextMuted,
           icon = Icons.AutoMirrored.Filled.ArrowBack,
-          height = 32.dp,
-          modifier = Modifier.widthIn(min = 72.dp)
+          height = 30.dp,
+          fontSize = 10.sp,
+          modifier = Modifier.widthIn(min = 68.dp)
         )
 
         // Central Action: Verifikasi Hasil Ukur
@@ -909,8 +860,9 @@ fun TutorialStepScreen(
           onClick = { viewModel.openVerificationDialog() },
           color = if (isCurrentVerified) SafetyGreen else if (isAllWiresChecked) SparkAmber else BorderSubtle,
           icon = if (isCurrentVerified) Icons.Default.CheckCircle else Icons.Default.Speed,
-          height = 32.dp,
-          modifier = Modifier.weight(1f).padding(horizontal = 6.dp)
+          height = 30.dp,
+          fontSize = 10.sp,
+          modifier = Modifier.weight(1f)
         )
 
         // Next Step
@@ -919,8 +871,10 @@ fun TutorialStepScreen(
           onClick = { viewModel.nextStep() },
           enabled = uiState.selectedStepIndex < viewModel.allSteps.size - 1,
           color = if (uiState.selectedStepIndex < viewModel.allSteps.size - 1) ElectricCyan else TextMuted,
-          height = 32.dp,
-          modifier = Modifier.widthIn(min = 72.dp)
+          icon = Icons.AutoMirrored.Filled.ArrowForward,
+          height = 30.dp,
+          fontSize = 10.sp,
+          modifier = Modifier.widthIn(min = 68.dp)
         )
       }
     }

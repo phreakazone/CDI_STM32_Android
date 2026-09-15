@@ -32,6 +32,7 @@ import com.example.model.WiringStep
 import com.example.model.adaptToPlatform
 import com.example.ui.theme.*
 import id.ns200.cdir7.McuPlatform
+import id.ns200.cdir7.ui.components.MotecButton
 
 /**
  * StepWiringVisualCanvas:
@@ -437,31 +438,17 @@ fun StepWiringChecklist(
           }
         }
 
-        FilledTonalButton(
+        MotecButton(
+          text = if (isAllChecked) "LEPAS SEMUA" else "SAMBUNG SEMUA",
           onClick = {
             val allIds = connections.map { it.id }
             onCheckAllConnections(step.id, allIds, !isAllChecked)
           },
-          colors = ButtonDefaults.filledTonalButtonColors(
-            containerColor = if (isAllChecked) Color(0xFF263238) else Color(0xFF162D3D),
-            contentColor = if (isAllChecked) TextPrimaryDark else ElectricCyan
-          ),
-          shape = RoundedCornerShape(8.dp),
-          contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-          modifier = Modifier.height(32.dp)
-        ) {
-          Icon(
-            imageVector = if (isAllChecked) Icons.Default.Close else Icons.Default.DoneAll,
-            contentDescription = null,
-            modifier = Modifier.size(14.dp)
-          )
-          Spacer(modifier = Modifier.width(4.dp))
-          Text(
-            text = if (isAllChecked) "Lepas Semua" else "Sambung Semua",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold
-          )
-        }
+          color = if (isAllChecked) TextPrimaryDark else ElectricCyan,
+          icon = if (isAllChecked) Icons.Default.Close else Icons.Default.DoneAll,
+          height = 28.dp,
+          fontSize = 10.sp
+        )
       }
     }
 
@@ -703,31 +690,16 @@ fun StepWiringChecklist(
             }
           }
 
-          // Row 4: Full-Width Clear Touch-Target Button
-          Button(
+          // Row 4: Full-Width Clear Touch-Target Motec Button
+          MotecButton(
+            text = if (isConnChecked) "KABEL TERSAMBUNG (KETUK LEPAS)" else "TANDAI KABEL TERSAMBUNG",
             onClick = { onToggleConnection(step.id, conn.id) },
-            colors = ButtonDefaults.buttonColors(
-              containerColor = if (isConnChecked) SafetyGreen else Color(0xFF192A3D),
-              contentColor = if (isConnChecked) Color.Black else ElectricCyan
-            ),
-            border = if (isConnChecked) null else BorderStroke(1.dp, ElectricCyan.copy(alpha = 0.7f)),
-            shape = RoundedCornerShape(8.dp),
-            modifier = Modifier
-              .fillMaxWidth()
-              .height(38.dp)
-          ) {
-            Icon(
-              imageVector = if (isConnChecked) Icons.Default.CheckCircle else Icons.Default.Cable,
-              contentDescription = null,
-              modifier = Modifier.size(15.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-              text = if (isConnChecked) "Kabel Sudah Tersambung (Ketuk untuk Lepas)" else "Tandai Kabel Tersambung",
-              fontSize = 11.sp,
-              fontWeight = FontWeight.Bold
-            )
-          }
+            color = if (isConnChecked) SafetyGreen else ElectricCyan,
+            icon = if (isConnChecked) Icons.Default.CheckCircle else Icons.Default.Cable,
+            height = 32.dp,
+            fontSize = 10.5.sp,
+            modifier = Modifier.fillMaxWidth()
+          )
         }
       }
     }
@@ -735,13 +707,13 @@ fun StepWiringChecklist(
     // Completion notification banner if all wires are checked
     if (isAllChecked) {
       Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = Color(0xFF00381C),
+        shape = RoundedCornerShape(4.dp),
+        color = Color(0xFF002914),
         border = BorderStroke(1.dp, SafetyGreen),
         modifier = Modifier.fillMaxWidth()
       ) {
         Row(
-          modifier = Modifier.padding(10.dp),
+          modifier = Modifier.padding(8.dp),
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -753,36 +725,32 @@ fun StepWiringChecklist(
               imageVector = Icons.Default.CheckCircle,
               contentDescription = null,
               tint = SafetyGreen,
-              modifier = Modifier.size(20.dp)
+              modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Column {
               Text(
                 text = "Semua Kabel Selesai Disolder!",
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = SafetyGreen
               )
               Text(
                 text = "Langkah selanjutnya: Ukur multimeter & verifikasi",
-                fontSize = 10.sp,
+                fontSize = 9.5.sp,
                 color = Color(0xFFA5D6A7)
               )
             }
           }
 
-          Button(
+          MotecButton(
+            text = "VERIFIKASI SEKARANG",
             onClick = onOpenVerification,
-            colors = ButtonDefaults.buttonColors(
-              containerColor = SafetyGreen,
-              contentColor = Color.Black
-            ),
-            shape = RoundedCornerShape(8.dp),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-            modifier = Modifier.height(30.dp)
-          ) {
-            Text("Verifikasi Sekarang", fontSize = 10.sp, fontWeight = FontWeight.Bold)
-          }
+            color = SafetyGreen,
+            icon = Icons.Default.CheckCircle,
+            height = 28.dp,
+            fontSize = 9.5.sp
+          )
         }
       }
     }

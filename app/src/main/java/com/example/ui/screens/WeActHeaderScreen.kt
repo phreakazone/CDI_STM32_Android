@@ -37,6 +37,8 @@ import com.example.ui.components.WeActHeaderVisualizer
 import com.example.ui.theme.*
 import com.example.viewmodel.WiringViewModel
 import id.ns200.cdir7.McuPlatform
+import id.ns200.cdir7.ui.components.MotecButton
+import id.ns200.cdir7.ui.theme.TextMuted
 
 @Composable
 fun WeActHeaderScreen(
@@ -240,23 +242,13 @@ fun WeActHeaderScreen(
             val isSelected = selectedFilter == filter
             val activeColor = if (activePlatform == McuPlatform.ESP32_WROOM) SparkAmber else ElectricCyan
 
-            Surface(
-              shape = RoundedCornerShape(6.dp),
-              color = if (isSelected) activeColor.copy(alpha = 0.25f) else Color(0xFF131A24),
-              border = BorderStroke(1.dp, if (isSelected) activeColor else OutlineDark),
-              modifier = Modifier
-                .clip(RoundedCornerShape(6.dp))
-                .clickable { selectedFilter = filter }
-            ) {
-              Text(
-                text = filter,
-                modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 10.sp,
-                color = if (isSelected) Color.White else TextSecondaryDark
-              )
-            }
+            MotecButton(
+              text = filter,
+              onClick = { selectedFilter = filter },
+              color = if (isSelected) activeColor else TextMuted,
+              height = 28.dp,
+              fontSize = 9.5.sp
+            )
           }
         }
       }
@@ -321,47 +313,27 @@ fun PlatformSwitcherBanner(
         )
       }
 
-      // Compact Toggle Buttons
+      // Compact Motec Platform Toggle Buttons
       Row(
-        modifier = Modifier
-          .background(Color(0xFF080D14), RoundedCornerShape(6.dp))
-          .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(6.dp))
-          .padding(2.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
       ) {
         val isStm = activePlatform == McuPlatform.STM32WB55
-        Box(
-          modifier = Modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(if (isStm) ElectricCyan.copy(alpha = 0.25f) else Color.Transparent)
-            .clickable { onSelectPlatform(McuPlatform.STM32WB55) }
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-          contentAlignment = Alignment.Center
-        ) {
-          Text(
-            text = "STM32 (35P)",
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, fontWeight = FontWeight.Bold),
-            color = if (isStm) ElectricCyan else TextSecondaryDark,
-            fontFamily = FontFamily.Monospace
-          )
-        }
+        MotecButton(
+          text = "STM32 (35P)",
+          onClick = { onSelectPlatform(McuPlatform.STM32WB55) },
+          color = if (isStm) ElectricCyan else TextMuted,
+          height = 26.dp,
+          fontSize = 9.sp
+        )
 
         val isEsp = activePlatform == McuPlatform.ESP32_WROOM
-        Box(
-          modifier = Modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(if (isEsp) SparkAmber.copy(alpha = 0.25f) else Color.Transparent)
-            .clickable { onSelectPlatform(McuPlatform.ESP32_WROOM) }
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-          contentAlignment = Alignment.Center
-        ) {
-          Text(
-            text = "ESP32 (38P)",
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, fontWeight = FontWeight.Bold),
-            color = if (isEsp) SparkAmber else TextSecondaryDark,
-            fontFamily = FontFamily.Monospace
-          )
-        }
+        MotecButton(
+          text = "ESP32 (38P)",
+          onClick = { onSelectPlatform(McuPlatform.ESP32_WROOM) },
+          color = if (isEsp) SparkAmber else TextMuted,
+          height = 26.dp,
+          fontSize = 9.sp
+        )
       }
     }
   }
