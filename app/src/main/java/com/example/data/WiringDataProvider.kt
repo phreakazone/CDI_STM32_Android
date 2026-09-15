@@ -1129,14 +1129,14 @@ object WiringDataProvider {
       connectionCondition = "Hubungkan kabel USB data. STM32: masuk DFU dengan BOOT0/NRST. ESP32: masuk bootloader dengan BOOT/EN bila auto-reset tidak bekerja.",
       appAction = "STM32: flash image R8 ke 0x08000000 dengan STM32CubeProgrammer. ESP32: flash image ESP-IDF sesuai partition table proyek.",
       outputCondition = "Penulisan dan verifikasi image target yang benar berhasil; perangkat reboot normal.",
-      proceedCriteria = "BLE mengiklankan NS200-CDI-R8 dan menjawab GET,CAPS.",
+      proceedCriteria = "BLE mengiklankan NS200-CDI dan menjawab GET,CAPS.",
       stopHazard = "Gagal koneksi: periksa kabel USB Type-C data (bukan kabel charger saja)."
     ),
     QuickSetupStep(
       stepNumber = 2,
       stageName = "2. Logic & Tegangan Catu",
       connectionCondition = "Kill switch OFF (J1.5 = 0V), kontak ON, dan jalur charger diisolasi dengan membuka SW_SERVICE atau mencabut FHV.",
-      appAction = "Buka aplikasi Android, scan BLE 'NS200-CDI-R8', lalu hubungkan GATT.",
+      appAction = "Buka aplikasi Android, scan BLE 'NS200-CDI', lalu hubungkan GATT.",
       outputCondition = "Tegangan aki terbaca akal (11.8V - 12.8V); HV terbaca < 30V; Tahap aplikasi terbaca 'BARU'.",
       proceedCriteria = "Aki terbaca normal & BLE terhubung stabil.",
       stopHazard = "STOP jika VBAT tidak masuk akal atau HV > 30V saat jalur charger telah diisolasi."

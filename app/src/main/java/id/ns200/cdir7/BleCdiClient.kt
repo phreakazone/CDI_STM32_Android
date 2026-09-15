@@ -150,9 +150,9 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         override fun onScanResult(type: Int, result: ScanResult) {
             val device = result.device
             val name = result.scanRecord?.deviceName ?: device.name ?: "Unknown BLE"
-            val exact = name.equals("NS200-CDI-R7", true)
+            val exact = name.equals("NS200-CDI", true)
             val byService = result.scanRecord?.serviceUuids?.any { it.uuid == serviceUuid } == true
-            val isCandidate = exact || byService || name.contains("CDI-R7", true) || name.contains("NS200", true)
+            val isCandidate = exact || byService || name.contains("NS200-CDI", true) || name.contains("CDI", true) || name.contains("NS200", true)
 
             val item = DiscoveredBleDevice(
                 device = device,
@@ -346,7 +346,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
                 lastDevice?.name
             } catch (_: SecurityException) {
                 null
-            } ?: "NS200-CDI-R7"
+            } ?: "NS200-CDI"
             _connectedDeviceName.value = deviceName
             send("PING")
             listener.onState("Connected • $deviceName • PHY 1M", true)
@@ -482,7 +482,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         _devices.value = emptyList()
         _scanning.value = true
         _busy.value = true
-        listener.onState("Memindai NS200-CDI-R7...", false)
+        listener.onState("Memindai NS200-CDI...", false)
 
         try {
             scanner.startScan(scannerCallback)

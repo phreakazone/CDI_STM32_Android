@@ -420,9 +420,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     // Console logs
     private val _terminalLogs = MutableStateFlow<List<String>>(
         listOf(
-            "NS200 CDI R8 System Initialized.",
+            "NS200-CDI System Initialized.",
             "MoTeC / AIM Telemetry Protocol Engine Ready.",
-            "Firmware R8: Dual-Core OEM Learn & Pro 16x8 Engine.",
+            "Firmware Engine: 32x16 3D Map, Dyno Live Trim, Dual-Core Safety.",
             "Hardware Target: ${_selectedPlatform.value.displayName}."
         )
     )
@@ -514,7 +514,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             simTps = 0f
             engineSound.stop()
             _isConnected.value = false
-            appendLog("Scanning for NS200-CDI-R7 BLE...")
+            appendLog("Scanning for NS200-CDI BLE...")
             bleClient.connect()
         }
     }
@@ -1540,7 +1540,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             appendLog("Memulai OTA BLE untuk file: $fileName (${bytes.size} byte)")
             bleClient.startOta(bytes, _selectedPlatform.value)
         } else {
-            Toast.makeText(context, "OTA hanya tersedia saat BLE CDI R8 terhubung", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "OTA hanya tersedia saat BLE NS200-CDI terhubung", Toast.LENGTH_SHORT).show()
         }
     }
 

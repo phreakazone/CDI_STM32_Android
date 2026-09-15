@@ -89,7 +89,7 @@ fun QuickSetupGuideScreen(viewModel: CdiViewModel) {
                     color = MotecOrange
                 )
                 Text(
-                    text = "Panduan Resmi NS200-CDI R8 • ${selectedPlatform.displayName}",
+                    text = "Panduan Resmi NS200-CDI • ${selectedPlatform.displayName}",
                     fontSize = 11.sp,
                     color = TextSecondary,
                     fontFamily = FontFamily.Monospace

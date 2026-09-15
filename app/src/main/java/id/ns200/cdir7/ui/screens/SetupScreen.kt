@@ -173,7 +173,7 @@ private fun CompactSetupHeader(
                         color = MotecOrange.copy(alpha = 0.2f)
                     ) {
                         Text(
-                            text = "R8",
+                            text = "R9",
                             fontSize = 8.5.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
@@ -405,7 +405,7 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: M
         }
 
         StageCard(
-            title = "KONTROL MODE FIRMWARE R8",
+            title = "KONTROL MODE FIRMWARE",
             subtitle = if (selectedPlatform == McuPlatform.STM32WB55) {
                 "Pilih alur kerja CDI STM32. Mode DIY mandiri hanya aktif setelah konfirmasi OEM_UNPLUGGED (tidak ada takeover otomatis)."
             } else {
@@ -616,10 +616,10 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: M
                 }
             }
 
-            // Target Voltage Selector R8
+            // Target Voltage Selector
             Spacer(Modifier.height(4.dp))
             Text(
-                "TARGET TEGANGAN HV R8 (NORMAL 285 V / PRO 345 V)",
+                "TARGET TEGANGAN HV (NORMAL 285 V / PRO 345 V)",
                 color = SensorAmber,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
@@ -865,12 +865,12 @@ private fun FirstStartStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatf
 
     StageBody {
         StageCard(
-            title = "5 • FIRST START AMAN (FIRMWARE R8)",
-            subtitle = "Mode aman: 220V, CENTER saja, advance ≤10°, limiter 3.000 RPM. Di R8, status otomatis tersimpan setelah stabil 3 detik dan otomatis READY setelah mesin berhenti atau boot berikutnya."
+            title = "5 • FIRST START AMAN",
+            subtitle = "Mode aman: 220V, CENTER saja, advance ≤10°, limiter 3.000 RPM. Status otomatis tersimpan setelah stabil 3 detik dan otomatis READY setelah mesin berhenti atau boot berikutnya."
         ) {
             CompactStatusRow("TARGET TEGANGAN", "$firstStartHv V", firstStartHv <= 220)
             CompactStatusRow("DURASI STABIL", "${t.firstStartSeconds} / 3 detik", ranLongEnough)
-            CompactStatusRow("STATUS OTOMATIS R8", if (ranLongEnough) "TERPENUHI (≥3s) • SIAP READY SAAT MESIN MATI" else "MENUNGGU STABIL (${t.firstStartSeconds}/3s)", ranLongEnough)
+            CompactStatusRow("STATUS OTOMATIS", if (ranLongEnough) "TERPENUHI (≥3s) • SIAP READY SAAT MESIN MATI" else "MENUNGGU STABIL (${t.firstStartSeconds}/3s)", ranLongEnough)
             CompactStatusRow("RPM MESIN", "${t.rpm} RPM", if (ranLongEnough) t.rpm == 0 else t.rpm in 1000..3500)
             CompactStatusRow("HV CENTER / SIDE", "${t.hvCenter} / ${t.hvSide} V", stoppedAndSafe || (!demoEngineRunning && t.hvCenter < 30))
 
