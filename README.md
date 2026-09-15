@@ -513,6 +513,25 @@ Menu **Pinout MCU** dalam aplikasi menyediakan visualisasi ganda (**Mode Tabel 2
 
 ## 📝 Catatan Rilis (Changelog)
 
+### Versi 9.0.0 (Standardisasi Identitas BLE "NS200-CDI", Integrasi Core R9 32x16, & Penyelarasan Firmware ESP32)
+- **Standardisasi Identitas BLE Permanen ("NS200-CDI")**:
+  - Menyeragamkan nama broadcast Bluetooth LE menjadi `"NS200-CDI"` murni tanpa embel-embel kode versi (`R7`, `R8`, dll.), baik di layer advertising firmware ESP32/STM32 maupun scanner Android.
+  - Menjamin kompatibilitas jangka panjang (*forward-compatible*) sehingga pembaruan firmware di masa depan tidak lagi memerlukan perubahan kode deteksi nama perangkat di aplikasi.
+- **Penyelarasan Total Protokol R9 v5 & Dimensi Peta 32x16**:
+  - Mengonfirmasi struktur data `cdi_r5.h` pada spesifikasi penuh R9: `CDI_R5_RPM_POINTS` = 32 titik RPM, `CDI_R5_TPS_POINTS` = 16 titik TPS, `CDI_R5_ABSOLUTE_RPM_CAP` = 30.000 RPM, dan store version 5.
+  - Sinkronisasi handler `handle_r9_map()` untuk pemrosesan perintah `MAP,BEGIN`, `MAP,RPM`, `MAP,LOAD`, `MAP,CELL`, `MAP,SAVE`, dan `MAP,SELECT`.
+  - Dukungan penuh fitur baru R9: Live Dyno Advance Trim (`DYNO,BEGIN/TRIM/COMMIT`), Kontrol Kipas Otomatis 3-Titik NTC (`TEMP,CAL`, `SET,FAN`), Universal Engine Profile (`SET,PROFILE`), dan handshake kapabilitas v5 (`GET,CAPS`).
+- **Penyelesaian Fatal Error Toolchain GCC 15 (ESP-IDF v6.1)**:
+  - Memperbaiki ketidaksesuaian qualifier pointer pada `cdi_r5_protocol.c` di baris perintah `MAP,SELECT` (`select_save` non-const untuk `strtok_r`), meloloskan kompilasi 1169/1169 target dengan status bersih.
+  - Menjaga modul waktu kritis `cdi_timebase` tetap 100% berjalan di IRAM internal dengan membersihkan atribut ganda pada header file untuk menghindari peringatan compiler.
+- **Konfigurasi Partisi Dual OTA A/B Riil ESP32**:
+  - Penerapan `partitions.csv` dengan skema partisi pabrik dan OTA ganda (`nvs` 24KB, `otadata` 8KB, `phy_init` 4KB, `factory` 1MB, `ota_0` 1MB, `ota_1` 1MB) pada flash 4MB.
+  - Sinkronisasi file `sdkconfig.defaults` dan instruksi pembersihan cache build `sdkconfig` agar partisi A/B langsung aktif pada proses reconfigure.
+  - Ukuran binary aplikasi terkompilasi `ns200_cdi_esp32.bin` sebesar 0x891b0 bytes (~548 KB), menyisakan ruang kosong aman sebesar 46% (0x76e50 bytes).
+- **Penyelarasan Teks & Konsistensi UI Aplikasi Android**:
+  - Memperbarui teks header status, kartu alur kontrol mode, panduan hardware, dan log terminal awal dari referensi lama menjadi format modern tanpa divergensi versi.
+ 
+    
 ### Versi 8.3.2 (Audit Kontrak Firmware dan Wiring Dua Platform)
 - Menyamakan parser/alur Android dengan firmware STM32 dan ESP32: `ACK,MODE` kini diikuti pembacaan ulang MODE, SETUP, dan STATUS; tahap READY dipertahankan sebagai nilai firmware 0–4.
 - Menyamakan batas map dan limiter: 8x4/10.500 RPM untuk Normal, 16x8/11.500 RPM untuk PRO, advance maksimum 36°.
@@ -544,24 +563,6 @@ Menu **Pinout MCU** dalam aplikasi menyediakan visualisasi ganda (**Mode Tabel 2
   - Kompilasi build berhasil tanpa error (`compile_applet` PASS).
   - Seluruh rangkaian unit test berhasil diverifikasi (`testDebugUnitTest` PASS).
   - Konfigurasi rahasia build (`.env.example` & `BuildConfig`) dibersihkan sesuai standar keamanan produksi.
-
-### Versi 9.0.0 (Standardisasi Identitas BLE "NS200-CDI", Integrasi Core R9 32x16, & Penyelarasan Firmware ESP32)
-- **Standardisasi Identitas BLE Permanen ("NS200-CDI")**:
-  - Menyeragamkan nama broadcast Bluetooth LE menjadi `"NS200-CDI"` murni tanpa embel-embel kode versi (`R7`, `R8`, dll.), baik di layer advertising firmware ESP32/STM32 maupun scanner Android.
-  - Menjamin kompatibilitas jangka panjang (*forward-compatible*) sehingga pembaruan firmware di masa depan tidak lagi memerlukan perubahan kode deteksi nama perangkat di aplikasi.
-- **Penyelarasan Total Protokol R9 v5 & Dimensi Peta 32x16**:
-  - Mengonfirmasi struktur data `cdi_r5.h` pada spesifikasi penuh R9: `CDI_R5_RPM_POINTS` = 32 titik RPM, `CDI_R5_TPS_POINTS` = 16 titik TPS, `CDI_R5_ABSOLUTE_RPM_CAP` = 30.000 RPM, dan store version 5.
-  - Sinkronisasi handler `handle_r9_map()` untuk pemrosesan perintah `MAP,BEGIN`, `MAP,RPM`, `MAP,LOAD`, `MAP,CELL`, `MAP,SAVE`, dan `MAP,SELECT`.
-  - Dukungan penuh fitur baru R9: Live Dyno Advance Trim (`DYNO,BEGIN/TRIM/COMMIT`), Kontrol Kipas Otomatis 3-Titik NTC (`TEMP,CAL`, `SET,FAN`), Universal Engine Profile (`SET,PROFILE`), dan handshake kapabilitas v5 (`GET,CAPS`).
-- **Penyelesaian Fatal Error Toolchain GCC 15 (ESP-IDF v6.1)**:
-  - Memperbaiki ketidaksesuaian qualifier pointer pada `cdi_r5_protocol.c` di baris perintah `MAP,SELECT` (`select_save` non-const untuk `strtok_r`), meloloskan kompilasi 1169/1169 target dengan status bersih.
-  - Menjaga modul waktu kritis `cdi_timebase` tetap 100% berjalan di IRAM internal dengan membersihkan atribut ganda pada header file untuk menghindari peringatan compiler.
-- **Konfigurasi Partisi Dual OTA A/B Riil ESP32**:
-  - Penerapan `partitions.csv` dengan skema partisi pabrik dan OTA ganda (`nvs` 24KB, `otadata` 8KB, `phy_init` 4KB, `factory` 1MB, `ota_0` 1MB, `ota_1` 1MB) pada flash 4MB.
-  - Sinkronisasi file `sdkconfig.defaults` dan instruksi pembersihan cache build `sdkconfig` agar partisi A/B langsung aktif pada proses reconfigure.
-  - Ukuran binary aplikasi terkompilasi `ns200_cdi_esp32.bin` sebesar 0x891b0 bytes (~548 KB), menyisakan ruang kosong aman sebesar 46% (0x76e50 bytes).
-- **Penyelarasan Teks & Konsistensi UI Aplikasi Android**:
-  - Memperbarui teks header status, kartu alur kontrol mode, panduan hardware, dan log terminal awal dari referensi lama menjadi format modern tanpa divergensi versi.
 
 ### Versi 8.3.0 (Ready Produksi: Pinout Dual-Platform STM32 & ESP32, Tabel 2-Kolom Presisi, & Visualisasi Fisik Board Otentik)
 - **Desain Bebas Gap Ruang Kosong (Zero-Gap Layout Architecture)**:
