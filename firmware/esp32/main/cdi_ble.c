@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define TAG "CDI_BLE"
-#define DEVICE_NAME "NS200-CDI-R7"
+#define DEVICE_NAME "NS200-CDI"
 
 /* 7a8f1000-6c9d-4e40-a45f-0b4b4e533230 */
 static const ble_uuid128_t s_svc_uuid =
