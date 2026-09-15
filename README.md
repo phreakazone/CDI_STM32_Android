@@ -4,9 +4,7 @@
 > **Sumber firmware lengkap yang dapat dibuild:** gunakan
 > [STM32WB55](https://github.com/phreakazone/Firmware_CDI_NS200) atau
 > [ESP32-WROOM-32](https://github.com/phreakazone/Firmware_CDI_NS200_ESP32).
-> Folder [firmware](firmware) di repository Android adalah lapisan pengembangan/integrasi
-> R9, bukan pengganti kedua paket firmware lengkap tersebut.
-> Lihat [panduan build firmware khusus](firmware/README.md).
+
 
 ## Alur integrasi R9
 
@@ -15,8 +13,7 @@
 3. Aplikasi membatasi editor berdasarkan jawaban firmware, bukan berdasarkan nama NS200.
 4. Penulisan profile/map/kalibrasi hanya dilakukan saat RPM 0 dan HV di bawah 30 V.
 5. FIRST START tetap 3.000 RPM dan maksimum 10° sampai `SETUP,DONE` tersimpan.
-6. STM32WB55 dan ESP32 memakai [core C99 yang sama](firmware/common/src/cdi_firmware.c);
-   port hanya menangani GPIO, ADC, timer, NVM, BLE, dan OTA sesuai MCU.
+6. STM32WB55 dan ESP32 port hanya menangani GPIO, ADC, timer, NVM, BLE, dan OTA sesuai MCU.
 
 | Fungsi | Android | Core bersama | STM32WB55 | ESP32 |
 |---|---|---|---|---|
@@ -29,7 +26,7 @@
 
 Aplikasi Android kendali terpadu untuk unit pengapian **CDI Programmable NS200-CDI** (Bajaj Pulsar 200 DTS-i & Modifikasi Dual/Triple Spark dengan Engine R9 v5.0). Menggabungkan kokpit telemetri balap gaya MoTeC, pemetaan kurva pengapian resolusi tinggi 32x16 matrix 4-slot dinamis, Live Dyno Advance Trim, kalibrasi strobo pulser TDC, mode pembelajaran kurva asli (**OEM Learn Mode**), sistem pengunggah firmware nirkabel (**BLE OTA Firmware Uploader** dengan partisi A/B), alur aktivasi mandiri aman (**Safe DIY Mode**), katalog modul jadi pasaran (*Commercial Off-the-Shelf Drop-in Modules*), bengkel panduan kabel interaktif, diagnostik paket data biner BLE, serta simulator akustik mesin knalpot multi-silinder (*Live Audio Engine Test Bench*).
 
-Mendukung Arsitektur Lintas Platform (*Dual-Platform*): [**WeAct STM32WB55**](https://github.com/phreakazone/Firmware_CDI_NS200) dan [**ESP32 WROOM**](https://github.com/phreakazone/Firmware_CDI_NS200_ESP32). Panduan build keduanya ada di [firmware/README.md](firmware/README.md).
+Mendukung Arsitektur Lintas Platform (*Dual-Platform*): [**WeAct STM32WB55**](https://github.com/phreakazone/Firmware_CDI_NS200) dan [**ESP32 WROOM**](https://github.com/phreakazone/Firmware_CDI_NS200_ESP32).
 
 ---
 
@@ -106,21 +103,6 @@ Untuk mengurangi kerumitan wiring kabel dan solder-menyolder komponen diskrit, s
 | **1. OEM Learn Signal Isolator** | ⭐ **SANGAT DIREKOMENDASIKAN #1** | **Modul Optocoupler PC817 4-Channel Isolation Board** | Rp 12.000 – Rp 18.000 | Terminal sekrup (baut obeng), 4x LED indikator kedip pulsa, jumper pull-up onboard, isolasi optik 5000V. Cukup 1 modul untuk dua kanal sekaligus: sadapan Center (J1.12) dan Side (J1.6). |
 | **2. Driver Relay Kipas** (J1.7 / Radiator Fan) | ⭐ **SANGAT DIREKOMENDASIKAN #2** | **Modul Relay 1-Channel 5V dengan Optocoupler** | Rp 8.000 – Rp 14.000 | Menggantikan transistor BC547 diskrit. Pin MCU langsung masuk ke pin `IN` modul. Sudah ada optoisolator, dioda flyback proteksi lonjakan motor kipas, dan terminal sekrup. |
 | **3. Catu Daya Logic 5V** (+12V Kontak ke +5V MCU) | Alternatif Opsional | **Modul Mini DC-DC Buck MP1584EN / LM2596** | Rp 8.000 – Rp 15.000 | Menggantikan regulator linear panas. Menghasilkan 5.0V DC dingin & stabil untuk MCU. |
-
----
-
-### ⚠️ Evaluasi Modul Pasaran yang DITOLAK (JANGAN DIGUNAKAN)
-
-Setelah pengujian teknis mendalam terhadap karakteristik CDI kapasitif DTS-i, modul-modul berikut **TIDAK DIREKOMENDASIKAN**:
-
-1. ❌ **Modul Boost Converter 12V → 300–1200V untuk Charge Pump HV**:
-   - **Penyebab**: Kemampuan arus keluaran modul pasaran ini rata-rata hanya **2 – 20 mA**. Untuk sistem pengapian 3 busi (Triple Spark) pada putaran tinggi (10.000 RPM), sistem membutuhkan arus pengisian kapasitor minimal **80 – 120 mA**. Arus 2–20 mA tidak akan mampu mengisi kapasitor tepat waktu sehingga pengapian akan drop / misfire parah di putaran menengah ke atas. Selain itu, modul boost generik tidak memiliki pin kontrol PWM dari firmware untuk switching dinamis level tegangan 285V (Normal) dan 345V (Mode PRO).
-2. ❌ **Modul Bridge Rectifier Generik**:
-   - **Penyebab**: Modul penyearah jembatan generik di pasaran dirancang untuk frekuensi jala-jala listrik PLN (50/60 Hz), bukan frekuensi switching tinggi trafo frekuensi tinggi ATX/flyback (~100 kHz). Jika dipaksakan, dioda akan mengalami panas ekstrem (*thermal breakdown*) dan *forward voltage drop* yang tinggi. Gunakan dioda ultrafast diskrit seperti **UF4007** (trr < 75ns).
-3. ❌ **Modul SCR / Dimmer AC**:
-   - **Penyebab**: Rangkaian gerbang pemicu pada modul dimmer AC dirancang untuk arus bolak-balik AC 220V frekuensi rendah. Tidak responsif untuk pulsa trigger mikrodetik (60–100 µs) discharge kapasitor CDI DC. Tetap gunakan thyristor **BT151-800R** atau **TYN612**.
-4. ❌ **Modul Sensor Tegangan Generik (Voltage Divider Module)**:
-   - **Penyebab**: Modul sensor tegangan pasaran umumnya menggunakan rasio pembagi tetap (misal 5:1 untuk Arduino 5V 0–25V). Rasio ini tidak cocok dan tidak presisi untuk kalibrasi ADC 3.3V firmware pada pembacaan feedback tegangan HV (300V+), TPS, maupun sensor suhu NTC. Pembagi resistif terkalibrasi diskrit dengan dioda clamp pengaman **BAT54S** jauh lebih presisi dan aman.
 
 ---
 
