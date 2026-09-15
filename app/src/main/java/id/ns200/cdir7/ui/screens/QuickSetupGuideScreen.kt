@@ -1,5 +1,6 @@
 package id.ns200.cdir7.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,6 +28,7 @@ import id.ns200.cdir7.CdiViewModel
 import id.ns200.cdir7.McuPlatform
 import id.ns200.cdir7.ScreenTab
 import id.ns200.cdir7.SetupStage
+import id.ns200.cdir7.ui.components.MotecButton
 import id.ns200.cdir7.ui.theme.*
 
 data class HarnessPinItem(
@@ -71,8 +73,8 @@ fun QuickSetupGuideScreen(viewModel: CdiViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .background(CarbonDark)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         // Top Header
         Row(
@@ -82,15 +84,15 @@ fun QuickSetupGuideScreen(viewModel: CdiViewModel) {
         ) {
             Column {
                 Text(
-                    text = "QUICK SETUP & HARDWARE WIRING",
-                    fontSize = 14.sp,
+                    text = "QUICK SETUP & WIRING",
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Black,
                     fontFamily = FontFamily.Monospace,
                     color = MotecOrange
                 )
                 Text(
-                    text = "Panduan Resmi NS200-CDI • ${selectedPlatform.displayName}",
-                    fontSize = 11.sp,
+                    text = "NS200-CDI • ${selectedPlatform.displayName}",
+                    fontSize = 10.sp,
                     color = TextSecondary,
                     fontFamily = FontFamily.Monospace
                 )
@@ -98,7 +100,7 @@ fun QuickSetupGuideScreen(viewModel: CdiViewModel) {
 
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(RoundedCornerShape(3.dp))
                     .background(
                         when (telemetry.setupStage) {
                             SetupStage.READY.code -> RacingLime.copy(alpha = 0.2f)
@@ -113,13 +115,13 @@ fun QuickSetupGuideScreen(viewModel: CdiViewModel) {
                             SetupStage.FIRST_START.code -> MotecOrange
                             else -> SensorAmber
                         },
-                        RoundedCornerShape(6.dp)
+                        RoundedCornerShape(3.dp)
                     )
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .padding(horizontal = 6.dp, vertical = 3.dp)
             ) {
                 Text(
                     text = "TAHAP: ${telemetry.stage.label}",
-                    fontSize = 10.sp,
+                    fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
                     color = when (telemetry.setupStage) {
                         SetupStage.READY.code -> RacingLime
@@ -147,18 +149,18 @@ fun QuickSetupGuideScreen(viewModel: CdiViewModel) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (isSel) MotecOrange else SurfacePanel)
-                        .border(1.dp, if (isSel) MotecOrange else BorderSubtle, RoundedCornerShape(6.dp))
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(if (isSel) MotecOrange.copy(alpha = 0.25f) else SurfacePanel.copy(alpha = 0.4f))
+                        .border(1.dp, if (isSel) MotecOrange else BorderSubtle, RoundedCornerShape(3.dp))
                         .clickable { selectedTab = index }
-                        .padding(vertical = 8.dp),
+                        .padding(vertical = 5.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = title,
                         fontSize = 10.sp,
                         fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isSel) CarbonDark else TextSecondary,
+                        color = if (isSel) MotecOrange else TextSecondary,
                         fontFamily = FontFamily.Monospace,
                         maxLines = 1
                     )
@@ -197,40 +199,40 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         state = listState,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         // TOP SAFETY & INTERLOCK STATUS BAR
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, if (t.isHvOverLimitWarning) RaceRedline else BorderSubtle, RoundedCornerShape(12.dp)),
+                    .border(1.dp, if (t.isHvOverLimitWarning) RaceRedline else BorderSubtle, RoundedCornerShape(3.dp)),
                 colors = CardDefaults.cardColors(containerColor = CardBackground),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(3.dp)
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "STATUS OUTPUT & PROTEKSI FIRMWARE",
-                            fontSize = 11.sp,
+                            text = "STATUS OUTPUT & INTERLOCK",
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = MotecOrange,
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
                             text = "TAHAP: ${t.stage.label.uppercase()}",
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Black,
                             color = RacingLime,
                             fontFamily = FontFamily.Monospace
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -239,7 +241,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                         InterlockBadge("OUTPUT DIY", t.armed, RacingLime, TextMuted)
                         InterlockBadge("HV AKTIF", t.hvEnabled, RacingLime, TextMuted)
                         InterlockBadge("PRO 345V", t.proEnabled, ElectricCyan, TextMuted)
-                        InterlockBadge("CENTER KOIL", t.centerEnabled, RacingLime, TextMuted)
+                        InterlockBadge("CTR KOIL", t.centerEnabled, RacingLime, TextMuted)
                         InterlockBadge("SIDE KOIL", t.sideEnabled, ElectricCyan, TextMuted)
                     }
                 }
@@ -251,38 +253,28 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, ElectricCyan.copy(alpha = 0.5f), RoundedCornerShape(12.dp)),
-                colors = CardDefaults.cardColors(containerColor = ElectricCyan.copy(alpha = 0.08f)),
-                shape = RoundedCornerShape(12.dp)
+                    .border(1.dp, ElectricCyan.copy(alpha = 0.4f), RoundedCornerShape(3.dp)),
+                colors = CardDefaults.cardColors(containerColor = ElectricCyan.copy(alpha = 0.06f)),
+                shape = RoundedCornerShape(3.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.Top
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Icons.Default.Info,
                         contentDescription = "Info",
                         tint = ElectricCyan,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(16.dp)
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = "PEMBERITAHUAN SETUP AWAL (STROBO OPSIONAL)",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            color = ElectricCyan
-                        )
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Text(
-                            text = "Strobo timing adalah metode akurat. Mode manual tersedia sebagai fallback dengan sudut awal firmware 60.0° yang masih wajib diverifikasi sebelum pemakaian beban tinggi.",
-                            fontSize = 10.sp,
-                            lineHeight = 14.sp,
-                            fontFamily = FontFamily.Monospace,
-                            color = TextPrimary
-                        )
-                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Strobo timing akurat. Mode manual tersedia fallback offset awal 60.0°.",
+                        fontSize = 9.sp,
+                        lineHeight = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = TextPrimary
+                    )
                 }
             }
         }
@@ -291,72 +283,62 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
         item {
             StageCard(
                 stageNumber = 1,
-                title = "BARU : Verifikasi Baterai & Komunikasi BLE",
+                title = "BARU : Verifikasi Baterai & BLE",
                 isCurrent = quickSetupPage == SetupStage.BARU.code,
                 isDone = visibleProgress > SetupStage.BARU.code,
                 onSelectStage = { viewModel.selectQuickSetupPage(SetupStage.BARU.code) }
             ) {
                 Text(
-                    text = "• Sebelum mulai: kill switch OFF harus membuat J1.5 = 0V.\n" +
-                            "• Pastikan kontak/kill switch OFF, interlock software R8 aktif dan HV < 30V.\n" +
-                            "• Setelah aman, kontak ON harus memberi sekitar 12V pada J1.5.\n" +
-                            "• Starter mesin 2-3 detik tanpa HV untuk verifikasi komunikasi BLE.",
-                    fontSize = 11.sp,
+                    text = "• Kill switch OFF: J1.5 = 0V, HV < 30V.\n" +
+                            "• Kontak ON: J1.5 = +12V. Uji komunikasi BLE ke MCU.",
+                    fontSize = 10.sp,
                     color = TextSecondary,
                     fontFamily = FontFamily.Monospace,
-                    lineHeight = 15.sp
+                    lineHeight = 13.sp
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    OutlinedButton(
-                        onClick = { viewModel.sendRawCommand("PING") },
+                    MotecButton(
+                        text = "1. PING CDI",
+                        onClick = { viewModel.pingCdiManual() },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(vertical = 4.dp)
-                    ) {
-                        Text("1. PING CDI", fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                    }
-                    OutlinedButton(
-                        onClick = { viewModel.requestSetupState() },
+                        color = ElectricCyan,
+                        height = 30.dp
+                    )
+                    MotecButton(
+                        text = "2. BACA SETUP",
+                        onClick = { viewModel.requestSetupStateManual() },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(vertical = 4.dp)
-                    ) {
-                        Text("2. BACA SETUP", fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                    }
+                        color = SensorAmber,
+                        height = 30.dp
+                    )
                 }
-                Spacer(modifier = Modifier.height(6.dp))
-                Button(
-                    enabled = !preflightBusy,
+                Spacer(modifier = Modifier.height(4.dp))
+                MotecButton(
+                    text = if (preflightBusy) "MEMERIKSA MCU..." else "PERIKSA & LANJUT KE TAHAP 2",
                     onClick = { viewModel.startQuickSetupPreflight() },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(vertical = 6.dp)
-                ) {
-                    if (preflightBusy) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = CarbonDark)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("MENUNGGU 3 RESPONS MCU...", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
-                    } else {
-                        Text("PERIKSA & LANJUT KE TAHAP 2", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
-                    }
-                }
-                Spacer(modifier = Modifier.height(7.dp))
-                Text(
-                    text = preflightMessage,
-                    fontSize = 10.sp,
-                    lineHeight = 14.sp,
-                    fontFamily = FontFamily.Monospace,
-                    color = when {
-                        preflightMessage.startsWith("LULUS") -> RacingLime
-                        preflightMessage.startsWith("GAGAL") -> RaceRedline
-                        else -> ElectricCyan
-                    }
+                    color = MotecOrange,
+                    enabled = !preflightBusy,
+                    height = 32.dp
                 )
+                if (preflightMessage.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = preflightMessage,
+                        fontSize = 9.sp,
+                        lineHeight = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = when {
+                            preflightMessage.startsWith("LULUS") || preflightMessage.contains("OK") -> RacingLime
+                            preflightMessage.startsWith("GAGAL") -> RaceRedline
+                            else -> ElectricCyan
+                        }
+                    )
+                }
             }
         }
 
@@ -370,41 +352,28 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                 onSelectStage = { viewModel.selectQuickSetupPage(SetupStage.PULSER.code) }
             ) {
                 Text(
-                    text = "• Hubungkan kabel pulser putih-merah (J1.10) via pengkondisi sinyal ke ${selectedPlatform.pulserPin}.\n" +
-                            "• Kualitas Pulser Live: ${t.pickupQuality}/100 (Target >= 10).\n" +
-                            "• Putar starter 2-3 detik untuk mendeteksi sinyal reluktor.",
-                    fontSize = 11.sp,
+                    text = "• Kabel pulser (J1.10) via signal conditioner ke ${selectedPlatform.pulserPin}.\n" +
+                            "• Kualitas Sinyal: ${t.pickupQuality}/100 (Target >= 10).\n" +
+                            "• Starter 2-3 detik untuk verifikasi pulser reluktor.",
+                    fontSize = 10.sp,
                     color = TextSecondary,
                     fontFamily = FontFamily.Monospace,
-                    lineHeight = 15.sp
+                    lineHeight = 13.sp
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 PulserAdvancedSettings(viewModel)
 
-                Spacer(modifier = Modifier.height(10.dp))
-                Button(
-                    enabled = !setupCommandPending,
+                Spacer(modifier = Modifier.height(8.dp))
+                MotecButton(
+                    text = if (setupCommandPending) "MENUNGGU MCU..." else "KONFIRMASI PULSER OK & LANJUT TDC",
                     onClick = { viewModel.confirmPulserPickup() },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(vertical = 6.dp)
-                ) {
-                    if (setupCommandPending) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = CarbonDark
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("MENUNGGU MCU...", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
-                    } else {
-                        Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = CarbonDark, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("KONFIRMASI PULSER OK & LANJUT TDC", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
-                    }
-                }
+                    color = RacingLime,
+                    enabled = !setupCommandPending,
+                    height = 32.dp,
+                    icon = Icons.Default.Check
+                )
             }
         }
 
@@ -412,118 +381,88 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
         item {
             StageCard(
                 stageNumber = 3,
-                title = "TDC : Kalibrasi Titik Mati Atas (OPSIONAL STROBO)",
+                title = "TDC : Kalibrasi Titik Mati Atas",
                 isCurrent = quickSetupPage == SetupStage.TDC.code,
                 isDone = visibleProgress > SetupStage.TDC.code,
                 onSelectStage = { viewModel.selectQuickSetupPage(SetupStage.TDC.code) }
             ) {
                 // Choice selector between Strobe vs Manual
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(SurfacePanel, RoundedCornerShape(8.dp))
-                        .padding(3.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(if (strobeModeChoice == 0) MotecOrange else Color.Transparent)
-                            .clickable { strobeModeChoice = 0 }
-                            .padding(vertical = 6.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "DENGAN STROBO LED",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            color = if (strobeModeChoice == 0) CarbonDark else TextSecondary
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(if (strobeModeChoice == 1) RacingLime else Color.Transparent)
-                            .clickable { strobeModeChoice = 1 }
-                            .padding(vertical = 6.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "TANPA STROBO (MANUAL)",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            color = if (strobeModeChoice == 1) CarbonDark else TextSecondary
-                        )
-                    }
+                    MotecButton(
+                        text = "DENGAN STROBO LED",
+                        onClick = { strobeModeChoice = 0 },
+                        modifier = Modifier.weight(1f),
+                        color = if (strobeModeChoice == 0) MotecOrange else TextMuted,
+                        height = 28.dp
+                    )
+                    MotecButton(
+                        text = "TANPA STROBO (MANUAL)",
+                        onClick = { strobeModeChoice = 1 },
+                        modifier = Modifier.weight(1f),
+                        color = if (strobeModeChoice == 1) RacingLime else TextMuted,
+                        height = 28.dp
+                    )
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 if (strobeModeChoice == 0) {
                     // STROBE HARDWARE OPTION
                     Text(
-                        text = "• Hubungkan ${selectedPlatform.strobePin} ke driver MOSFET FQP30N06L & LED strobo 1W.\n" +
-                                "• Buka baut lubang intip magnet bak mesin kiri Pulsar 200NS.\n" +
-                                "• Aplikasi menggeser sudut trigger absolut; starter harus terus berputar saat tanda diamati.\n" +
-                                "• Starter mesin dan sesuaikan offset hingga garis 'T' sejajar takik merah.",
-                        fontSize = 11.sp,
+                        text = "• Hubungkan ${selectedPlatform.strobePin} ke driver MOSFET & LED strobo.\n" +
+                                "• Buka baut lubang intip magnet kiri Pulsar 200NS.\n" +
+                                "• Starter mesin, sesuaikan hingga garis 'T' sejajar takik.",
+                        fontSize = 10.sp,
                         color = TextSecondary,
                         fontFamily = FontFamily.Monospace,
-                        lineHeight = 15.sp
+                        lineHeight = 13.sp
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Button(
+                        MotecButton(
+                            text = if (strobeActive) "STROBO ON" else "STROBO OFF",
                             onClick = { viewModel.toggleStrobe(!strobeActive) },
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (strobeActive) SensorAmber else SurfacePanel
-                            ),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Icon(imageVector = Icons.Default.FlashOn, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(if (strobeActive) "STROBO ON" else "STROBO OFF", fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                        }
-                        Button(
-                            enabled = !setupCommandPending,
+                            color = if (strobeActive) SensorAmber else ElectricCyan,
+                            height = 30.dp,
+                            icon = Icons.Default.FlashOn
+                        )
+                        MotecButton(
+                            text = "SIMPAN TDC STROBO",
                             onClick = { viewModel.saveTdcStrobe() },
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("SIMPAN TDC STROBO", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
-                        }
+                            color = RacingLime,
+                            height = 30.dp,
+                            enabled = !setupCommandPending
+                        )
                     }
                 } else {
                     // MANUAL OFFSET OPTION (NO STROBE REQUIRED)
                     Text(
-                        text = "• Kalibrasi tanpa strobo menggunakan offset manual terukur.\n" +
-                                "• 60.0° adalah nilai awal konservatif firmware, bukan hasil ukur final motor Anda.\n" +
-                                "• Nilai disimpan redundan ke flash A/B (0x0807E000 / 0x0807F000).",
-                        fontSize = 11.sp,
+                        text = "• Offset manual terukur (awal: 60.0° BTDC).\n" +
+                                "• Nilai disimpan permanen ke flash A/B redundan.",
+                        fontSize = 10.sp,
                         color = TextSecondary,
                         fontFamily = FontFamily.Monospace,
-                        lineHeight = 15.sp
+                        lineHeight = 13.sp
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Offset Pulser:", fontSize = 11.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
+                        Text("Offset Pulser:", fontSize = 10.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
                         Text(
                             text = "${if (pulserOffset > 0) "+" else ""}%.1f° BTDC".format(pulserOffset),
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Black,
                             color = MotecOrange,
                             fontFamily = FontFamily.Monospace
@@ -540,47 +479,41 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        OutlinedButton(
+                        MotecButton(
+                            text = "0.0° STD",
                             onClick = { viewModel.setPulserOffset(0.0f) },
                             modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(6.dp),
-                            contentPadding = PaddingValues(vertical = 2.dp)
-                        ) {
-                            Text("0.0° STD", fontSize = 9.sp, fontFamily = FontFamily.Monospace)
-                        }
-                        OutlinedButton(
+                            color = ElectricCyan,
+                            height = 26.dp
+                        )
+                        MotecButton(
+                            text = "+1.5° ADV",
                             onClick = { viewModel.setPulserOffset(1.5f) },
                             modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(6.dp),
-                            contentPadding = PaddingValues(vertical = 2.dp)
-                        ) {
-                            Text("+1.5° ADV", fontSize = 9.sp, fontFamily = FontFamily.Monospace)
-                        }
-                        OutlinedButton(
+                            color = SensorAmber,
+                            height = 26.dp
+                        )
+                        MotecButton(
+                            text = "-1.5° RET",
                             onClick = { viewModel.setPulserOffset(-1.5f) },
                             modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(6.dp),
-                            contentPadding = PaddingValues(vertical = 2.dp)
-                        ) {
-                            Text("-1.5° RET", fontSize = 9.sp, fontFamily = FontFamily.Monospace)
-                        }
+                            color = SensorAmber,
+                            height = 26.dp
+                        )
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        enabled = !setupCommandPending,
+                    Spacer(modifier = Modifier.height(6.dp))
+                    MotecButton(
+                        text = "SIMPAN TDC & LANJUT TPS",
                         onClick = { viewModel.saveManualTdc(pulserOffset) },
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(vertical = 6.dp)
-                    ) {
-                        Icon(imageVector = Icons.Default.Save, contentDescription = null, tint = CarbonDark, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("SIMPAN TDC MANUAL KE FLASH & LANJUT TPS", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
-                    }
+                        color = RacingLime,
+                        enabled = !setupCommandPending,
+                        height = 32.dp,
+                        icon = Icons.Default.Save
+                    )
                 }
             }
         }
@@ -589,46 +522,52 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
         item {
             StageCard(
                 stageNumber = 4,
-                title = "TPS_CAL : Kalibrasi Gas Tertutup & Penuh",
+                title = "TPS_CAL : Kalibrasi Sensor Gas",
                 isCurrent = quickSetupPage == SetupStage.TPS_CAL.code,
                 isDone = visibleProgress > SetupStage.TPS_CAL.code,
                 onSelectStage = { viewModel.selectQuickSetupPage(SetupStage.TPS_CAL.code) }
             ) {
                 Text(
-                    text = "• Mesin dalam kondisi MATI, kunci kontak ON.\n" +
-                            "• Sensor TPS membaca ADC pada pin J1.2 & J1.4.\n" +
+                    text = "• Mesin MATI, kunci kontak ON (J1.2 & J1.4).\n" +
                             "• Posisi Gas Saat Ini: ${t.tps / 10f}%",
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     color = TextSecondary,
                     fontFamily = FontFamily.Monospace,
-                    lineHeight = 15.sp
+                    lineHeight = 13.sp
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Button(
-                        enabled = !setupCommandPending,
+                    MotecButton(
+                        text = "1. GAS TUTUP (0%)",
                         onClick = { viewModel.calibrateTpsClosed() },
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(vertical = 6.dp)
-                    ) {
-                        Text("1. GAS TUTUP (0%)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextPrimary, fontFamily = FontFamily.Monospace)
-                    }
-                    Button(
-                        enabled = !setupCommandPending,
+                        color = ElectricCyan,
+                        height = 30.dp,
+                        enabled = !setupCommandPending
+                    )
+                    MotecButton(
+                        text = "2. GAS PENUH (100%)",
                         onClick = { viewModel.calibrateTpsOpen() },
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(vertical = 6.dp)
-                    ) {
-                        Text("2. GAS PENUH (100%)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
-                    }
+                        color = MotecOrange,
+                        height = 30.dp,
+                        enabled = !setupCommandPending
+                    )
                 }
+                Spacer(modifier = Modifier.height(6.dp))
+                MotecButton(
+                    text = "LANJUT KE TAHAP 5 (FIRST START) →",
+                    onClick = {
+                        viewModel.advanceSetupStage(SetupStage.FIRST_START.code)
+                        viewModel.selectQuickSetupPage(SetupStage.FIRST_START.code)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = RacingLime,
+                    height = 32.dp
+                )
             }
         }
 
@@ -636,31 +575,39 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
         item {
             StageCard(
                 stageNumber = 5,
-                title = "FIRST_START : Uji Mesin Hidup Pertama",
+                title = "FIRST_START : Uji Nyala Pertama",
                 isCurrent = quickSetupPage == SetupStage.FIRST_START.code,
                 isDone = visibleProgress > SetupStage.FIRST_START.code,
                 onSelectStage = { viewModel.selectQuickSetupPage(SetupStage.FIRST_START.code) }
             ) {
                 Text(
-                    text = "• Mode Pengamanan: Tegangan 220V, KOIL CENTER SAJA, Advance <= 10°, Rev-limiter 3.000 RPM.\n" +
-                            "• Otomatis R8: Tersimpan setelah stabil 3 detik dan otomatis READY setelah mesin berhenti atau boot berikutnya.\n" +
-                            "• Tegangan HV Kapasitor Live: CENTER ${t.hvCenter}V, SIDE ${t.hvSide}V (Durasi Stabil: ${t.firstStartSeconds}/3s).",
-                    fontSize = 11.sp,
+                    text = "• Failsafe: 220V, CENTER ONLY, Adv <= 10°, Limit 3000 RPM.\n" +
+                            "• Tegangan HV: CTR ${t.hvCenter}V, SIDE ${t.hvSide}V (Stabil: ${t.firstStartSeconds}/3s).",
+                    fontSize = 10.sp,
                     color = TextSecondary,
                     fontFamily = FontFamily.Monospace,
-                    lineHeight = 15.sp
+                    lineHeight = 13.sp
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    enabled = !setupCommandPending,
+                Spacer(modifier = Modifier.height(6.dp))
+                MotecButton(
+                    text = "AKTIFKAN FIRST START SAFETY MODE",
                     onClick = { viewModel.prepareFirstStartMode() },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(vertical = 6.dp)
-                ) {
-                    Text("AKTIFKAN FIRST START SAFETY MODE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
-                }
+                    color = MotecOrange,
+                    height = 32.dp,
+                    enabled = !setupCommandPending
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                MotecButton(
+                    text = "LANJUT KE TAHAP 6 (READY) →",
+                    onClick = {
+                        viewModel.advanceSetupStage(SetupStage.READY.code)
+                        viewModel.selectQuickSetupPage(SetupStage.READY.code)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = RacingLime,
+                    height = 32.dp
+                )
             }
         }
 
@@ -668,45 +615,40 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
         item {
             StageCard(
                 stageNumber = 6,
-                title = "READY : Operasi Penuh Normal & Simpan Permanen",
+                title = "READY : Operasi Penuh Normal",
                 isCurrent = quickSetupPage == SetupStage.READY.code,
                 isDone = t.setupStage >= SetupStage.READY.code,
                 onSelectStage = { viewModel.selectQuickSetupPage(SetupStage.READY.code) }
             ) {
                 Text(
-                    text = "• Mesin hidup stabil >= 3 detik. Siap operasi jalan penuh.\n" +
-                            "• Pilih mode koil lalu simpan konfigurasi permanen ke flash A/B.\n" +
-                            "• Boot CDI berikutnya langsung memakai kalibrasi tanpa perlu setup ulang.",
-                    fontSize = 11.sp,
+                    text = "• Mesin stabil >= 3 detik. Siap operasi normal.\n" +
+                            "• Pilih mode pengapian koil untuk mengaktifkan operasi jalan.",
+                    fontSize = 10.sp,
                     color = TextSecondary,
                     fontFamily = FontFamily.Monospace,
-                    lineHeight = 15.sp
+                    lineHeight = 13.sp
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Button(
-                        enabled = !setupCommandPending,
+                    MotecButton(
+                        text = "READY: CENTER",
                         onClick = { viewModel.confirmReadyCenterOnly() },
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(vertical = 6.dp)
-                    ) {
-                        Text("READY: CENTER", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextPrimary, fontFamily = FontFamily.Monospace)
-                    }
-                    Button(
-                        enabled = !setupCommandPending,
+                        color = ElectricCyan,
+                        height = 32.dp,
+                        enabled = !setupCommandPending
+                    )
+                    MotecButton(
+                        text = "READY: 3 BUSI",
                         onClick = { viewModel.confirmReadyTripleSpark(0) },
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(vertical = 6.dp)
-                    ) {
-                        Text("READY: 3 BUSI", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
-                    }
+                        color = RacingLime,
+                        height = 32.dp,
+                        enabled = !setupCommandPending
+                    )
                 }
             }
         }
@@ -721,54 +663,49 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp)),
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(3.dp)),
                 colors = CardDefaults.cardColors(containerColor = CardBackground),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(3.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
                         text = "MANAJEMEN SETUP & ADVANCE MAP CUSTOM",
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextSecondary,
                         fontFamily = FontFamily.Monospace
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        OutlinedButton(
-                            enabled = !setupCommandPending,
+                        MotecButton(
+                            text = "RESET SETUP",
                             onClick = { viewModel.resetSetupWorkflow() },
                             modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(vertical = 6.dp)
-                        ) {
-                            Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = RaceRedline, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("RESET SETUP", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = RaceRedline, fontFamily = FontFamily.Monospace)
-                        }
-                        Button(
+                            color = RaceRedline,
+                            height = 30.dp,
+                            enabled = !setupCommandPending,
+                            icon = Icons.Default.Refresh
+                        )
+                        MotecButton(
+                            text = "MAP CUSTOM ⚠️",
                             onClick = { viewModel.setTab(ScreenTab.MAPS) },
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(vertical = 6.dp)
-                        ) {
-                            Icon(imageVector = Icons.Default.Tune, contentDescription = null, tint = CarbonDark, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("MAP CUSTOM ⚠️", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
-                        }
+                            color = MotecOrange,
+                            height = 30.dp,
+                            icon = Icons.Default.Tune
+                        )
                     }
                 }
             }
         }
 
         item {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
         }
     }
 }
@@ -785,36 +722,45 @@ private fun StageCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onSelectStage)
             .border(
-                1.5.dp,
+                1.dp,
                 when {
                     isCurrent -> MotecOrange
-                    isDone -> RacingLime
+                    isDone -> RacingLime.copy(alpha = 0.6f)
                     else -> BorderSubtle
                 },
-                RoundedCornerShape(12.dp)
+                RoundedCornerShape(3.dp)
             ),
         colors = CardDefaults.cardColors(
             containerColor = if (isCurrent) CardHover else CardBackground
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(3.dp)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp)
+        ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onSelectStage)
+                    .padding(vertical = 2.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(24.dp)
-                            .clip(CircleShape)
+                            .size(20.dp)
+                            .clip(RoundedCornerShape(2.dp))
                             .background(
                                 when {
-                                    isDone -> RacingLime
-                                    isCurrent -> MotecOrange
+                                    isDone -> RacingLime.copy(alpha = 0.2f)
+                                    isCurrent -> MotecOrange.copy(alpha = 0.25f)
                                     else -> SurfacePanel
                                 }
                             )
@@ -825,7 +771,7 @@ private fun StageCard(
                                     isCurrent -> MotecOrange
                                     else -> BorderSubtle
                                 },
-                                CircleShape
+                                RoundedCornerShape(2.dp)
                             ),
                         contentAlignment = Alignment.Center
                     ) {
@@ -833,43 +779,78 @@ private fun StageCard(
                             Icon(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = "Done",
-                                tint = CarbonDark,
-                                modifier = Modifier.size(16.dp)
+                                tint = RacingLime,
+                                modifier = Modifier.size(13.dp)
                             )
                         } else {
                             Text(
                                 text = "$stageNumber",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isCurrent) CarbonDark else TextMuted,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Black,
+                                color = if (isCurrent) MotecOrange else TextMuted,
                                 fontFamily = FontFamily.Monospace
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = title,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (isCurrent) MotecOrange else if (isDone) TextPrimary else TextSecondary,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1
                     )
                 }
 
-                if (isCurrent) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(MotecOrange.copy(alpha = 0.2f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text("PROSES", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MotecOrange, fontFamily = FontFamily.Monospace)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (isDone) {
+                        Surface(
+                            shape = RoundedCornerShape(2.dp),
+                            color = RacingLime.copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, RacingLime.copy(alpha = 0.5f))
+                        ) {
+                            Text(
+                                text = "LULUS",
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = RacingLime,
+                                fontFamily = FontFamily.Monospace,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    } else if (isCurrent) {
+                        Surface(
+                            shape = RoundedCornerShape(2.dp),
+                            color = MotecOrange.copy(alpha = 0.2f),
+                            border = BorderStroke(1.dp, MotecOrange)
+                        ) {
+                            Text(
+                                text = "AKTIF",
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MotecOrange,
+                                fontFamily = FontFamily.Monospace,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
                     }
+                    Icon(
+                        imageVector = if (isCurrent) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = if (isCurrent) MotecOrange else TextMuted,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-            content()
+            if (isCurrent) {
+                Spacer(modifier = Modifier.height(6.dp))
+                content()
+            }
         }
     }
 }
@@ -896,27 +877,27 @@ private fun HarnessJ1View(viewModel: CdiViewModel, confirmedMap: Map<String, Boo
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, MotecOrange, RoundedCornerShape(10.dp)),
+                    .border(1.dp, MotecOrange, RoundedCornerShape(3.dp)),
                 colors = CardDefaults.cardColors(containerColor = CardBackground),
-                shape = RoundedCornerShape(10.dp)
+                shape = RoundedCornerShape(3.dp)
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
                     Text(
                         text = "ORIENTASI KONEKTOR CDI J1 (12 PIN)",
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = MotecOrange,
                         fontFamily = FontFamily.Monospace
                     )
                     Text(
-                        text = "Muka soket HARNESS, latch di atas:\n• Baris atas (kiri ke kanan): 1 - 6\n• Baris bawah (kiri ke kanan): 7 - 12\n*Gunakan pigtail adaptor, JANGAN MEMOTONG harness motor!",
-                        fontSize = 10.sp,
+                        text = "Muka soket HARNESS, latch di atas:\n• Baris atas: 1 - 6 | Baris bawah: 7 - 12\n*Gunakan pigtail adaptor, JANGAN MEMOTONG harness motor!",
+                        fontSize = 9.sp,
                         color = TextSecondary,
                         fontFamily = FontFamily.Monospace
                     )
@@ -932,15 +913,15 @@ private fun HarnessJ1View(viewModel: CdiViewModel, confirmedMap: Map<String, Boo
                     .border(
                         1.dp,
                         if (isConfirmed) RacingLime else if (pin.isWarning) SensorAmber else BorderSubtle,
-                        RoundedCornerShape(10.dp)
+                        RoundedCornerShape(3.dp)
                     ),
                 colors = CardDefaults.cardColors(containerColor = CardBackground),
-                shape = RoundedCornerShape(10.dp)
+                shape = RoundedCornerShape(3.dp)
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(10.dp),
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -948,15 +929,15 @@ private fun HarnessJ1View(viewModel: CdiViewModel, confirmedMap: Map<String, Boo
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = pin.pin,
-                                fontSize = 13.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isConfirmed) RacingLime else MotecOrange,
                                 fontFamily = FontFamily.Monospace
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "${pin.wireColor} (${pin.name})",
-                                fontSize = 12.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TextPrimary,
                                 fontFamily = FontFamily.Monospace
@@ -964,62 +945,47 @@ private fun HarnessJ1View(viewModel: CdiViewModel, confirmedMap: Map<String, Boo
                         }
                         Text(
                             text = "Tujuan: ${pin.target}",
-                            fontSize = 10.sp,
+                            fontSize = 9.sp,
                             color = ElectricCyan,
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
                             text = pin.description,
-                            fontSize = 10.sp,
+                            fontSize = 9.sp,
                             color = TextMuted,
                             fontFamily = FontFamily.Monospace
                         )
                     }
 
                     Column(horizontalAlignment = Alignment.End) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(
-                                    if (isConfirmed) RacingLime.copy(alpha = 0.2f)
+                        Surface(
+                            shape = RoundedCornerShape(2.dp),
+                            color = if (isConfirmed) RacingLime.copy(alpha = 0.2f)
                                     else if (pin.isWarning) SensorAmber.copy(alpha = 0.2f)
-                                    else SurfacePanel
-                                )
-                                .border(
-                                    1.dp,
-                                    if (isConfirmed) RacingLime else if (pin.isWarning) SensorAmber else BorderSubtle,
-                                    RoundedCornerShape(4.dp)
-                                )
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    else SurfacePanel,
+                            border = BorderStroke(
+                                1.dp,
+                                if (isConfirmed) RacingLime else if (pin.isWarning) SensorAmber else BorderSubtle
+                            )
                         ) {
                             Text(
                                 text = if (isConfirmed) "CONFIRMED" else pin.status,
-                                fontSize = 9.sp,
+                                fontSize = 8.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isConfirmed) RacingLime else if (pin.isWarning) SensorAmber else TextSecondary,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = FontFamily.Monospace,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                             )
                         }
 
                         if (pin.isWarning) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Button(
+                            Spacer(modifier = Modifier.height(3.dp))
+                            MotecButton(
+                                text = if (isConfirmed) "BATAL" else "KONFIRMASI",
                                 onClick = { viewModel.toggleConfirmPin(pin.pin) },
-                                shape = RoundedCornerShape(4.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isConfirmed) RacingLime else SurfacePanel
-                                ),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                modifier = Modifier.height(26.dp)
-                            ) {
-                                Text(
-                                    text = if (isConfirmed) "UNCHECK" else "KONFIRMASI",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isConfirmed) CarbonDark else TextPrimary,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            }
+                                color = if (isConfirmed) RacingLime else SensorAmber,
+                                height = 24.dp
+                            )
                         }
                     }
                 }
@@ -1614,63 +1580,63 @@ fun PulserAdvancedSettings(viewModel: CdiViewModel) {
     val edge by viewModel.pickupEdge.collectAsState()
     val setupCommandPending by viewModel.setupCommandPending.collectAsState()
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Text(
-            "PULSER CONFIGURATION",
-            fontSize = 11.sp,
+            "KONFIGURASI PULSER RELUKTOR",
+            fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             color = MotecOrange,
             fontFamily = FontFamily.Monospace
         )
 
-        Text("Trigger edge", fontSize = 10.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Trigger edge:", fontSize = 9.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf("FALLING", "RISING").forEach { item ->
-                FilterChip(
-                    selected = edge == item,
-                    enabled = !setupCommandPending,
+                MotecButton(
+                    text = if (item == "FALLING") "$item (NS200)" else item,
                     onClick = { viewModel.setPulserEdge(item) },
-                    label = {
-                        Text(
-                            text = if (item == "FALLING") "$item (NS200)" else item,
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
+                    enabled = !setupCommandPending,
+                    color = if (edge == item) MotecOrange else TextMuted,
+                    height = 26.dp,
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
 
-        Text("Pulse per revolution: $selectedPpr", fontSize = 10.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Pulse per revolution: $selectedPpr PPR", fontSize = 9.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             (1..4).forEach { ppr ->
-                FilterChip(
-                    selected = selectedPpr == ppr,
-                    enabled = !setupCommandPending,
+                MotecButton(
+                    text = "$ppr PPR",
                     onClick = { viewModel.setPulserPpr(ppr) },
-                    label = { Text("$ppr PPR", fontSize = 10.sp, fontFamily = FontFamily.Monospace) }
+                    enabled = !setupCommandPending,
+                    color = if (selectedPpr == ppr) ElectricCyan else TextMuted,
+                    height = 24.dp,
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
 
-        Text("SCR gate pulse: $selectedGate µs", fontSize = 10.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("SCR gate pulse: $selectedGate µs", fontSize = 9.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf(60, 80, 100, 120).forEach { gate ->
-                FilterChip(
-                    selected = selectedGate == gate,
-                    enabled = !setupCommandPending,
+                MotecButton(
+                    text = "$gate µs",
                     onClick = { viewModel.setGateDurationUs(gate) },
-                    label = { Text("$gate µs", fontSize = 10.sp, fontFamily = FontFamily.Monospace) }
+                    enabled = !setupCommandPending,
+                    color = if (selectedGate == gate) RacingLime else TextMuted,
+                    height = 24.dp,
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
 
         Text(
-            text = "Nilai awal NS200: 1 PPR dan 80 µs. Perubahan PPR mengharuskan kalibrasi TDC ulang.",
-            fontSize = 10.sp,
+            text = "STD NS200: 1 PPR, 80 µs, FALLING. Ubah PPR butuh kalibrasi TDC.",
+            fontSize = 9.sp,
             color = TextMuted,
             fontFamily = FontFamily.Monospace,
-            lineHeight = 13.sp
+            lineHeight = 11.sp
         )
     }
 }
@@ -1691,13 +1657,13 @@ private fun FanModeSettings(viewModel: CdiViewModel) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp)),
+            .border(1.dp, BorderSubtle, RoundedCornerShape(3.dp)),
         colors = CardDefaults.cardColors(containerColor = CardBackground),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(3.dp)
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1705,15 +1671,15 @@ private fun FanModeSettings(viewModel: CdiViewModel) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "RADIATOR FAN MODE",
-                    fontSize = 11.sp,
+                    "KONTROL KIPAS RADIATOR",
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     color = SensorAmber,
                     fontFamily = FontFamily.Monospace
                 )
                 Text(
-                    "Aktif: $fanMode",
-                    fontSize = 10.sp,
+                    "AKTIF: $fanMode",
+                    fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
                     color = when (fanMode) {
                         "ON" -> RacingLime
@@ -1725,35 +1691,36 @@ private fun FanModeSettings(viewModel: CdiViewModel) {
             }
 
             Text(
-                "Kontrol relai J1.7 melalui ${selectedPlatform.fanRelayPin}. Firmware saat ini: OFF = output LOW; ON dan AUTO = output HIGH failsafe. AUTO berbasis suhu belum tersedia karena konversi NTC belum diimplementasikan.",
-                fontSize = 10.sp,
+                "Relai J1.7 via ${selectedPlatform.fanRelayPin}. OFF: LOW, ON/AUTO: HIGH.",
+                fontSize = 9.sp,
                 color = TextSecondary,
                 fontFamily = FontFamily.Monospace
             )
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 listOf("OFF", "ON", "AUTO").forEach { mode ->
-                    FilterChip(
-                        selected = fanMode == mode,
-                        enabled = safeToChange && !setupCommandPending,
+                    MotecButton(
+                        text = mode,
                         onClick = { viewModel.setFanMode(mode) },
-                        label = {
-                            Text(
-                                mode,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
+                        enabled = safeToChange && !setupCommandPending,
+                        color = if (fanMode == mode) {
+                            when (mode) {
+                                "ON" -> RacingLime
+                                "OFF" -> RaceRedline
+                                else -> ElectricCyan
+                            }
+                        } else TextMuted,
+                        height = 26.dp,
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
 
             if (!safeToChange) {
                 Text(
-                    "⚠️ Matikan mesin dan tunggu tegangan HV di bawah 30 V untuk mengubah mode fan.",
+                    "⚠️ Mesin harus mati & HV < 30V untuk mengubah mode kipas.",
                     color = Color(0xFFFF4444),
-                    fontSize = 10.sp,
+                    fontSize = 9.sp,
                     fontFamily = FontFamily.Monospace
                 )
             }

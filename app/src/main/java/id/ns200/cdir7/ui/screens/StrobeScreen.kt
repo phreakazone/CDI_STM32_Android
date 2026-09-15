@@ -307,24 +307,16 @@ fun StrobeScreen(viewModel: CdiViewModel) {
                 // Fine Adjustment Step Buttons (-1.0, -0.1, +0.1, +1.0)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     listOf(-1.0f to "-1.0°", -0.1f to "-0.1°", 0.1f to "+0.1°", 1.0f to "+1.0°").forEach { step ->
-                        Button(
+                        id.ns200.cdir7.ui.components.MotecButton(
+                            text = step.second,
                             onClick = { viewModel.adjustPulserOffset(step.first) },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(vertical = 8.dp)
-                        ) {
-                            Text(
-                                text = step.second,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
+                            color = TextPrimary,
+                            height = 30.dp,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
             }
@@ -335,15 +327,15 @@ fun StrobeScreen(viewModel: CdiViewModel) {
             modifier = Modifier
                 .fillMaxWidth()
                 .border(
-                    1.5.dp,
+                    1.dp,
                     if (flashSaved) RacingLime else MotecOrange,
-                    RoundedCornerShape(14.dp)
+                    RoundedCornerShape(3.dp)
                 )
                 .testTag("save_flash_card"),
             colors = CardDefaults.cardColors(containerColor = CardBackground),
-            shape = RoundedCornerShape(14.dp)
+            shape = RoundedCornerShape(3.dp)
         ) {
-            Column(modifier = Modifier.padding(14.dp)) {
+            Column(modifier = Modifier.padding(10.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -352,68 +344,51 @@ fun StrobeScreen(viewModel: CdiViewModel) {
                         imageVector = if (flashSaved) Icons.Default.CheckCircle else Icons.Default.Save,
                         contentDescription = "Flash Save",
                         tint = if (flashSaved) RacingLime else MotecOrange,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Column {
                         Text(
                             text = "SIMPAN KALIBRASI TDC",
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Black,
                             fontFamily = FontFamily.Monospace,
                             color = if (flashSaved) RacingLime else TextPrimary
                         )
                         Text(
                             text = "Flash A/B otomatis • 0x0807E000 / 0x0807F000",
-                            fontSize = 10.sp,
+                            fontSize = 9.sp,
                             fontFamily = FontFamily.Monospace,
                             color = TextSecondary
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "Merekam sudut trigger ke flash redundan. Setelah ACK MCU, Setup otomatis lanjut ke TPS; status READY diberikan setelah FIRST START selesai.",
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     color = TextMuted,
                     fontFamily = FontFamily.Monospace
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-                Button(
+                id.ns200.cdir7.ui.components.MotecButton(
+                    text = when {
+                        setupCommandPending -> "MENUNGGU ACK MCU..."
+                        flashSaved -> "TDC TERSIMPAN DI FLASH A/B"
+                        else -> "SIMPAN TDC & LANJUT KE TPS"
+                    },
                     onClick = { viewModel.saveCalibrationToFlash() },
                     enabled = !setupCommandPending,
+                    color = if (flashSaved) RacingLime else MotecOrange,
+                    icon = if (flashSaved) Icons.Default.CheckCircle else Icons.Default.Save,
+                    height = 36.dp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
-                        .testTag("save_to_flash_button"),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (flashSaved) RacingLime else MotecOrange
-                    ),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    if (setupCommandPending) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = CarbonDark
-                        )
-                        Spacer(modifier = Modifier.width(7.dp))
-                    }
-                    Text(
-                        text = when {
-                            setupCommandPending -> "MENUNGGU ACK MCU..."
-                            flashSaved -> "TDC TERSIMPAN DI FLASH A/B"
-                            else -> "SIMPAN TDC & LANJUT KE TPS"
-                        },
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = CarbonDark,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
+                        .testTag("save_to_flash_button")
+                )
             }
         }
 

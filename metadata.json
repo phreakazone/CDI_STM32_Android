@@ -1,6 +1,6 @@
 {
-  "name": "CDI Universal R9",
-  "description": "Aplikasi kontrol CDI Programmable Pulsar NS200 Firmware R8: Alur OEM Learn, Kontrol Mode DIY/Manual, Otomatis First Start & Ready, Pengunggah APP.bin BLE OTA, Dashboard balap MoTeC, Kurva Pengapian 4 Slot, dan Bengkel Wiring.",
+  "name": "IGNITRA CDI",
+  "description": "Aplikasi kendali tuning pengapian IGNITRA CDI R9 (Dual-MCU ESP32 & STM32WB55): Telemetri balap MoTeC, Pemetaan Kurva 4-Slot, BLE Hardware Scanner, Alur Safe DIY & OEM Learn, serta BLE OTA Firmware Flasher.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

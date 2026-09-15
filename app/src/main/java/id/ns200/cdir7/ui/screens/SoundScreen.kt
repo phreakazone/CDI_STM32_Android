@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.ns200.cdir7.CdiViewModel
 import id.ns200.cdir7.EngineSound
+import id.ns200.cdir7.ui.components.MotecButton
 import id.ns200.cdir7.ui.theme.*
 import kotlin.math.abs
 import kotlin.math.sin
@@ -295,17 +296,13 @@ fun SoundScreen(viewModel: CdiViewModel) {
                             color = SensorAmber,
                             fontFamily = FontFamily.Monospace
                         )
-                        Button(
+                        MotecButton(
+                            text = "STARTER",
                             onClick = { viewModel.simulateStartEngine() },
-                            colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
-                            shape = RoundedCornerShape(6.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 3.dp),
-                            modifier = Modifier.height(28.dp)
-                        ) {
-                            Icon(Icons.Default.PlayArrow, null, tint = CarbonDark, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("STARTER", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                        }
+                            color = RacingLime,
+                            icon = Icons.Default.PlayArrow,
+                            height = 26.dp
+                        )
                     }
                 }
 
@@ -389,61 +386,53 @@ fun SoundScreen(viewModel: CdiViewModel) {
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(
-                        onClick = {
-                            viewModel.resetDemoThrottle()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-                        modifier = Modifier.weight(1f).height(34.dp)
-                    ) {
-                        Text("IDLE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = ElectricCyan, fontFamily = FontFamily.Monospace)
-                    }
+                    MotecButton(
+                        text = "IDLE",
+                        onClick = { viewModel.resetDemoThrottle() },
+                        color = ElectricCyan,
+                        height = 30.dp,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                    Button(
-                        onClick = {
-                            viewModel.setDemoRpmDirect(4500f)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-                        modifier = Modifier.weight(1f).height(34.dp)
-                    ) {
-                        Text("4.5K", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextPrimary, fontFamily = FontFamily.Monospace)
-                    }
+                    MotecButton(
+                        text = "4.5K",
+                        onClick = { viewModel.setDemoRpmDirect(4500f) },
+                        color = TextPrimary,
+                        height = 30.dp,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                    Button(
-                        onClick = {
-                            viewModel.setDemoRpmDirect(8000f)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-                        modifier = Modifier.weight(1f).height(34.dp)
-                    ) {
-                        Text("8K", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MotecOrange, fontFamily = FontFamily.Monospace)
-                    }
+                    MotecButton(
+                        text = "8K",
+                        onClick = { viewModel.setDemoRpmDirect(8000f) },
+                        color = MotecOrange,
+                        height = 30.dp,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                    Button(
-                        onClick = {
-                            viewModel.setDemoRpmDirect(11500f)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-                        modifier = Modifier.weight(1.2f).height(34.dp)
-                    ) {
-                        Text("LIMITER", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = RaceRedline, fontFamily = FontFamily.Monospace)
-                    }
+                    MotecButton(
+                        text = "LIMITER",
+                        onClick = { viewModel.setDemoRpmDirect(11500f) },
+                        color = RaceRedline,
+                        height = 30.dp,
+                        modifier = Modifier.weight(1.2f)
+                    )
 
                     // Momentary Quick Blip & Hold Gas Button (Simulasi Putar Tuas Gas)
                     Box(
                         modifier = Modifier
                             .weight(1.3f)
-                            .height(34.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isRevving) RaceRedline else MotecOrange)
+                            .height(30.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(
+                                if (isRevving) RaceRedline.copy(alpha = 0.35f)
+                                else MotecOrange.copy(alpha = 0.2f)
+                            )
+                            .border(
+                                1.dp,
+                                if (isRevving) RaceRedline else MotecOrange,
+                                RoundedCornerShape(3.dp)
+                            )
                             .pointerInput(Unit) {
                                 detectTapGestures(
                                     onTap = {
@@ -471,7 +460,7 @@ fun SoundScreen(viewModel: CdiViewModel) {
                             text = if (isRevving) "GAS!!" else "BLIP GAS",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Black,
-                            color = CarbonDark,
+                            color = if (isRevving) RaceRedline else MotecOrange,
                             fontFamily = FontFamily.Monospace
                         )
                     }
@@ -696,7 +685,8 @@ fun SoundScreen(viewModel: CdiViewModel) {
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End
                     ) {
-                        Button(
+                        MotecButton(
+                            text = if (isSelected) "SUARA AKTIF • DENGARKAN" else "PILIH & TEST SUARA",
                             onClick = {
                                 if (preset == EngineSound.Preset.CUSTOM) {
                                     filePicker.launch(arrayOf("audio/mpeg", "audio/wav", "audio/ogg", "audio/*"))
@@ -704,28 +694,10 @@ fun SoundScreen(viewModel: CdiViewModel) {
                                     viewModel.setSoundPreset(preset)
                                 }
                             },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isSelected) ElectricCyan.copy(alpha = 0.25f) else SurfacePanel
-                            ),
-                            shape = RoundedCornerShape(6.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 3.dp),
-                            modifier = Modifier.height(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isSelected) Icons.Default.VolumeUp else Icons.Default.PlayArrow,
-                                contentDescription = "Test Audio",
-                                tint = if (isSelected) ElectricCyan else TextSecondary,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = if (isSelected) "SUARA AKTIF • DENGARKAN" else "PILIH & TEST SUARA",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isSelected) ElectricCyan else TextSecondary,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
+                            color = if (isSelected) ElectricCyan else TextSecondary,
+                            icon = if (isSelected) Icons.Default.VolumeUp else Icons.Default.PlayArrow,
+                            height = 26.dp
+                        )
                     }
                 }
             }
@@ -768,17 +740,13 @@ fun SoundScreen(viewModel: CdiViewModel) {
                             )
                         }
 
-                        Button(
+                        MotecButton(
+                            text = "PILIH BERKAS",
                             onClick = { filePicker.launch(arrayOf("audio/mpeg", "audio/wav", "audio/ogg", "audio/*")) },
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Icon(imageVector = Icons.Default.Add, contentDescription = "Add", tint = CarbonDark, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("PILIH BERKAS", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
-                        }
+                            color = MotecOrange,
+                            icon = Icons.Default.Add,
+                            height = 28.dp
+                        )
                     }
 
                     if (customTracks.isNotEmpty()) {

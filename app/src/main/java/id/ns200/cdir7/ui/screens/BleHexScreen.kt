@@ -1,16 +1,19 @@
 package id.ns200.cdir7.ui.screens
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
+import android.location.LocationManager
 import android.net.Uri
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,15 +26,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.location.LocationManagerCompat
 import id.ns200.cdir7.CdiProtocol
 import id.ns200.cdir7.CdiViewModel
 import id.ns200.cdir7.OtaState
+import id.ns200.cdir7.ui.components.MotecButton
 import id.ns200.cdir7.ui.theme.*
 
 enum class LinkQuality(val label: String, val color: Color) {
@@ -51,14 +59,9 @@ fun evaluateLinkQuality(
     }
 
     return when {
-        crcPercent < 95f || rateHz < 12 ->
-            LinkQuality.BURUK
-
-        rateHz in 18..22 && crcPercent >= 99f ->
-            LinkQuality.STABIL
-
-        else ->
-            LinkQuality.CUKUP
+        crcPercent < 95f || rateHz < 12 -> LinkQuality.BURUK
+        rateHz in 18..22 && crcPercent >= 99f -> LinkQuality.STABIL
+        else -> LinkQuality.CUKUP
     }
 }
 
@@ -66,7 +69,7 @@ fun evaluateLinkQuality(
 @Composable
 fun BleHexScreen(
     viewModel: CdiViewModel,
-    onRequestPermissions: (() -> Unit)? = null
+    onRequestPermissions: (((isScan: Boolean, onGranted: (() -> Unit)?) -> Unit))? = null
 ) {
     val connectionStatus by viewModel.connectionStatus.collectAsState()
     val isConnected by viewModel.isConnected.collectAsState()
@@ -84,9 +87,23 @@ fun BleHexScreen(
     val logs by viewModel.terminalLogs.collectAsState()
     val otaState by viewModel.otaState.collectAsState()
     val selectedPlatform by viewModel.selectedPlatform.collectAsState()
+    val savedDeviceMac by viewModel.savedDeviceMac.collectAsState()
     val context = LocalContext.current
 
     val linkQuality = evaluateLinkQuality(isConnected, packetRate, crcPercent)
+    var filterOnlyCdi by remember { mutableStateOf(false) }
+    var showManualMacDialog by remember { mutableStateOf(false) }
+    var manualMacInput by remember { mutableStateOf(savedDeviceMac ?: "") }
+
+    // Deteksi Layanan Lokasi (GPS) HP - Hanya relevan untuk Android 11 ke bawah (SDK < 31)
+    val locationManager = remember { context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager }
+    val isGpsEnabled = remember(isScanning, isConnected) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            true // Android 12+ dengan flag neverForLocation resmi bebas GPS
+        } else {
+            locationManager?.let { LocationManagerCompat.isLocationEnabled(it) } ?: true
+        }
+    }
 
     val binFilePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -100,7 +117,7 @@ fun BleHexScreen(
                     val fileName = it.lastPathSegment?.substringAfterLast('/') ?: "APP.bin"
                     viewModel.startOtaUpload(bytes, fileName)
                 } else {
-                    Toast.makeText(context, "File kosong atau tidak dapat dibaca", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "File kosong atau tidak terbaca", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 Toast.makeText(context, "Gagal membaca file: ${e.message}", Toast.LENGTH_LONG).show()
@@ -111,727 +128,35 @@ fun BleHexScreen(
     var commandInput by remember { mutableStateOf("") }
     val scrollState = rememberScrollState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(CarbonDark)
-            .verticalScroll(scrollState)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // BLE GATT STATUS CARD
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(
-                    1.dp,
-                    linkQuality.color,
-                    RoundedCornerShape(14.dp)
+    // Dialog Input MAC Langsung (Koneksi Bebas GPS 100%)
+    if (showManualMacDialog) {
+        AlertDialog(
+            onDismissRequest = { showManualMacDialog = false },
+            shape = RoundedCornerShape(3.dp),
+            containerColor = CardBackground,
+            title = {
+                Text(
+                    text = "KONEKSI LANGSUNG VIA MAC (BEBAS GPS)",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MotecOrange,
+                    fontFamily = FontFamily.Monospace
                 )
-                .testTag("ble_status_card"),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
-            shape = RoundedCornerShape(14.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Header Row: Status Indicator & Link Quality Badge
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .clip(CircleShape)
-                                .background(linkQuality.color)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Text(
-                                text = if (isConnected) {
-                                    if (isSimulation) "MODE SIMULASI CDI R9"
-                                    else if (telemetryPacketCount < 2L) "BLE CONNECTED • STANDBY"
-                                    else "BLE CONNECTED • ${packetRate} Hz"
-                                } else "BLE OFFLINE / TERPUTUS",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                color = linkQuality.color,
-                                maxLines = 1
-                            )
-                            Text(
-                                text = connectionStatus,
-                                fontSize = 10.sp,
-                                color = TextSecondary,
-                                fontFamily = FontFamily.Monospace,
-                                maxLines = 1
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = linkQuality.color.copy(alpha = 0.15f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, linkQuality.color.copy(alpha = 0.5f))
-                    ) {
-                        Text(
-                            text = if (isSimulation) "SIMULASI" else linkQuality.label,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            color = linkQuality.color,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                        )
-                    }
-                }
-
-                // Dedicated Action Buttons Row (Full width, balanced 50/50 weights - never squeezed!)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Demo / Simulation mode toggle button
-                    OutlinedButton(
-                        onClick = { viewModel.toggleSimulation() },
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = if (isSimulation) MotecOrange else TextSecondary
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(38.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isSimulation) Icons.Default.PlayCircle else Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = if (isSimulation) MotecOrange else TextSecondary
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = if (isSimulation) "SIMULASI: ON" else "SIMULASI: OFF",
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
-
-                    // Connect / Disconnect button
-                    Button(
-                        onClick = {
-                            if (!isConnected && !viewModel.hasBlePermissions() && onRequestPermissions != null) {
-                                onRequestPermissions()
-                            } else {
-                                viewModel.toggleConnect()
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isConnected) RaceRedline else RacingLime
-                        ),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(38.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isConnected) Icons.Default.BluetoothDisabled else Icons.Default.Bluetooth,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = CarbonDark
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = when {
-                                isConnected -> "PUTUS BLE"
-                                isBusy -> "BATALKAN"
-                                else -> "HUBUNGKAN"
-                            },
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = CarbonDark,
-                            fontFamily = FontFamily.Monospace,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
-                }
-
-                // GATT Specs
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(SurfacePanel, RoundedCornerShape(8.dp))
-                        .padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    GattSpecRow("SERVICE UUID", "7a8f1000-6c9d-4e40-a45f-0b4b4e533230")
-                    GattSpecRow("TELEMETRY CHAR", "7a8f1001-... (${telemetryPacketCount} frame • ${packetRate} Hz • v3 20B)")
-                    GattSpecRow("COMMAND CHAR", "7a8f1002-... (Antrean ACK: $pending)")
-                    GattSpecRow("RESPONSE CHAR", "7a8f1003-... (Notify ASCII Stream)")
-                    GattSpecRow(
-                        "CRC16 INTEGRITY",
-                        if (telemetryPacketCount == 0L) "BELUM ADA FRAME"
-                        else "%.1f%% VALID (%s)".format(crcPercent, linkQuality.label)
-                    )
-                    GattSpecRow("TELEMETRY RX", telemetryRxMessage)
-                }
-            }
-        }
-
-        // BLE OTA FIRMWARE UPLOADER (APP.BIN - R9) CARD
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, if (otaState is OtaState.Transferring) ElectricCyan else BorderSubtle, RoundedCornerShape(14.dp))
-                .testTag("ble_ota_card"),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
-            shape = RoundedCornerShape(14.dp)
-        ) {
-            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "PENGUNGGAH FIRMWARE BLE (OTA R9)",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MotecOrange,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        Text(
-                            text = if (selectedPlatform == id.ns200.cdir7.McuPlatform.STM32WB55) {
-                                "Target: STM32 APP.bin"
-                            } else {
-                                "Target: ESP32 application image sesuai partition table"
-                            },
-                            fontSize = 10.sp,
-                            color = TextSecondary,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(
-                                when (otaState) {
-                                    is OtaState.Transferring -> ElectricCyan.copy(alpha = 0.2f)
-                                    is OtaState.Success -> RacingLime.copy(alpha = 0.2f)
-                                    is OtaState.Error -> RaceRedline.copy(alpha = 0.2f)
-                                    else -> SurfacePanel
-                                }
-                            )
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = when (otaState) {
-                                is OtaState.Idle -> "IDLE"
-                                is OtaState.Preparing -> "MENYIAPKAN"
-                                is OtaState.Transferring -> "MENGUNGGAH"
-                                is OtaState.Verifying -> "VERIFIKASI"
-                                is OtaState.Success -> "SUKSES"
-                                is OtaState.Error -> "ERROR"
-                            },
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            color = when (otaState) {
-                                is OtaState.Transferring -> ElectricCyan
-                                is OtaState.Success -> RacingLime
-                                is OtaState.Error -> RaceRedline
-                                else -> TextSecondary
-                            }
-                        )
-                    }
-                }
-
-                // Safety Preflight Status
-                val safetyErr = viewModel.checkOtaPreflightSafety()
-                val isSafetyOk = safetyErr == null
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(if (isSafetyOk) SurfacePanel else RaceRedline.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                        .border(1.dp, if (isSafetyOk) BorderSubtle else RaceRedline.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                        .padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "SYARAT KESELAMATAN SEBELUM OTA:",
+                        text = "Koneksi langsung ke MAC address tidak membutuhkan GPS/Layanan Lokasi pada semua versi Android.",
                         fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isSafetyOk) RacingLime else SensorAmber,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Text(
-                        text = "• RPM = 0 (${if (telemetry.rpm == 0) "OK: Mesin Mati" else "BAHAYA: ${telemetry.rpm} RPM"})\n" +
-                               "• Output OFF (${if (!telemetry.centerEnabled && !telemetry.sideEnabled) "OK: Koil Nonaktif" else "PERINGATAN: Koil Aktif"})\n" +
-                               "• HV < 30V (${if (telemetry.hvCenter < 30 && telemetry.hvSide < 30) "OK: Aman (${telemetry.hvCenter}V/${telemetry.hvSide}V)" else "BAHAYA: ${telemetry.hvCenter}V/${telemetry.hvSide}V"})",
-                        fontSize = 9.sp,
-                        lineHeight = 13.sp,
                         color = TextSecondary,
                         fontFamily = FontFamily.Monospace
                     )
-                    if (!isSafetyOk) {
-                        Text(
-                            text = "Update hanya dapat dimulai saat RPM=0, output OFF, dan kedua HV <30 V.",
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = RaceRedline,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-                }
-
-                // OTA Transfer Status & Progress Bar
-                when (val state = otaState) {
-                    is OtaState.Transferring -> {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "Mengirim: ${state.bytesTransferred} / ${state.totalBytes} Byte",
-                                    fontSize = 10.sp,
-                                    color = ElectricCyan,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                                Text(
-                                    text = "${(state.progressPercent * 100).toInt()}% (Chunk ${state.chunkIndex + 1}/${state.totalChunks})",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = RacingLime,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            }
-                            LinearProgressIndicator(
-                                progress = { state.progressPercent },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(8.dp)
-                                    .clip(RoundedCornerShape(4.dp)),
-                                color = ElectricCyan,
-                                trackColor = SurfacePanel
-                            )
-                            Button(
-                                onClick = viewModel::cancelOtaUpload,
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(containerColor = RaceRedline),
-                                shape = RoundedCornerShape(6.dp),
-                                contentPadding = PaddingValues(vertical = 4.dp)
-                            ) {
-                                Text("BATALKAN PROSES OTA", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextPrimary, fontFamily = FontFamily.Monospace)
-                            }
-                        }
-                    }
-                    is OtaState.Verifying -> {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = ElectricCyan)
-                            Text("Memverifikasi CRC32 Flash MCU...", fontSize = 11.sp, color = ElectricCyan, fontFamily = FontFamily.Monospace)
-                        }
-                    }
-                    is OtaState.Success -> {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(RacingLime.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
-                                .border(1.dp, RacingLime, RoundedCornerShape(8.dp))
-                                .padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.CheckCircle, null, tint = RacingLime, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("SUKSES! Firmware R9 berhasil diunggah. ${state.message}", fontSize = 10.sp, color = RacingLime, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                    is OtaState.Error -> {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(RaceRedline.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
-                                .border(1.dp, RaceRedline, RoundedCornerShape(8.dp))
-                                .padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.Error, null, tint = RaceRedline, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("GAGAL OTA: ${state.reason}", fontSize = 10.sp, color = RaceRedline, fontFamily = FontFamily.Monospace)
-                        }
-                    }
-                    else -> Unit
-                }
-
-                // File Selection & Upload Buttons
-                if (otaState !is OtaState.Transferring && otaState !is OtaState.Preparing && otaState !is OtaState.Verifying) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            enabled = isSafetyOk,
-                            onClick = { binFilePickerLauncher.launch("*/*") },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
-                            shape = RoundedCornerShape(6.dp),
-                            contentPadding = PaddingValues(vertical = 6.dp)
-                        ) {
-                            Icon(Icons.Default.UploadFile, null, tint = CarbonDark, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("PILIH APP.BIN", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
-                        }
-
-                        OutlinedButton(
-                            onClick = { viewModel.sendRawCommand("GET,OTA") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(6.dp),
-                            contentPadding = PaddingValues(vertical = 6.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = ElectricCyan)
-                        ) {
-                            Icon(Icons.Default.Info, null, tint = ElectricCyan, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("STATUS OTA", fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                        }
-                    }
-                }
-            }
-        }
-
-        // HARDWARE BLE SCANNER & PAIRING CARD
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp))
-                .testTag("ble_scanner_card"),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
-            shape = RoundedCornerShape(14.dp)
-        ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "BLE HARDWARE CDI SCANNER",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MotecOrange,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        Text(
-                            text = "Target: CDI Universal R9 / STM32WB55 atau ESP32",
-                            fontSize = 10.sp,
-                            color = TextSecondary,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-
-                    Button(
-                        onClick = {
-                            if (isScanning) {
-                                viewModel.stopBleScan()
-                            } else {
-                                if (!viewModel.hasBlePermissions() && onRequestPermissions != null) {
-                                    onRequestPermissions()
-                                } else {
-                                    viewModel.startBleScan()
-                                }
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isScanning) RaceRedline else MotecOrange
-                        ),
-                        shape = RoundedCornerShape(6.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = if (isScanning) "STOP SCAN" else "SCAN BLE",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = CarbonDark,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                if (discoveredDevices.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(SurfacePanel, RoundedCornerShape(8.dp))
-                            .padding(12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (isScanning) "Sedang mencari perangkat CDI sekitar..." else "Tekan 'SCAN BLE' untuk mencari modul CDI hardware nyata.",
-                            fontSize = 11.sp,
-                            color = TextMuted,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for (item in discoveredDevices) {
-                            val devName = item.name.ifBlank { "BLE Device" }
-                            val devAddr = item.address
-                            val isTarget = item.isCdiCandidate
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(if (isTarget) CardHover else SurfacePanel, RoundedCornerShape(8.dp))
-                                    .border(1.dp, if (isTarget) RacingLime else BorderSubtle, RoundedCornerShape(8.dp))
-                                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = devName,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isTarget) RacingLime else TextPrimary,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                    Text(
-                                        text = "$devAddr  (RSSI: ${item.rssi} dBm)",
-                                        fontSize = 10.sp,
-                                        color = TextSecondary,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                }
-
-                                Button(
-                                    onClick = {
-                                        if (!viewModel.hasBlePermissions() && onRequestPermissions != null) {
-                                            onRequestPermissions()
-                                        } else {
-                                            viewModel.connectBleDevice(item.device)
-                                        }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (isTarget) RacingLime else MotecOrange
-                                    ),
-                                    shape = RoundedCornerShape(6.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        text = "KONEK",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = CarbonDark,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.LockOpen,
-                        contentDescription = "Tanpa PIN",
-                        tint = RacingLime,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Tanpa PIN/bonding • PHY 1M • Auto-reconnect eksponensial 1–30s",
-                        fontSize = 10.sp,
-                        color = RacingLime,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-            }
-        }
-
-        // REAL-TIME 20-BYTE RAW HEXADECIMAL PACKET INSPECTOR
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp))
-                .testTag("hex_packet_inspector"),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
-            shape = RoundedCornerShape(14.dp)
-        ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "20-BYTE V3 ${if (rawPacket.getOrNull(3)?.toInt() == 1) "DIAGNOSTIC" else "CORE"}",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = ElectricCyan,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Text(
-                        text = "RATE: $packetRate Hz",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = RacingLime,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Hex Grid Matrix (20 bytes shown in 4 rows of 5 bytes)
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(SurfacePanel, RoundedCornerShape(8.dp))
-                        .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
-                        .padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    for (row in 0..3) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "%02X:".format(row * 5),
-                                fontSize = 11.sp,
-                                color = TextMuted,
-                                fontFamily = FontFamily.Monospace
-                            )
-                            for (col in 0..4) {
-                                val byteIndex = row * 5 + col
-                                val byteVal = if (byteIndex < rawPacket.size) rawPacket[byteIndex].toInt() and 0xFF else 0
-                                val color = when (byteIndex) {
-                                    0, 1, 2 -> ElectricCyan        // Header 15 CD 03
-                                    3 -> RacingLime                // Frame kind
-                                    4, 5 -> SensorAmber            // Sequence
-                                    6, 7 -> MotecOrange            // RPM
-                                    8, 9 -> TechPurple             // TPS
-                                    10, 11 -> ElectricCyan         // Advance
-                                    12, 13 -> SensorAmber          // Battery
-                                    14, 15, 16, 17 -> RacingLime   // HV Caps
-                                    18, 19 -> RacingLime           // CRC16
-                                    else -> TextSecondary
-                                }
-                                Text(
-                                    text = "%02X".format(byteVal),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = color,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Field Decoder Legend
-                @OptIn(ExperimentalLayoutApi::class)
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    LegendChip("0-2: Magic (15 CD 03)", ElectricCyan)
-                    LegendChip("3: Type (0:CORE / 1:DIAG)", RacingLime)
-                    LegendChip("4-5: Seq ${telemetry.sequence}", MotecOrange)
-                    LegendChip(
-                        if (rawPacket.getOrNull(3)?.toInt() == 1) "6-17 DIAG: Suhu/Flags/Fault/TDC"
-                        else "6-17 CORE: RPM/TPS/ADV/BAT/HV",
-                        TechPurple
-                    )
-                    LegendChip("18-19: CRC16 OK", RacingLime)
-                }
-            }
-        }
-
-        // TERMINAL CONSOLE LOG & COMMAND SENDER
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp)),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
-            shape = RoundedCornerShape(14.dp)
-        ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                Text(
-                    text = "DIAGNOSTIC TERMINAL LOG",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = SensorAmber,
-                    fontFamily = FontFamily.Monospace
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Console Box
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(140.dp)
-                        .background(CarbonDark, RoundedCornerShape(8.dp))
-                        .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
-                        .padding(8.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    logs.takeLast(20).forEach { line ->
-                        Text(
-                            text = "> $line",
-                            fontSize = 10.sp,
-                            color = if (line.startsWith("TX")) MotecOrange else if (line.startsWith("RX")) ElectricCyan else TextSecondary,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Command Input Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
                     OutlinedTextField(
-                        value = commandInput,
-                        onValueChange = { commandInput = it },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(50.dp),
-                        placeholder = { Text("Ketik command (e.g. PING, LOAD,0)", fontSize = 11.sp, color = TextMuted) },
+                        value = manualMacInput,
+                        onValueChange = { manualMacInput = it.uppercase() },
+                        placeholder = { Text("Contoh: AA:BB:CC:DD:EE:FF", fontSize = 11.sp, color = TextMuted) },
                         singleLine = true,
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(3.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = TextPrimary,
                             unfocusedTextColor = TextPrimary,
@@ -839,102 +164,872 @@ fun BleHexScreen(
                             unfocusedBorderColor = BorderSubtle,
                             focusedContainerColor = SurfacePanel,
                             unfocusedContainerColor = SurfacePanel
-                        )
+                        ),
+                        modifier = Modifier.fillMaxWidth()
                     )
-
-                    Button(
-                        onClick = {
-                            viewModel.sendRawCommand(commandInput)
-                            commandInput = ""
-                        },
-                        modifier = Modifier.height(50.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MotecOrange)
-                    ) {
-                        Text("KIRIM", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CarbonDark, fontFamily = FontFamily.Monospace)
-                    }
                 }
+            },
+            confirmButton = {
+                MotecButton(
+                    text = "HUBUNGKAN",
+                    onClick = {
+                        val cleaned = manualMacInput.trim()
+                        if (cleaned.isNotBlank()) {
+                            showManualMacDialog = false
+                            if (onRequestPermissions != null) {
+                                onRequestPermissions(false) { viewModel.connectDirectAddress(cleaned) }
+                            } else {
+                                viewModel.connectDirectAddress(cleaned)
+                            }
+                        } else {
+                            Toast.makeText(context, "Masukkan MAC address yang valid", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    color = RacingLime
+                )
+            },
+            dismissButton = {
+                MotecButton(
+                    text = "BATAL",
+                    onClick = { showManualMacDialog = false },
+                    color = TextSecondary
+                )
+            }
+        )
+    }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Quick Command Buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(CarbonDark),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = 740.dp)
+                .fillMaxWidth()
+                .verticalScroll(scrollState)
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            // ==========================================
+            // 1. BLE GATT STATUS & CONTROLS (MOTEC STYLE)
+            // ==========================================
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, linkQuality.color.copy(alpha = 0.8f), RoundedCornerShape(3.dp))
+                    .testTag("ble_status_card"),
+                colors = CardDefaults.cardColors(containerColor = CardBackground),
+                shape = RoundedCornerShape(3.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    listOf("PING", "LOAD,0", "LOAD,1", "SAVE,0").forEach { cmd ->
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(SurfacePanel)
-                                .border(1.dp, BorderSubtle, RoundedCornerShape(4.dp))
-                                .clickable { viewModel.sendRawCommand(cmd) }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                    // Header Row: Status Bar & Quality Badge
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Text(cmd, fontSize = 10.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(linkQuality.color)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = when {
+                                    isConnected && isSimulation -> "MODE SIMULASI CDI R9"
+                                    isConnected && telemetryPacketCount < 2L -> "BLE TERHUBUNG • STANDBY"
+                                    isConnected -> "BLE TERHUBUNG • ${packetRate} Hz"
+                                    isBusy -> "BLE: MENGHUBUNGKAN..."
+                                    else -> "BLE OFFLINE / TERPUTUS"
+                                },
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                color = linkQuality.color,
+                                maxLines = 1
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(2.dp),
+                            color = linkQuality.color.copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, linkQuality.color.copy(alpha = 0.6f))
+                        ) {
+                            Text(
+                                text = if (isSimulation) "SIMULASI" else linkQuality.label,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                color = linkQuality.color,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
+                    // Action Buttons 50/50: MOTEC SQUARE BUTTONS
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        MotecButton(
+                            text = if (isSimulation) "SIMULASI: AKTIF" else "MODE SIMULASI",
+                            onClick = { viewModel.toggleSimulation() },
+                            icon = if (isSimulation) Icons.Default.PlayCircle else Icons.Default.PlayArrow,
+                            color = if (isSimulation) MotecOrange else TextSecondary,
+                            modifier = Modifier.weight(1f),
+                            height = 34.dp
+                        )
+
+                        MotecButton(
+                            text = when {
+                                isConnected -> "PUTUS KONEKSI"
+                                isBusy -> "BATALKAN"
+                                else -> "HUBUNGKAN"
+                            },
+                            onClick = {
+                                if (!isConnected) {
+                                    val hasSaved = !savedDeviceMac.isNullOrBlank()
+                                    if (hasSaved) {
+                                        if (!viewModel.hasConnectPermission() && onRequestPermissions != null) {
+                                            onRequestPermissions(false) { viewModel.toggleConnect() }
+                                        } else {
+                                            viewModel.toggleConnect()
+                                        }
+                                    } else {
+                                        if (!viewModel.hasBlePermissions() && onRequestPermissions != null) {
+                                            onRequestPermissions(true) { viewModel.toggleConnect() }
+                                        } else {
+                                            viewModel.toggleConnect()
+                                        }
+                                    }
+                                } else {
+                                    viewModel.toggleConnect()
+                                }
+                            },
+                            icon = if (isConnected) Icons.Default.BluetoothDisabled else Icons.Default.Bluetooth,
+                            color = if (isConnected) RaceRedline else RacingLime,
+                            modifier = Modifier.weight(1f),
+                            height = 34.dp
+                        )
+                    }
+
+                    // Compact GATT Specs Grid (2 columns, minimal whitespace)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(SurfacePanel, RoundedCornerShape(2.dp))
+                            .border(1.dp, BorderSubtle, RoundedCornerShape(2.dp))
+                            .padding(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("SRV: 7a8f1000... (128-bit)", fontSize = 9.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
+                            Text("CMD: 7a8f1002... (Q: $pending)", fontSize = 9.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("TEL: 7a8f1001... ($telemetryPacketCount pkts)", fontSize = 9.sp, color = ElectricCyan, fontFamily = FontFamily.Monospace)
+                            Text("RSP: 7a8f1003... (ASCII)", fontSize = 9.sp, color = TechPurple, fontFamily = FontFamily.Monospace)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("RATE: ${packetRate} Hz • PHY 1M", fontSize = 9.sp, color = RacingLime, fontFamily = FontFamily.Monospace)
+                            Text("CRC: %.1f%% (%s)".format(crcPercent, linkQuality.label), fontSize = 9.sp, color = linkQuality.color, fontFamily = FontFamily.Monospace)
+                        }
+                        if (telemetryRxMessage.isNotBlank()) {
+                            Text("RX: $telemetryRxMessage", fontSize = 9.sp, color = TextPrimary, fontFamily = FontFamily.Monospace, maxLines = 1)
                         }
                     }
                 }
             }
+
+            // ==========================================
+            // 2. HARDWARE BLE CDI SCANNER (FOKUS UTAMA)
+            // ==========================================
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, if (isScanning) MotecOrange else BorderSubtle, RoundedCornerShape(3.dp))
+                    .testTag("ble_scanner_card"),
+                colors = CardDefaults.cardColors(containerColor = CardBackground),
+                shape = RoundedCornerShape(3.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // Scanner Header Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Icon(
+                                imageVector = Icons.Default.BluetoothSearching,
+                                contentDescription = null,
+                                tint = if (isScanning) MotecOrange else ElectricCyan,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Column {
+                                Text(
+                                    text = "BLE HARDWARE SCANNER",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isScanning) MotecOrange else TextPrimary,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Text(
+                                    text = if (isScanning) "Mencari frekuensi radio BLE..." else "${discoveredDevices.size} modul terdeteksi",
+                                    fontSize = 9.sp,
+                                    color = TextSecondary,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+
+                        // Scan / Stop Motec Button
+                        MotecButton(
+                            text = if (isScanning) "HENTIKAN" else "PINDAI BLE",
+                            onClick = {
+                                if (isScanning) {
+                                    viewModel.stopBleScan()
+                                } else {
+                                    if (onRequestPermissions != null) {
+                                        onRequestPermissions(true) { viewModel.startBleScan() }
+                                    } else {
+                                        viewModel.startBleScan()
+                                    }
+                                }
+                            },
+                            icon = if (isScanning) Icons.Default.Close else Icons.Default.Search,
+                            color = if (isScanning) RaceRedline else MotecOrange,
+                            height = 32.dp,
+                            modifier = Modifier.testTag("start_scan_button")
+                        )
+                    }
+
+                    // Scanning Progress Bar
+                    if (isScanning) {
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(2.dp),
+                            color = MotecOrange,
+                            trackColor = SurfacePanel
+                        )
+                    }
+
+                    // GPS Warning & Solusi Bebas GPS jika GPS Mati pada Android < 12 (Android 11 kebawah)
+                    if (!isGpsEnabled && android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(SensorAmber.copy(alpha = 0.12f), RoundedCornerShape(2.dp))
+                                .border(1.dp, SensorAmber.copy(alpha = 0.6f), RoundedCornerShape(2.dp))
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Icon(Icons.Default.LocationOff, null, tint = SensorAmber, modifier = Modifier.size(13.dp))
+                                Spacer(Modifier.width(5.dp))
+                                Text(
+                                    text = "Android <12 butuh GPS aktif untuk scan BLE. Atau gunakan Hubungkan MAC (Bebas GPS).",
+                                    fontSize = 8.sp,
+                                    color = SensorAmber,
+                                    fontFamily = FontFamily.Monospace,
+                                    maxLines = 1
+                                )
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                MotecButton(
+                                    text = "INPUT MAC",
+                                    onClick = { showManualMacDialog = true },
+                                    color = ElectricCyan,
+                                    height = 22.dp,
+                                    fontSize = 8.sp
+                                )
+                                MotecButton(
+                                    text = "AKTIFKAN GPS",
+                                    onClick = {
+                                        try {
+                                            context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                                        } catch (_: Exception) {
+                                            Toast.makeText(context, "Buka Pengaturan untuk menyalakan Lokasi", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    color = SensorAmber,
+                                    height = 22.dp,
+                                    fontSize = 8.sp
+                                )
+                            }
+                        }
+                    }
+
+                    // Filter Tabs & Direct MAC Action
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            // Filter: Semua
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(if (!filterOnlyCdi) MotecOrange.copy(alpha = 0.18f) else SurfacePanel)
+                                    .border(1.dp, if (!filterOnlyCdi) MotecOrange else BorderSubtle, RoundedCornerShape(2.dp))
+                                    .clickable { filterOnlyCdi = false }
+                                    .padding(horizontal = 7.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = "SEMUA (${discoveredDevices.size})",
+                                    fontSize = 9.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (!filterOnlyCdi) MotecOrange else TextSecondary
+                                )
+                            }
+
+                            // Filter: Hanya CDI
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(if (filterOnlyCdi) RacingLime.copy(alpha = 0.18f) else SurfacePanel)
+                                    .border(1.dp, if (filterOnlyCdi) RacingLime else BorderSubtle, RoundedCornerShape(2.dp))
+                                    .clickable { filterOnlyCdi = true }
+                                    .padding(horizontal = 7.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = "CDI TARGET (${discoveredDevices.count { it.isCdiCandidate }})",
+                                    fontSize = 9.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (filterOnlyCdi) RacingLime else TextSecondary
+                                )
+                            }
+                        }
+
+                        // Tombol Cepat Input MAC (100% Bebas GPS)
+                        MotecButton(
+                            text = "KONEK MAC",
+                            onClick = { showManualMacDialog = true },
+                            icon = Icons.Default.Dialpad,
+                            color = ElectricCyan,
+                            height = 24.dp,
+                            fontSize = 8.5.sp
+                        )
+                    }
+
+                    val displayedDevices = if (filterOnlyCdi) {
+                        discoveredDevices.filter { it.isCdiCandidate }
+                    } else {
+                        discoveredDevices
+                    }
+
+                    // Devices List
+                    if (displayedDevices.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(SurfacePanel, RoundedCornerShape(2.dp))
+                                .border(1.dp, BorderSubtle, RoundedCornerShape(2.dp))
+                                .padding(vertical = 12.dp, horizontal = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    text = when {
+                                        isScanning -> "🔍 Sedang memindai radio BLE..."
+                                        filterOnlyCdi && discoveredDevices.isNotEmpty() -> "Tidak ada target CDI di antara ${discoveredDevices.size} perangkat sekitar."
+                                        else -> "Belum ada perangkat. Tekan 'PINDAI BLE' atau gunakan 'KONEK MAC'."
+                                    },
+                                    fontSize = 10.sp,
+                                    color = TextMuted,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                if (!isScanning) {
+                                    Text("Pastikan kontak motor & CDI menyala (No PIN • Auto-reconnect)", fontSize = 8.5.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
+                                }
+                            }
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            for (item in displayedDevices) {
+                                val devName = item.name.ifBlank { "BLE Device" }
+                                val devAddr = item.address
+                                val isTarget = item.isCdiCandidate
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(if (isTarget) CardHover else SurfacePanel, RoundedCornerShape(2.dp))
+                                        .border(1.dp, if (isTarget) RacingLime.copy(alpha = 0.8f) else BorderSubtle, RoundedCornerShape(2.dp))
+                                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = devName,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isTarget) RacingLime else TextPrimary,
+                                                fontFamily = FontFamily.Monospace
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(2.dp),
+                                                color = if (isTarget) RacingLime.copy(alpha = 0.2f) else CarbonDark,
+                                                border = BorderStroke(0.5.dp, if (isTarget) RacingLime else BorderSubtle)
+                                            ) {
+                                                Text(
+                                                    text = if (isTarget) "TARGET CDI" else "BLE LAIN",
+                                                    fontSize = 8.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isTarget) RacingLime else TextMuted,
+                                                    fontFamily = FontFamily.Monospace,
+                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                )
+                                            }
+                                        }
+                                        Text(
+                                            text = "$devAddr • ${item.rssi} dBm",
+                                            fontSize = 9.sp,
+                                            color = TextSecondary,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                    }
+
+                                    MotecButton(
+                                        text = "KONEK",
+                                        onClick = {
+                                            if (onRequestPermissions != null) {
+                                                onRequestPermissions(false) { viewModel.connectBleDevice(item.device) }
+                                            } else {
+                                                viewModel.connectBleDevice(item.device)
+                                            }
+                                        },
+                                        color = if (isTarget) RacingLime else MotecOrange,
+                                        enabled = !isConnected && !isBusy,
+                                        height = 26.dp,
+                                        fontSize = 9.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ==========================================
+            // 3. BLE OTA FIRMWARE UPLOADER (COLLAPSIBLE)
+            // ==========================================
+            var otaCardExpanded by remember { mutableStateOf(otaState !is OtaState.Idle) }
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, if (otaState is OtaState.Transferring) ElectricCyan else BorderSubtle, RoundedCornerShape(3.dp))
+                    .testTag("ble_ota_card"),
+                colors = CardDefaults.cardColors(containerColor = CardBackground),
+                shape = RoundedCornerShape(3.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { otaCardExpanded = !otaCardExpanded }
+                        ) {
+                            Text(
+                                text = "PENGUNGGAH FIRMWARE (OTA R9)",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MotecOrange,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                imageVector = if (otaCardExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = null,
+                                tint = TextSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(2.dp),
+                            color = when (otaState) {
+                                is OtaState.Transferring -> ElectricCyan.copy(alpha = 0.18f)
+                                is OtaState.Success -> RacingLime.copy(alpha = 0.18f)
+                                is OtaState.Error -> RaceRedline.copy(alpha = 0.18f)
+                                else -> SurfacePanel
+                            },
+                            border = BorderStroke(
+                                1.dp,
+                                when (otaState) {
+                                    is OtaState.Transferring -> ElectricCyan
+                                    is OtaState.Success -> RacingLime
+                                    is OtaState.Error -> RaceRedline
+                                    else -> BorderSubtle
+                                }
+                            )
+                        ) {
+                            Text(
+                                text = when (otaState) {
+                                    is OtaState.Idle -> "IDLE"
+                                    is OtaState.Preparing -> "SIAP"
+                                    is OtaState.Transferring -> "UPLOAD"
+                                    is OtaState.Verifying -> "VERIFIKASI"
+                                    is OtaState.Success -> "SUKSES"
+                                    is OtaState.Error -> "ERROR"
+                                },
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                color = when (otaState) {
+                                    is OtaState.Transferring -> ElectricCyan
+                                    is OtaState.Success -> RacingLime
+                                    is OtaState.Error -> RaceRedline
+                                    else -> TextSecondary
+                                },
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
+                    if (otaCardExpanded || otaState !is OtaState.Idle) {
+                        val safetyErr = viewModel.checkOtaPreflightSafety()
+                        val isSafetyOk = safetyErr == null
+
+                        // Preflight Safety Strip
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(if (isSafetyOk) SurfacePanel else RaceRedline.copy(alpha = 0.12f), RoundedCornerShape(2.dp))
+                                .border(1.dp, if (isSafetyOk) BorderSubtle else RaceRedline.copy(alpha = 0.6f), RoundedCornerShape(2.dp))
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "RPM=0: ${telemetry.rpm == 0} • KOIL=OFF: ${!telemetry.centerEnabled && !telemetry.sideEnabled} • HV<30V: ${telemetry.hvCenter < 30 && telemetry.hvSide < 30}",
+                                fontSize = 8.5.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = if (isSafetyOk) RacingLime else RaceRedline
+                            )
+                            Text(
+                                text = if (selectedPlatform == id.ns200.cdir7.McuPlatform.STM32WB55) "STM32" else "ESP32",
+                                fontSize = 8.5.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                color = TextSecondary
+                            )
+                        }
+
+                        // OTA Progress or State
+                        when (val state = otaState) {
+                            is OtaState.Transferring -> {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("${state.bytesTransferred}/${state.totalBytes}B", fontSize = 9.sp, color = ElectricCyan, fontFamily = FontFamily.Monospace)
+                                        Text("${(state.progressPercent * 100).toInt()}% (Chunk ${state.chunkIndex + 1}/${state.totalChunks})", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = RacingLime, fontFamily = FontFamily.Monospace)
+                                    }
+                                    LinearProgressIndicator(
+                                        progress = { state.progressPercent },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(4.dp)
+                                            .clip(RoundedCornerShape(2.dp)),
+                                        color = ElectricCyan,
+                                        trackColor = SurfacePanel
+                                    )
+                                    MotecButton(
+                                        text = "BATALKAN OTA",
+                                        onClick = viewModel::cancelOtaUpload,
+                                        color = RaceRedline,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        height = 26.dp
+                                    )
+                                }
+                            }
+                            is OtaState.Verifying -> {
+                                Text("Memverifikasi CRC32 Flash MCU...", fontSize = 9.5.sp, color = ElectricCyan, fontFamily = FontFamily.Monospace)
+                            }
+                            is OtaState.Success -> {
+                                Text("SUKSES: Firmware R9 aktif. ${state.message}", fontSize = 9.5.sp, color = RacingLime, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                            }
+                            is OtaState.Error -> {
+                                Text("ERROR OTA: ${state.reason}", fontSize = 9.5.sp, color = RaceRedline, fontFamily = FontFamily.Monospace)
+                            }
+                            else -> Unit
+                        }
+
+                        // Action Buttons
+                        if (otaState !is OtaState.Transferring && otaState !is OtaState.Preparing && otaState !is OtaState.Verifying) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                MotecButton(
+                                    text = "PILIH APP.BIN",
+                                    onClick = { binFilePickerLauncher.launch("*/*") },
+                                    icon = Icons.Default.UploadFile,
+                                    color = MotecOrange,
+                                    enabled = isSafetyOk,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                MotecButton(
+                                    text = "STATUS OTA",
+                                    onClick = { viewModel.sendRawCommand("GET,OTA") },
+                                    icon = Icons.Default.Info,
+                                    color = ElectricCyan,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ==========================================
+            // 4. 20-BYTE RAW HEXADECIMAL PACKET STREAM
+            // ==========================================
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(3.dp))
+                    .testTag("hex_packet_inspector"),
+                colors = CardDefaults.cardColors(containerColor = CardBackground),
+                shape = RoundedCornerShape(3.dp)
+            ) {
+                Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "20-BYTE V3 STREAM (${if (rawPacket.getOrNull(3)?.toInt() == 1) "DIAG" else "CORE"})",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ElectricCyan,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = "$packetRate Hz",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = RacingLime,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+
+                    // Hex Grid Matrix (4 rows x 5 columns)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(SurfacePanel, RoundedCornerShape(2.dp))
+                            .border(1.dp, BorderSubtle, RoundedCornerShape(2.dp))
+                            .padding(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        for (row in 0..3) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "%02X:".format(row * 5),
+                                    fontSize = 10.sp,
+                                    color = TextMuted,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                for (col in 0..4) {
+                                    val byteIndex = row * 5 + col
+                                    val byteVal = if (byteIndex < rawPacket.size) rawPacket[byteIndex].toInt() and 0xFF else 0
+                                    val color = when (byteIndex) {
+                                        0, 1, 2 -> ElectricCyan        // Header 15 CD 03
+                                        3 -> RacingLime                // Frame kind
+                                        4, 5 -> SensorAmber            // Sequence
+                                        6, 7 -> MotecOrange            // RPM
+                                        8, 9 -> TechPurple             // TPS
+                                        10, 11 -> ElectricCyan         // Advance
+                                        12, 13 -> SensorAmber          // Battery
+                                        14, 15, 16, 17 -> RacingLime   // HV Caps
+                                        18, 19 -> RacingLime           // CRC16
+                                        else -> TextSecondary
+                                    }
+                                    Text(
+                                        text = "%02X".format(byteVal),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = color,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Field Decoder Legend
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("0-2: Magic 15CD03", fontSize = 8.sp, color = ElectricCyan, fontFamily = FontFamily.Monospace)
+                        Text("3: Type", fontSize = 8.sp, color = RacingLime, fontFamily = FontFamily.Monospace)
+                        Text("4-5: Seq", fontSize = 8.sp, color = SensorAmber, fontFamily = FontFamily.Monospace)
+                        Text("6-17: Vars", fontSize = 8.sp, color = MotecOrange, fontFamily = FontFamily.Monospace)
+                        Text("18-19: CRC16", fontSize = 8.sp, color = RacingLime, fontFamily = FontFamily.Monospace)
+                    }
+                }
+            }
+
+            // ==========================================
+            // 5. DIAGNOSTIC TERMINAL LOG & COMMAND SENDER
+            // ==========================================
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(3.dp)),
+                colors = CardDefaults.cardColors(containerColor = CardBackground),
+                shape = RoundedCornerShape(3.dp)
+            ) {
+                Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "DIAGNOSTIC TERMINAL LOG",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = SensorAmber,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = "${logs.size} baris",
+                            fontSize = 9.sp,
+                            color = TextMuted,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+
+                    // Console Box
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp)
+                            .background(CarbonDark, RoundedCornerShape(2.dp))
+                            .border(1.dp, BorderSubtle, RoundedCornerShape(2.dp))
+                            .padding(6.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        if (logs.isEmpty()) {
+                            Text("> Terminal siap • Kirim perintah ASCII di bawah", fontSize = 9.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
+                        } else {
+                            logs.takeLast(20).forEach { line ->
+                                Text(
+                                    text = "> $line",
+                                    fontSize = 9.sp,
+                                    color = when {
+                                        line.startsWith("TX") -> MotecOrange
+                                        line.startsWith("RX") -> ElectricCyan
+                                        line.contains("ERR", true) -> RaceRedline
+                                        else -> TextSecondary
+                                    },
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+                    }
+
+                    // Command Input Bar
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = commandInput,
+                            onValueChange = { commandInput = it },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(38.dp),
+                            placeholder = { Text("Command (e.g. PING, LOAD,0)", fontSize = 10.sp, color = TextMuted) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(3.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedBorderColor = MotecOrange,
+                                unfocusedBorderColor = BorderSubtle,
+                                focusedContainerColor = SurfacePanel,
+                                unfocusedContainerColor = SurfacePanel
+                            )
+                        )
+
+                        MotecButton(
+                            text = "KIRIM",
+                            onClick = {
+                                if (commandInput.isNotBlank()) {
+                                    viewModel.sendRawCommand(commandInput.trim())
+                                    commandInput = ""
+                                }
+                            },
+                            color = MotecOrange,
+                            height = 38.dp
+                        )
+                    }
+
+                    // Quick Command Chips
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        listOf("PING", "LOAD,0", "LOAD,1", "SAVE,0", "GET,OTA").forEach { cmd ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(SurfacePanel)
+                                    .border(1.dp, BorderSubtle, RoundedCornerShape(2.dp))
+                                    .clickable { viewModel.sendRawCommand(cmd) }
+                                    .padding(horizontal = 6.dp, vertical = 3.dp)
+                            ) {
+                                Text(cmd, fontSize = 9.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-    }
-}
-
-@Composable
-private fun GattSpecRow(label: String, value: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 1.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top
-    ) {
-        Text(
-            text = label,
-            fontSize = 10.sp,
-            color = TextMuted,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.weight(0.36f)
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = value,
-            fontSize = 10.sp,
-            color = TextPrimary,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.weight(0.64f),
-            textAlign = androidx.compose.ui.text.style.TextAlign.End
-        )
-    }
-}
-
-@Composable
-private fun LegendChip(text: String, color: Color) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .background(SurfacePanel, RoundedCornerShape(6.dp))
-            .border(1.dp, BorderSubtle, RoundedCornerShape(6.dp))
-            .padding(horizontal = 7.dp, vertical = 3.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .clip(CircleShape)
-                .background(color)
-        )
-        Spacer(modifier = Modifier.width(5.dp))
-        Text(
-            text = text,
-            fontSize = 9.5.sp,
-            color = TextSecondary,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1
-        )
     }
 }

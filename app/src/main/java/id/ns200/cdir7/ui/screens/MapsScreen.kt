@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.ns200.cdir7.CdiViewModel
 import id.ns200.cdir7.CustomAdvancePoint
+import id.ns200.cdir7.ui.components.MotecButton
 import id.ns200.cdir7.ui.theme.*
 
 @Composable
@@ -422,31 +423,17 @@ fun MapsScreen(viewModel: CdiViewModel) {
             }
 
             // SYNC ACTION BUTTON
-            Button(
+            MotecButton(
+                text = if (pendingCommands > 0) "SYNC MCU: $pendingCommands PERINTAH" else "SINKRONISASI KURVA KE CDI VIA BLE",
                 onClick = { viewModel.syncCurveToBle() },
                 enabled = pendingCommands == 0,
+                color = MotecOrange,
+                icon = Icons.Default.Sync,
+                height = 38.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
-                    .testTag("sync_curve_button"),
-                colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Sync,
-                    contentDescription = "Sync",
-                    tint = CarbonDark,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = if (pendingCommands > 0) "SYNC MCU: $pendingCommands PERINTAH" else "SINKRONISASI KURVA KE CDI VIA BLE",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = CarbonDark,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
+                    .testTag("sync_curve_button")
+            )
         } else {
             // ==========================================
             // CUSTOM ADVANCE MAP EDITOR SECTION
@@ -475,17 +462,15 @@ fun MapsScreen(viewModel: CdiViewModel) {
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf("ECO", "STREET", "RAIN", "PRO").forEach { preset ->
-                            OutlinedButton(
+                            MotecButton(
+                                text = preset,
                                 onClick = {
                                     viewModel.loadCustomPreset(preset)
                                     Toast.makeText(context, "Base preset $preset dimuat!", Toast.LENGTH_SHORT).show()
                                 },
-                                shape = RoundedCornerShape(6.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = ElectricCyan)
-                            ) {
-                                Text(preset, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                            }
+                                color = ElectricCyan,
+                                height = 26.dp
+                            )
                         }
                     }
                 }
@@ -727,7 +712,8 @@ fun MapsScreen(viewModel: CdiViewModel) {
             }
 
             // SAVE TO MCU FLASH BUTTON WITH SAFETY INTERLOCK
-            Button(
+            MotecButton(
+                text = "SIMPAN MAP CUSTOM KE FLASH MCU",
                 onClick = {
                     // Pre-check safety
                     if (telemetry.rpm > 0) {
@@ -741,28 +727,13 @@ fun MapsScreen(viewModel: CdiViewModel) {
                     }
                 },
                 enabled = pendingCommands == 0,
+                color = RacingLime,
+                icon = Icons.Default.Save,
+                height = 38.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp)
-                    .testTag("save_custom_map_button"),
-                colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Save,
-                    contentDescription = "Save Flash",
-                    tint = CarbonDark,
-                    modifier = Modifier.size(22.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "SIMPAN MAP CUSTOM KE FLASH MCU",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Black,
-                    color = CarbonDark,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
+                    .testTag("save_custom_map_button")
+            )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -791,14 +762,15 @@ fun MapsScreen(viewModel: CdiViewModel) {
                 )
             },
             confirmButton = {
-                Button(
+                MotecButton(
+                    text = "MENGERTI",
                     onClick = { showSafetyDialog = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel)
-                ) {
-                    Text("MENGERTI", color = TextPrimary, fontFamily = FontFamily.Monospace)
-                }
+                    color = TextPrimary,
+                    height = 32.dp
+                )
             },
             containerColor = CardBackground,
+            shape = RoundedCornerShape(3.dp),
             tonalElevation = 6.dp
         )
     }
@@ -834,7 +806,8 @@ fun MapsScreen(viewModel: CdiViewModel) {
                 }
             },
             confirmButton = {
-                Button(
+                MotecButton(
+                    text = "TULIS KE MCU",
                     onClick = {
                         showSaveConfirmDialog = false
                         val error = viewModel.saveCustomMapToMcu()
@@ -845,17 +818,20 @@ fun MapsScreen(viewModel: CdiViewModel) {
                             Toast.makeText(context, "Map masuk antrean BLE. Tunggu pending=0 dan readback lengkap.", Toast.LENGTH_LONG).show()
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MotecOrange)
-                ) {
-                    Text("TULIS KE MCU", color = CarbonDark, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                }
+                    color = MotecOrange,
+                    height = 32.dp
+                )
             },
             dismissButton = {
-                OutlinedButton(onClick = { showSaveConfirmDialog = false }) {
-                    Text("BATAL", color = TextSecondary, fontFamily = FontFamily.Monospace)
-                }
+                MotecButton(
+                    text = "BATAL",
+                    onClick = { showSaveConfirmDialog = false },
+                    color = TextSecondary,
+                    height = 32.dp
+                )
             },
             containerColor = CardBackground,
+            shape = RoundedCornerShape(3.dp),
             tonalElevation = 6.dp
         )
     }

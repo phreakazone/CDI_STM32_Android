@@ -290,6 +290,10 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     val otaState: StateFlow<OtaState> = bleClient.otaState
     val connectedDeviceName: StateFlow<String?> = bleClient.connectedDeviceName
+    val savedDeviceMac: StateFlow<String?> = bleClient.savedDeviceMac
+    val savedDeviceName: StateFlow<String?> = bleClient.savedDeviceName
+    val powerSaveMode: StateFlow<Boolean> = bleClient.powerSaveMode
+    val autoConnectOnStart: StateFlow<Boolean> = bleClient.autoConnectOnStart
 
     private val cdiPrefs = context.getSharedPreferences("cdi_r8_prefs", Context.MODE_PRIVATE)
 
@@ -514,12 +518,67 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             simTps = 0f
             engineSound.stop()
             _isConnected.value = false
-            appendLog("Scanning for NS200-CDI BLE...")
-            bleClient.connect()
+
+            val savedMac = bleClient.savedDeviceMac.value
+            if (!savedMac.isNullOrBlank()) {
+                val savedName = bleClient.savedDeviceName.value ?: "IGNITRA CDI"
+                appendLog("Koneksi langsung ke $savedName [$savedMac] (Mode Hemat Baterai, GPS tidak diperlukan)...")
+                bleClient.connectSavedDevice()
+            } else {
+                appendLog("Memindai IGNITRA CDI BLE...")
+                bleClient.connect()
+            }
         }
     }
 
     fun hasBlePermissions() = bleClient.hasPermissions()
+    fun hasConnectPermission() = bleClient.hasConnectPermission()
+
+    fun connectDirectSaved() {
+        val savedMac = bleClient.savedDeviceMac.value
+        if (savedMac.isNullOrBlank()) {
+            Toast.makeText(context, "Belum ada modul CDI tersimpan", Toast.LENGTH_SHORT).show()
+            return
+        }
+        _isSimulationMode.value = false
+        _isRevving.value = false
+        _demoThrottleSlider.value = 0f
+        simRpm = 0f
+        simTps = 0f
+        engineSound.stop()
+        val name = bleClient.savedDeviceName.value ?: "IGNITRA CDI"
+        appendLog("Koneksi langsung ke $name [$savedMac] (Mode Hemat Baterai, GPS tidak aktif)...")
+        bleClient.connectSavedDevice()
+    }
+
+    fun connectDirectAddress(mac: String, name: String? = null) {
+        _isSimulationMode.value = false
+        _isRevving.value = false
+        _demoThrottleSlider.value = 0f
+        simRpm = 0f
+        simTps = 0f
+        engineSound.stop()
+        appendLog("Koneksi langsung ke MAC: $mac (Bebas GPS / Hemat Baterai)...")
+        val ok = bleClient.connectAddress(mac, name)
+        if (!ok) {
+            Toast.makeText(context, "Format MAC Address tidak valid", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun forgetSavedDevice() {
+        bleClient.forgetSavedDevice()
+        appendLog("Modul CDI tersimpan telah dihapus.")
+        Toast.makeText(context, "Modul tersimpan telah dihapus", Toast.LENGTH_SHORT).show()
+    }
+
+    fun setPowerSaveMode(enabled: Boolean) {
+        bleClient.setPowerSaveMode(enabled)
+        appendLog(if (enabled) "Mode Hemat Daya aktif (Prioritas Seimbang • Menghemat baterai saat setting)" else "Mode Balap aktif (Prioritas Tinggi • Telemetri Ultra Cepat)")
+    }
+
+    fun setAutoConnectOnStart(enabled: Boolean) {
+        bleClient.setAutoConnectOnStart(enabled)
+    }
 
     fun startBleScan() {
         _isSimulationMode.value = false
@@ -528,8 +587,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         simRpm = 0f
         simTps = 0f
         engineSound.stop()
-        appendLog("Scanning BLE devices nearby...")
-        bleClient.startScan()
+        appendLog("Memindai perangkat BLE sekitar (Hemat Daya)...")
+        bleClient.startScan(discoveryOnly = true)
     }
 
     fun stopBleScan() {
@@ -1206,10 +1265,43 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     // --- QUICK SETUP R7 PROTOCOL METHODS ---
 
+    fun pingCdiManual() {
+        if (bleClient.gattReady) {
+            bleClient.send("PING")
+            appendLog("TX: PING")
+            _quickSetupMessage.value = "TX: PING dikirim ke MCU... Menunggu respons PONG"
+            Toast.makeText(context, "PING dikirim ke modul CDI", Toast.LENGTH_SHORT).show()
+        } else if (_isSimulationMode.value) {
+            appendLog("TX: PING (Simulasi)")
+            appendLog("RX: PONG,CDI-R9-OK*CRC")
+            preflightPingOk = true
+            _quickSetupMessage.value = "PONG diterima dari MCU Simulasi R9 (Koneksi OK)"
+            Toast.makeText(context, "Simulasi PONG diterima (OK)", Toast.LENGTH_SHORT).show()
+        } else {
+            _quickSetupMessage.value = "CDI Belum Terhubung • Hubungkan lewat tab BLE atau nyalakan DEMO"
+            Toast.makeText(context, "CDI Belum Terhubung (Offline)", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     fun requestSetupState() {
+        requestSetupStateManual()
+    }
+
+    fun requestSetupStateManual() {
         if (bleClient.gattReady) {
             bleClient.send("GET,SETUP")
-            appendLog("BLE Send: GET,SETUP")
+            appendLog("TX: GET,SETUP")
+            _quickSetupMessage.value = "TX: GET,SETUP dikirim ke MCU..."
+            Toast.makeText(context, "Membaca konfigurasi setup dari MCU...", Toast.LENGTH_SHORT).show()
+        } else if (_isSimulationMode.value) {
+            appendLog("TX: GET,SETUP (Simulasi)")
+            preflightSetupOk = true
+            val t = _telemetry.value
+            _quickSetupMessage.value = "Setup MCU (Simulasi): TAHAP=${t.stage.label}, PPR=${_pulserPpr.value}, GATE=${_gateDurationUs.value}µs"
+            Toast.makeText(context, "Setup Simulasi: ${t.stage.label}", Toast.LENGTH_SHORT).show()
+        } else {
+            _quickSetupMessage.value = "CDI Belum Terhubung • Hubungkan lewat tab BLE atau nyalakan DEMO"
+            Toast.makeText(context, "CDI Belum Terhubung (Offline)", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1833,6 +1925,12 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         appendLog("RX: $value")
         val f = value.split(',')
         when (f.firstOrNull()) {
+            "PONG" -> {
+                preflightPingOk = true
+                updateQuickSetupPreflightProgress()
+                _quickSetupMessage.value = "PONG diterima dari MCU: $value (Komunikasi OK)"
+                Toast.makeText(context, "MCU PONG: Komunikasi Aktif!", Toast.LENGTH_SHORT).show()
+            }
             "CAPS" -> {
                 val parsed = FirmwareCapabilities.parse(f)
                 _firmwareCapabilities.value = parsed
@@ -2000,13 +2098,15 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             "ACK" -> {
                 clearSetupCommandPending()
                 val operation = f.getOrNull(1).orEmpty()
-                if (operation == "PONG_R7_2") {
+                if (operation.startsWith("PONG")) {
                     preflightPingOk = true
                     updateQuickSetupPreflightProgress()
+                    _quickSetupMessage.value = "MCU ACK: $operation (Komunikasi Aktif)"
+                    Toast.makeText(context, "MCU PONG: Komunikasi Aktif!", Toast.LENGTH_SHORT).show()
                 }
                 if (operation == "TDC_SAVED" || operation == "TDC_MANUAL_SAVED")
                     _flashSaved.value = true
-                if (operation !in setOf("LIVE", "OFFSET", "PONG_R7_2"))
+                if (operation !in setOf("LIVE", "OFFSET") && !operation.startsWith("PONG"))
                     Toast.makeText(context, "MCU ACK: $operation", Toast.LENGTH_SHORT).show()
 
                 val setupChangingOperations = setOf(

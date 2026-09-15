@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.*
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -136,6 +137,68 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
     private val _pending = MutableStateFlow(0)
     val pendingCommands: StateFlow<Int> = _pending.asStateFlow()
 
+    private var isDiscoveryOnly = false
+
+    private val blePrefs = context.getSharedPreferences("ignitra_ble_prefs", Context.MODE_PRIVATE)
+
+    private val _savedDeviceMac = MutableStateFlow<String?>(blePrefs.getString("saved_cdi_mac", null))
+    val savedDeviceMac: StateFlow<String?> = _savedDeviceMac.asStateFlow()
+
+    private val _savedDeviceName = MutableStateFlow<String?>(blePrefs.getString("saved_cdi_name", null))
+    val savedDeviceName: StateFlow<String?> = _savedDeviceName.asStateFlow()
+
+    // Mode Hemat Baterai (Power Save): Gunakan CONNECTION_PRIORITY_BALANCED (30-50ms) alih-alih HIGH (11ms)
+    // Mengurangi konsumsi daya radio Bluetooth HP & CDI hingga 60% saat tuning/setting
+    private val _powerSaveMode = MutableStateFlow(blePrefs.getBoolean("power_save_mode", true))
+    val powerSaveMode: StateFlow<Boolean> = _powerSaveMode.asStateFlow()
+
+    private val _autoConnectOnStart = MutableStateFlow(blePrefs.getBoolean("auto_connect_start", false))
+    val autoConnectOnStart: StateFlow<Boolean> = _autoConnectOnStart.asStateFlow()
+
+    fun setPowerSaveMode(enabled: Boolean) {
+        _powerSaveMode.value = enabled
+        blePrefs.edit().putBoolean("power_save_mode", enabled).apply()
+        applyConnectionPriority()
+        listener.onState(if (enabled) "Mode Hemat Baterai aktif (Priority Balanced • 45ms)" else "Mode Balap aktif (Priority High • 15ms)", gattReady)
+    }
+
+    fun setAutoConnectOnStart(enabled: Boolean) {
+        _autoConnectOnStart.value = enabled
+        blePrefs.edit().putBoolean("auto_connect_start", enabled).apply()
+    }
+
+    fun applyConnectionPriority() {
+        try {
+            val priority = if (_powerSaveMode.value) {
+                BluetoothGatt.CONNECTION_PRIORITY_BALANCED
+            } else {
+                BluetoothGatt.CONNECTION_PRIORITY_HIGH
+            }
+            gatt?.requestConnectionPriority(priority)
+        } catch (_: Exception) {}
+    }
+
+    fun saveLastDevice(mac: String, name: String?) {
+        val cleanMac = mac.trim().uppercase()
+        val cleanName = name?.trim()?.ifBlank { null } ?: "IGNITRA CDI"
+        _savedDeviceMac.value = cleanMac
+        _savedDeviceName.value = cleanName
+        blePrefs.edit()
+            .putString("saved_cdi_mac", cleanMac)
+            .putString("saved_cdi_name", cleanName)
+            .apply()
+    }
+
+    fun forgetSavedDevice() {
+        _savedDeviceMac.value = null
+        _savedDeviceName.value = null
+        blePrefs.edit()
+            .remove("saved_cdi_mac")
+            .remove("saved_cdi_name")
+            .apply()
+        listener.onState("Modul CDI tersimpan telah dihapus", false)
+    }
+
     fun hasPermissions(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
@@ -145,14 +208,31 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         }
     }
 
+    /**
+     * Izin khusus untuk direct connection ke MAC address yang telah disimpan.
+     * Tidak memerlukan BLUETOOTH_SCAN maupun ACCESS_FINE_LOCATION / GPS.
+     */
+    fun hasConnectPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+        } else {
+            // Android 11 ke bawah tidak mewajibkan runtime permissions untuk connectGatt ke MAC yang sudah diketahui
+            true
+        }
+    }
+
     private val scannerCallback = object : ScanCallback() {
         @SuppressLint("MissingPermission")
         override fun onScanResult(type: Int, result: ScanResult) {
             val device = result.device
-            val name = result.scanRecord?.deviceName ?: device.name ?: "Unknown BLE"
-            val exact = name.equals("NS200-CDI", true)
+            val name = try {
+                result.scanRecord?.deviceName ?: device.name ?: "Unknown BLE"
+            } catch (_: SecurityException) {
+                "Unknown BLE"
+            }
+            val exact = name.equals("IGNITRA-CDI", true) || name.equals("IGNITRA CDI", true) || name.equals("NS200-CDI", true) || name.equals("IGNITRA", true)
             val byService = result.scanRecord?.serviceUuids?.any { it.uuid == serviceUuid } == true
-            val isCandidate = exact || byService || name.contains("NS200-CDI", true) || name.contains("CDI", true) || name.contains("NS200", true)
+            val isCandidate = exact || byService || name.contains("IGNITRA", true) || name.contains("NS200-CDI", true) || name.contains("CDI", true) || name.contains("NS200", true)
 
             val item = DiscoveredBleDevice(
                 device = device,
@@ -170,8 +250,8 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
                     .thenByDescending { it.rssi }
             )
 
-            // Auto-connect if exact target match discovered and not already connected
-            if ((exact || byService) && gatt == null && !manualStop) {
+            // Auto-connect if in connect mode (not discovery-only scan) and exact target match discovered
+            if (!isDiscoveryOnly && (exact || byService) && gatt == null && !manualStop) {
                 connectDeviceExplicit(device)
             }
         }
@@ -179,7 +259,15 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         override fun onScanFailed(code: Int) {
             _scanning.value = false
             _busy.value = false
-            listener.onState("Scan BLE gagal (kode $code)", false)
+            val detail = when (code) {
+                ScanCallback.SCAN_FAILED_ALREADY_STARTED -> "Scan sudah berjalan (1)"
+                ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED -> "Registrasi scanner BLE gagal (2) • Coba matikan & hidupkan Bluetooth HP"
+                ScanCallback.SCAN_FAILED_INTERNAL_ERROR -> "Internal BLE stack error (3)"
+                ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED -> "BLE Scan tidak didukung (4)"
+                ScanCallback.SCAN_FAILED_OUT_OF_HARDWARE_RESOURCES -> "Resource BLE penuh (5)"
+                else -> "Kode error $code"
+            }
+            listener.onState("Gagal Memindai BLE: $detail", false)
         }
     }
 
@@ -196,7 +284,12 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
                 listener.onState("BLE terhubung • inisialisasi PHY 1M & GATT...", false)
 
                 try {
-                    owner.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+                    val priority = if (_powerSaveMode.value) {
+                        BluetoothGatt.CONNECTION_PRIORITY_BALANCED
+                    } else {
+                        BluetoothGatt.CONNECTION_PRIORITY_HIGH
+                    }
+                    owner.requestConnectionPriority(priority)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         owner.setPreferredPhy(
                             BluetoothDevice.PHY_LE_1M_MASK,
@@ -458,11 +551,75 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         }
     }
 
-    fun connect() = startScan()
+    /**
+     * Menghubungkan ke CDI.
+     * Jika ada MAC tersimpan, lakukan KONEKSI LANGSUNG (Bebas GPS & Sangat Hemat Baterai).
+     * Jika belum ada MAC tersimpan, mulai pemindaian (scan) untuk mencari modul.
+     */
+    fun connect() {
+        val savedMac = _savedDeviceMac.value
+        if (!savedMac.isNullOrBlank()) {
+            val savedName = _savedDeviceName.value ?: "IGNITRA CDI"
+            listener.onState("Koneksi langsung ke $savedName (Tanpa GPS / Hemat Baterai)...", false)
+            connectSavedDevice()
+        } else {
+            startScan(discoveryOnly = false)
+        }
+    }
+
+    /**
+     * KONEKSI LANGSUNG KE MAC ADDRESS (Bebas GPS & 100% Hemat Baterai)
+     * Tidak memindai channel RF, tidak memerlukan GPS aktif di semua Android,
+     * dan langsung membuka socket LE L2CAP ke modul hardware target.
+     */
+    @SuppressLint("MissingPermission")
+    fun connectAddress(macAddress: String, customName: String? = null): Boolean {
+        val cleanMac = macAddress.trim().uppercase()
+        if (!BluetoothAdapter.checkBluetoothAddress(cleanMac)) {
+            listener.onState("Format MAC Address tidak valid ($macAddress)", false)
+            return false
+        }
+        val currentAdapter = adapter
+        if (currentAdapter?.isEnabled != true) {
+            listener.onState("Bluetooth tidak aktif • Harap nyalakan Bluetooth HP", false)
+            return false
+        }
+        if (!hasConnectPermission()) {
+            val permName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "BLUETOOTH_CONNECT" else "BLUETOOTH"
+            listener.onState("Izin $permName belum diizinkan", false)
+            return false
+        }
+
+        stopScanInternal()
+        val device = try {
+            currentAdapter.getRemoteDevice(cleanMac)
+        } catch (e: Exception) {
+            listener.onState("Gagal memuat perangkat: " + (e.message ?: "Unknown"), false)
+            return false
+        }
+
+        val name = customName ?: try { device.name } catch (_: Exception) { null } ?: "IGNITRA CDI"
+        saveLastDevice(cleanMac, name)
+        connectDeviceExplicit(device)
+        return true
+    }
+
+    /**
+     * Menghubungkan langsung ke modul CDI yang tersimpan sebelumnya tanpa scan.
+     */
+    fun connectSavedDevice(): Boolean {
+        val mac = _savedDeviceMac.value
+        if (mac.isNullOrBlank()) {
+            listener.onState("Belum ada MAC tersimpan • Gunakan SCAN atau input MAC manual", false)
+            return false
+        }
+        return connectAddress(mac, _savedDeviceName.value)
+    }
 
     @SuppressLint("MissingPermission")
-    fun startScan() {
+    fun startScan(discoveryOnly: Boolean = false) {
         manualStop = false
+        isDiscoveryOnly = discoveryOnly
         stopScanInternal()
         closeCurrent()
         cancelReconnect()
@@ -472,31 +629,80 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         retryCount = 0
         lastDevice = null
 
-        val scanner = adapter?.bluetoothLeScanner
-        if (adapter?.isEnabled != true || scanner == null) {
+        val currentAdapter = adapter
+        if (currentAdapter?.isEnabled != true) {
             _busy.value = false
-            listener.onState("Bluetooth tidak aktif / tidak tersedia", false)
+            _scanning.value = false
+            listener.onState("Bluetooth tidak aktif • Harap nyalakan Bluetooth HP", false)
             return
         }
 
-        _devices.value = emptyList()
+        val scanner = currentAdapter.bluetoothLeScanner
+        if (scanner == null) {
+            _busy.value = false
+            _scanning.value = false
+            listener.onState("Bluetooth LE Scanner tidak tersedia di perangkat ini", false)
+            return
+        }
+
+        if (!hasPermissions()) {
+            _busy.value = false
+            _scanning.value = false
+            val permName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "BLUETOOTH_SCAN/CONNECT" else "LOKASI/GPS"
+            listener.onState("Izin $permName belum diizinkan", false)
+            return
+        }
+
+        // Muat perangkat yang sudah dipairing (bonded) secara instan tanpa perlu menunggu paket scan / GPS
+        val initialList = mutableListOf<DiscoveredBleDevice>()
+        try {
+            if (hasConnectPermission()) {
+                currentAdapter.bondedDevices?.forEach { bonded ->
+                    val bName = try { bonded.name } catch (_: SecurityException) { null } ?: "Perangkat Paired"
+                    val isCandidate = bName.contains("IGNITRA", true) || bName.contains("CDI", true) || bName.contains("NS200", true)
+                    initialList.add(
+                        DiscoveredBleDevice(
+                            device = bonded,
+                            name = "$bName (Paired)",
+                            address = bonded.address,
+                            rssi = -50,
+                            isCdiCandidate = isCandidate
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {}
+
+        _devices.value = initialList
         _scanning.value = true
-        _busy.value = true
-        listener.onState("Memindai NS200-CDI...", false)
+        _busy.value = !discoveryOnly
+        listener.onState(if (discoveryOnly) "Memindai perangkat BLE sekitar..." else "Memindai modul CDI...", false)
+
+        // Gunakan SCAN_MODE_LOW_LATENCY untuk responsivitas tercepat mendeteksi paket advert CDI
+        val settings = ScanSettings.Builder()
+            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .setReportDelay(0)
+            .build()
 
         try {
-            scanner.startScan(scannerCallback)
+            scanner.startScan(null, settings, scannerCallback)
+            // Timeout scan 12 detik agar memberikan waktu cukup untuk menangkap advertising interval
             scanTimer = Runnable {
                 stopScanInternal()
                 if (gatt == null) {
                     _busy.value = false
-                    listener.onState("CDI tidak ditemukan • coba SCAN ulang", false)
+                    val count = _devices.value.size
+                    if (count > 0) {
+                        listener.onState("Pemindaian selesai • $count perangkat ditemukan", false)
+                    } else {
+                        listener.onState("Tidak ada sinyal BLE terdeteksi • Pastikan modul CDI menyala & kontak ON", false)
+                    }
                 }
-            }.also { main.postDelayed(it, 15_000) }
+            }.also { main.postDelayed(it, 12_000) }
         } catch (e: Exception) {
             _scanning.value = false
             _busy.value = false
-            listener.onState("Scan gagal: " + e.message, false)
+            listener.onState("Scan gagal: " + (e.message ?: "Unknown error"), false)
         }
     }
 
@@ -515,6 +721,13 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         manualStop = false
         lastDevice = device
         retryCount = 0
+        val displayName = try {
+            if (hasPermissions()) device.name ?: device.address else device.address
+        } catch (_: SecurityException) {
+            device.address
+        }
+        saveLastDevice(device.address, displayName)
+        listener.onState("Menghubungkan $displayName...", false)
         open(device)
     }
 
@@ -525,6 +738,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         _busy.value = true
 
         val displayName = try { device.name } catch (_: Exception) { null } ?: device.address
+        saveLastDevice(device.address, displayName)
         listener.onState("Menghubungkan $displayName • tanpa PIN/bonding...", false)
 
         try {

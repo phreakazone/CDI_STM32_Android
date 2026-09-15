@@ -26,6 +26,7 @@ import id.ns200.cdir7.McuPlatform
 import id.ns200.cdir7.ScreenTab
 import id.ns200.cdir7.SetupStage
 import id.ns200.cdir7.Telemetry
+import id.ns200.cdir7.ui.components.MotecButton
 import id.ns200.cdir7.ui.theme.*
 
 /**
@@ -328,26 +329,26 @@ private fun StageCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp)),
+            .border(1.dp, BorderSubtle, RoundedCornerShape(3.dp)),
         colors = CardDefaults.cardColors(containerColor = CardBackground),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(3.dp)
     ) {
         Column(
-            modifier = Modifier.padding(13.dp),
-            verticalArrangement = Arrangement.spacedBy(9.dp)
+            modifier = Modifier.padding(9.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
                 title,
                 color = MotecOrange,
-                fontSize = 12.sp,
+                fontSize = 11.5.sp,
                 fontWeight = FontWeight.Black,
                 fontFamily = FontFamily.Monospace
             )
             Text(
                 subtitle,
                 color = TextSecondary,
-                fontSize = 10.sp,
-                lineHeight = 14.sp,
+                fontSize = 9.5.sp,
+                lineHeight = 13.sp,
                 fontFamily = FontFamily.Monospace
             )
             content()
@@ -387,21 +388,15 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: M
                 warning = if (selectedPlatform == McuPlatform.ESP32_WROOM) "Jangan sambungkan aki 12V langsung ke pin manapun pada ESP32!" else null
             )
 
-            Button(
-                enabled = !busy,
+            MotecButton(
+                text = if (busy) "MENUNGGU RESPONS MCU..." else "PERIKSA & LANJUT PULSER",
                 onClick = viewModel::startQuickSetupPreflight,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                if (busy) {
-                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = CarbonDark)
-                    Spacer(Modifier.width(7.dp))
-                    Text("MENUNGGU RESPONS MCU...", color = CarbonDark)
-                } else {
-                    Text("PERIKSA & LANJUT PULSER", color = CarbonDark)
-                }
-            }
+                enabled = !busy,
+                color = MotecOrange,
+                icon = Icons.Default.ArrowForward,
+                height = 32.dp,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
         StageCard(
@@ -502,43 +497,37 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: M
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Button(
-                                enabled = !isOemLearning && !pending,
+                            MotecButton(
+                                text = "MULAI LEARN",
                                 onClick = viewModel::startOemLearn,
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
-                                shape = RoundedCornerShape(6.dp),
-                                contentPadding = PaddingValues(vertical = 5.dp)
-                            ) {
-                                Text("MULAI LEARN", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Button(
-                                enabled = isOemLearning && !pending,
+                                enabled = !isOemLearning && !pending,
+                                color = MotecOrange,
+                                height = 30.dp,
+                                modifier = Modifier.weight(1f)
+                            )
+                            MotecButton(
+                                text = "SIMPAN & STOP",
                                 onClick = viewModel::stopOemLearn,
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
-                                shape = RoundedCornerShape(6.dp),
-                                contentPadding = PaddingValues(vertical = 5.dp)
-                            ) {
-                                Text("SIMPAN & STOP", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
+                                enabled = isOemLearning && !pending,
+                                color = RacingLime,
+                                height = 30.dp,
+                                modifier = Modifier.weight(1f)
+                            )
                         }
 
                         // Tombol Transisi Langsung setelah simpan data OEM
                         if (flashSaved || oemCenterPulses >= 5) {
-                            Button(
-                                enabled = !pending,
+                            MotecButton(
+                                text = "LEPAS PC817 & MASUK FIRST START AMAN",
                                 onClick = viewModel::confirmOemUnplugged,
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
-                                shape = RoundedCornerShape(6.dp)
-                            ) {
-                                Icon(Icons.Default.CheckCircle, null, tint = CarbonDark, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("LEPAS PC817 & MASUK FIRST START AMAN", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
+                                enabled = !pending,
+                                color = RacingLime,
+                                icon = Icons.Default.CheckCircle,
+                                height = 30.dp,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
 
                         // PANDUAN VISUAL WIRING & RANGKAIAN PENGAMAN SUNTIK KOIL & DAYA
@@ -573,15 +562,14 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: M
                             fontFamily = FontFamily.Monospace
                         )
                         if (!isOemUnpluggedConfirmed) {
-                            Button(
-                                enabled = !pending,
+                            MotecButton(
+                                text = "KONFIRMASI OEM_UNPLUGGED & AKTIFKAN DIY",
                                 onClick = viewModel::confirmOemUnplugged,
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
-                                shape = RoundedCornerShape(6.dp)
-                            ) {
-                                Text("KONFIRMASI OEM_UNPLUGGED & AKTIFKAN DIY", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
+                                enabled = !pending,
+                                color = RacingLime,
+                                height = 30.dp,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         } else {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.CheckCircle, null, tint = RacingLime, modifier = Modifier.size(14.dp))
@@ -628,32 +616,24 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: M
             CompactStatusRow("TEGANGAN TERPILIH", "$targetHv V (${if (isProVoltage) "PRO 345V" else "NORMAL 285V"})", true)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Button(
-                    enabled = !pending,
+                MotecButton(
+                    text = "NORMAL 285 V",
                     onClick = { viewModel.setHvVoltageMode(false) },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (!isProVoltage) MotecOrange else SurfacePanel
-                    ),
-                    shape = RoundedCornerShape(6.dp),
-                    contentPadding = PaddingValues(vertical = 5.dp)
-                ) {
-                    Text("NORMAL 285 V", color = if (!isProVoltage) CarbonDark else TextPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                }
-                Button(
                     enabled = !pending,
+                    color = if (!isProVoltage) MotecOrange else BorderSubtle,
+                    height = 30.dp,
+                    modifier = Modifier.weight(1f)
+                )
+                MotecButton(
+                    text = "PRO 345 V",
                     onClick = { viewModel.setHvVoltageMode(true) },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isProVoltage) ElectricCyan else SurfacePanel
-                    ),
-                    shape = RoundedCornerShape(6.dp),
-                    contentPadding = PaddingValues(vertical = 5.dp)
-                ) {
-                    Text("PRO 345 V", color = if (isProVoltage) CarbonDark else TextPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                }
+                    enabled = !pending,
+                    color = if (isProVoltage) ElectricCyan else BorderSubtle,
+                    height = 30.dp,
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }
@@ -679,15 +659,14 @@ private fun PulserStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform:
             )
 
             PulserAdvancedSettings(viewModel)
-            Button(
-                enabled = !pending,
+            MotecButton(
+                text = "KONFIRMASI PULSER & LANJUT TDC",
                 onClick = viewModel::confirmPulserPickup,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                PendingButtonText(pending, "KONFIRMASI PULSER & LANJUT TDC")
-            }
+                enabled = !pending,
+                color = RacingLime,
+                height = 32.dp,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
@@ -720,26 +699,24 @@ private fun OemLearnTdcCheckpointStage(viewModel: CdiViewModel, t: Telemetry, se
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Button(
-                    enabled = !isOemLearning && !pending,
+                MotecButton(
+                    text = "1. MULAI REKAM",
                     onClick = viewModel::startOemLearn,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text("1. MULAI REKAM", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                }
-                Button(
-                    enabled = isOemLearning && !pending,
+                    enabled = !isOemLearning && !pending,
+                    color = MotecOrange,
+                    height = 30.dp,
+                    modifier = Modifier.weight(1f)
+                )
+                MotecButton(
+                    text = "2. SIMPAN & STOP",
                     onClick = viewModel::stopOemLearn,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text("2. SIMPAN & STOP", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                }
+                    enabled = isOemLearning && !pending,
+                    color = RacingLime,
+                    height = 30.dp,
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
 
@@ -750,15 +727,14 @@ private fun OemLearnTdcCheckpointStage(viewModel: CdiViewModel, t: Telemetry, se
             CompactStatusRow("STATUS SOKET OEM", if (isOemUnpluggedConfirmed) "TERCABUT (DIY MANDIRI AKTIF)" else "MENUNGGU PENCABUTAN", isOemUnpluggedConfirmed)
 
             if (!isOemUnpluggedConfirmed) {
-                Button(
-                    enabled = !pending,
+                MotecButton(
+                    text = "KONFIRMASI OEM_UNPLUGGED & AKTIFKAN DIY",
                     onClick = viewModel::confirmOemUnplugged,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text("KONFIRMASI OEM_UNPLUGGED & AKTIFKAN DIY", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                }
+                    enabled = !pending,
+                    color = RacingLime,
+                    height = 30.dp,
+                    modifier = Modifier.fillMaxWidth()
+                )
             } else {
                 Row(
                     modifier = Modifier
@@ -780,26 +756,25 @@ private fun OemLearnTdcCheckpointStage(viewModel: CdiViewModel, t: Telemetry, se
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                OutlinedButton(
+                MotecButton(
+                    text = "4. KALIBRASI TPS",
                     onClick = { viewModel.selectQuickSetupPage(SetupStage.TPS_CAL.code) },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text("4. KALIBRASI TPS", fontSize = 10.sp, color = MotecOrange)
-                }
-                Button(
-                    enabled = isOemUnpluggedConfirmed,
+                    color = MotecOrange,
+                    height = 30.dp,
+                    modifier = Modifier.weight(1f)
+                )
+                MotecButton(
+                    text = "5. FIRST START",
                     onClick = {
                         viewModel.advanceSetupStage(SetupStage.FIRST_START.code)
                     },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = if (isOemUnpluggedConfirmed) RacingLime else SurfacePanel),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text("5. FIRST START", fontSize = 10.sp, color = if (isOemUnpluggedConfirmed) CarbonDark else TextMuted, fontWeight = FontWeight.Bold)
-                }
+                    enabled = isOemUnpluggedConfirmed,
+                    color = if (isOemUnpluggedConfirmed) RacingLime else BorderSubtle,
+                    height = 30.dp,
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }
@@ -829,22 +804,24 @@ private fun TpsStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: Mc
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Button(
-                    enabled = !pending,
+                MotecButton(
+                    text = "1. GAS TUTUP",
                     onClick = viewModel::calibrateTpsClosed,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
-                    shape = RoundedCornerShape(8.dp)
-                ) { Text("1. GAS TUTUP", color = TextPrimary, fontSize = 10.sp) }
-                Button(
                     enabled = !pending,
+                    color = TextPrimary,
+                    height = 30.dp,
+                    modifier = Modifier.weight(1f)
+                )
+                MotecButton(
+                    text = "2. GAS PENUH",
                     onClick = viewModel::calibrateTpsOpen,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
-                    shape = RoundedCornerShape(8.dp)
-                ) { Text("2. GAS PENUH", color = CarbonDark, fontSize = 10.sp) }
+                    enabled = !pending,
+                    color = MotecOrange,
+                    height = 30.dp,
+                    modifier = Modifier.weight(1f)
+                )
             }
             if (pending) {
                 Text("Menunggu ACK MCU sebelum tombol berikutnya aktif.", color = SensorAmber, fontSize = 9.sp)
@@ -881,13 +858,14 @@ private fun FirstStartStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatf
                 warning = if (selectedPlatform == McuPlatform.ESP32_WROOM) "First Start hanya menyalakan Koil Center (GPIO25). Koil Side (GPIO26) nonaktif hingga siap." else null
             )
 
-            Button(
-                enabled = !pending,
+            MotecButton(
+                text = "AKTIFKAN MODE FIRST START (220V)",
                 onClick = viewModel::prepareFirstStartMode,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
-                shape = RoundedCornerShape(8.dp)
-            ) { PendingButtonText(pending, "AKTIFKAN MODE FIRST START (220V)") }
+                enabled = !pending,
+                color = MotecOrange,
+                height = 32.dp,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
         // KONTROL SIMULASI KHUSUS DEMO (JIKA TIDAK TERHUBUNG KE MOTOR ASLI)
@@ -898,31 +876,27 @@ private fun FirstStartStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatf
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Button(
-                        enabled = !demoEngineRunning,
+                    MotecButton(
+                        text = "1. HIDUPKAN MESIN",
                         onClick = viewModel::simulateStartEngine,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Icon(Icons.Default.PlayArrow, null, tint = CarbonDark, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("1. HIDUPKAN MESIN", color = CarbonDark, fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
-                    }
+                        enabled = !demoEngineRunning,
+                        color = RacingLime,
+                        icon = Icons.Default.PlayArrow,
+                        height = 30.dp,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                    Button(
-                        enabled = demoEngineRunning || t.rpm > 0,
+                    MotecButton(
+                        text = "2. MATIKAN (RPM 0)",
                         onClick = viewModel::simulateStopEngine,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = RaceRedline),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Icon(Icons.Default.Stop, null, tint = Color.White, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("2. MATIKAN (RPM 0)", color = Color.White, fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
-                    }
+                        enabled = demoEngineRunning || t.rpm > 0,
+                        color = RaceRedline,
+                        icon = Icons.Default.Stop,
+                        height = 30.dp,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
 
                 val statusText = when {
@@ -1018,25 +992,23 @@ private fun FirstStartStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatf
                 "Syarat terpenuhi. Pilih mode READY yang diinginkan di bawah untuk menyimpan ke flash:"
             }
         ) {
-            Button(
-                enabled = canSaveReady,
+            MotecButton(
+                text = "SIMPAN READY • CENTER SAJA (MODE UJI ROAD TEST)",
                 onClick = viewModel::confirmReadyCenterOnly,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("SIMPAN READY • CENTER SAJA (MODE UJI ROAD TEST)", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            }
-
-            Button(
                 enabled = canSaveReady,
+                color = MotecOrange,
+                height = 32.dp,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            MotecButton(
+                text = "SIMPAN READY • TIGA BUSI (TRIPLE SPARK DTS-I)",
                 onClick = { viewModel.confirmReadyTripleSpark(0) },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("SIMPAN READY • TIGA BUSI (TRIPLE SPARK DTS-I)", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            }
+                enabled = canSaveReady,
+                color = RacingLime,
+                height = 32.dp,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Text(
                 "Di Firmware R8: Setelah stabil 3 detik dan mesin dimatikan, konfigurasi READY dikunci permanen ke flash internal ${selectedPlatform.displayName}.",
@@ -1069,40 +1041,36 @@ private fun ReadyStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: 
                 espPin = "Center: GPIO25 (LEFT.9) | Side: GPIO26 (LEFT.10)"
             )
 
-            Button(
+            MotecButton(
+                text = "BUKA DASHBOARD TACHO (MESIN HIDUP)",
                 onClick = {
                     viewModel.simulateStartEngine()
                     viewModel.setTab(ScreenTab.TACHO)
                 },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Icon(Icons.Default.Speed, null, tint = CarbonDark)
-                Spacer(Modifier.width(7.dp))
-                Text("BUKA DASHBOARD TACHO (MESIN HIDUP)", color = CarbonDark, fontWeight = FontWeight.Bold)
-            }
+                color = RacingLime,
+                icon = Icons.Default.Speed,
+                height = 34.dp,
+                modifier = Modifier.fillMaxWidth()
+            )
 
-            Button(
+            MotecButton(
+                text = "BUKA MAP PENGAPIAN",
                 onClick = { viewModel.setTab(ScreenTab.MAPS) },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = MotecOrange),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Icon(Icons.Default.Tune, null, tint = CarbonDark)
-                Spacer(Modifier.width(7.dp))
-                Text("BUKA MAP PENGAPIAN", color = CarbonDark)
-            }
-            OutlinedButton(
-                enabled = !pending,
+                color = MotecOrange,
+                icon = Icons.Default.Tune,
+                height = 34.dp,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            MotecButton(
+                text = "RESET SELURUH SETUP",
                 onClick = viewModel::resetSetupWorkflow,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Icon(Icons.Default.Refresh, null, tint = RaceRedline)
-                Spacer(Modifier.width(7.dp))
-                Text("RESET SELURUH SETUP", color = RaceRedline)
-            }
+                enabled = !pending,
+                color = RaceRedline,
+                icon = Icons.Default.Refresh,
+                height = 34.dp,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

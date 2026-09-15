@@ -1,9 +1,18 @@
 package com.example
 
 import android.Manifest
+import android.app.Activity
+import android.app.AlertDialog
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -30,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.location.LocationManagerCompat
 import com.example.ui.screens.WiringWorkshopHubScreen
 import com.example.viewmodel.WiringViewModel
 import id.ns200.cdir7.CdiViewModel
@@ -44,11 +54,38 @@ class MainActivity : ComponentActivity() {
     private val cdiViewModel: CdiViewModel by viewModels()
     private val wiringViewModel: WiringViewModel by viewModels()
 
+    private var pendingPermissionAction: (() -> Unit)? = null
+
+    private val enableLocationLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            val action = pendingPermissionAction
+            pendingPermissionAction = null
+            ensureBluetoothEnabled(action)
+        }
+
+    private val enableBluetoothLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                val action = pendingPermissionAction
+                pendingPermissionAction = null
+                action?.invoke() ?: cdiViewModel.toggleConnect()
+            } else {
+                pendingPermissionAction = null
+                Toast.makeText(this, "Bluetooth belum diaktifkan", Toast.LENGTH_SHORT).show()
+            }
+        }
+
     private val requestPermissionsLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
             val granted = permissions.entries.all { it.value }
             if (granted) {
-                cdiViewModel.toggleConnect()
+                val action = pendingPermissionAction
+                pendingPermissionAction = null
+                // Jika butuh scan dan lokasi belum aktif, tanyakan aktivasi lokasi
+                checkLocationAndProceed(true, action)
+            } else {
+                pendingPermissionAction = null
+                Toast.makeText(this, "Izin Bluetooth/Lokasi diperlukan untuk memindai CDI", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -61,31 +98,93 @@ class MainActivity : ComponentActivity() {
                 MainAppScreen(
                     cdiViewModel = cdiViewModel,
                     wiringViewModel = wiringViewModel,
-                    onRequestPermissions = { checkAndRequestPermissions(triggerConnect = true) }
+                    onRequestBleAction = { isScan, action -> checkAndRequestPermissions(isScan, action) }
                 )
             }
         }
+
+        // Auto-connect saat startup jika fitur diaktifkan
+        if (cdiViewModel.autoConnectOnStart.value && !cdiViewModel.savedDeviceMac.value.isNullOrBlank()) {
+            cdiViewModel.connectDirectSaved()
+        }
     }
 
-    private fun checkAndRequestPermissions(triggerConnect: Boolean = true) {
+    private fun isLocationServiceEnabled(): Boolean {
+        val locationManager = getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return true
+        return LocationManagerCompat.isLocationEnabled(locationManager)
+    }
+
+    private fun checkLocationAndProceed(isScan: Boolean, onGranted: (() -> Unit)?) {
+        // Pada Android 12+ (API 31+), BLUETOOTH_SCAN dengan usesPermissionFlags="neverForLocation"
+        // secara resmi TIDAK memerlukan Layanan Lokasi (GPS) aktif sama sekali.
+        // Pengecekan GPS hanya berlaku untuk Android 11 ke bawah (API < 31).
+        if (isScan && Build.VERSION.SDK_INT < Build.VERSION_CODES.S && !isLocationServiceEnabled()) {
+            pendingPermissionAction = onGranted
+            AlertDialog.Builder(this)
+                .setTitle("Layanan Lokasi (GPS) Android 11 Kebawah")
+                .setMessage("Keamanan Android versi lama (< Android 12) mengharuskan Layanan Lokasi aktif saat memindai BLE.\n\nTips: Anda juga bisa menggunakan fitur 'KONEKSI MAC LANGSUNG' di menu BLE untuk menghubungkan CDI tanpa menyalakan GPS.")
+                .setPositiveButton("AKTIFKAN GPS") { _, _ ->
+                    try {
+                        enableLocationLauncher.launch(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                    } catch (e: Exception) {
+                        Toast.makeText(this, "Buka Pengaturan HP untuk mengaktifkan Lokasi", Toast.LENGTH_SHORT).show()
+                        ensureBluetoothEnabled(onGranted)
+                    }
+                }
+                .setNegativeButton("TETAP SCAN") { _, _ ->
+                    ensureBluetoothEnabled(onGranted)
+                }
+                .setNeutralButton("BATAL") { _, _ ->
+                    pendingPermissionAction = null
+                }
+                .setCancelable(true)
+                .show()
+        } else {
+            ensureBluetoothEnabled(onGranted)
+        }
+    }
+
+    private fun checkAndRequestPermissions(isScan: Boolean = false, onGranted: (() -> Unit)? = null) {
         val permissions = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+            if (isScan && ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
                 permissions.add(Manifest.permission.BLUETOOTH_SCAN)
             }
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
                 permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
             }
-        } else {
+        } else if (isScan) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                 permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
             }
         }
 
         if (permissions.isNotEmpty()) {
+            pendingPermissionAction = onGranted
             requestPermissionsLauncher.launch(permissions.toTypedArray())
-        } else if (triggerConnect) {
-            cdiViewModel.toggleConnect()
+        } else {
+            checkLocationAndProceed(isScan, onGranted)
+        }
+    }
+
+    private fun ensureBluetoothEnabled(onGranted: (() -> Unit)?) {
+        val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+        val adapter = bluetoothManager?.adapter
+        if (adapter == null) {
+            Toast.makeText(this, "Hardware Bluetooth tidak tersedia pada perangkat ini", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (!adapter.isEnabled) {
+            pendingPermissionAction = onGranted
+            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+            try {
+                enableBluetoothLauncher.launch(enableBtIntent)
+            } catch (e: Exception) {
+                Toast.makeText(this, "Gagal meminta aktivasi Bluetooth: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            onGranted?.invoke() ?: cdiViewModel.toggleConnect()
         }
     }
 }
@@ -94,7 +193,7 @@ class MainActivity : ComponentActivity() {
 fun MainAppScreen(
     cdiViewModel: CdiViewModel,
     wiringViewModel: WiringViewModel,
-    onRequestPermissions: () -> Unit
+    onRequestBleAction: (((isScan: Boolean, onGranted: (() -> Unit)?) -> Unit))? = null
 ) {
     val currentTab by cdiViewModel.currentTab.collectAsState()
     val isConnected by cdiViewModel.isConnected.collectAsState()
@@ -126,7 +225,20 @@ fun MainAppScreen(
                     if (isBleScanning || isBleBusy || isConnected) {
                         cdiViewModel.toggleConnect()
                     } else {
-                        onRequestPermissions()
+                        val hasSaved = !cdiViewModel.savedDeviceMac.value.isNullOrBlank()
+                        if (hasSaved) {
+                            if (cdiViewModel.hasConnectPermission()) {
+                                cdiViewModel.toggleConnect()
+                            } else {
+                                onRequestBleAction?.invoke(false) { cdiViewModel.toggleConnect() } ?: cdiViewModel.toggleConnect()
+                            }
+                        } else {
+                            if (cdiViewModel.hasBlePermissions()) {
+                                cdiViewModel.toggleConnect()
+                            } else {
+                                onRequestBleAction?.invoke(true) { cdiViewModel.toggleConnect() } ?: cdiViewModel.toggleConnect()
+                            }
+                        }
                     }
                 },
                 onDemoClick = { cdiViewModel.toggleSimulation() }
@@ -157,7 +269,7 @@ fun MainAppScreen(
                 ScreenTab.SUARA -> SoundScreen(cdiViewModel)
                 ScreenTab.BLE -> BleHexScreen(
                     viewModel = cdiViewModel,
-                    onRequestPermissions = onRequestPermissions
+                    onRequestPermissions = onRequestBleAction
                 )
             }
         }
@@ -216,7 +328,7 @@ fun MotorsportTopBar(
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "CDI-UNIVERSAL",
+                                text = "IGNITRA CDI",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Black,
                                 fontFamily = FontFamily.Monospace,

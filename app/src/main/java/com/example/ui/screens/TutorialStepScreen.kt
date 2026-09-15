@@ -36,6 +36,9 @@ import com.example.ui.components.StepWiringChecklist
 import com.example.ui.components.StepWiringVisualCanvas
 import com.example.ui.components.generateDefaultConnectionsForStep
 import com.example.ui.theme.*
+import id.ns200.cdir7.ui.components.MotecButton
+import id.ns200.cdir7.ui.theme.BorderSubtle
+import id.ns200.cdir7.ui.theme.TextMuted
 import com.example.viewmodel.WiringViewModel
 
 /**
@@ -856,24 +859,13 @@ fun TutorialStepScreen(
                       fontWeight = FontWeight.Bold
                     )
 
-                    Button(
+                    MotecButton(
+                      text = if (isCurrentVerified) "Ubah Nilai" else "Input Hasil",
                       onClick = { viewModel.openVerificationDialog() },
-                      colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isCurrentVerified) SafetyGreen else SparkAmber,
-                        contentColor = Color.Black
-                      ),
-                      shape = RoundedCornerShape(6.dp),
-                      contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                      modifier = Modifier.height(28.dp)
-                    ) {
-                      Icon(Icons.Default.Speed, contentDescription = null, modifier = Modifier.size(12.dp))
-                      Spacer(modifier = Modifier.width(4.dp))
-                      Text(
-                        text = if (isCurrentVerified) "Ubah Nilai" else "Input Hasil Ukur",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                      )
-                    }
+                      color = if (isCurrentVerified) SafetyGreen else SparkAmber,
+                      icon = Icons.Default.Speed,
+                      height = 28.dp
+                    )
                   }
                 }
               }
@@ -896,63 +888,40 @@ fun TutorialStepScreen(
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 12.dp, vertical = 8.dp),
+          .padding(horizontal = 8.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
       ) {
         // Prev Step
-        OutlinedButton(
+        MotecButton(
+          text = "PREV",
           onClick = { viewModel.prevStep() },
           enabled = uiState.selectedStepIndex > 0,
-          shape = RoundedCornerShape(8.dp),
-          contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-          modifier = Modifier.height(38.dp)
-        ) {
-          Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(14.dp))
-          Spacer(modifier = Modifier.width(4.dp))
-          Text("Prev", fontSize = 11.sp)
-        }
+          color = if (uiState.selectedStepIndex > 0) ElectricCyan else TextMuted,
+          icon = Icons.AutoMirrored.Filled.ArrowBack,
+          height = 32.dp,
+          modifier = Modifier.widthIn(min = 72.dp)
+        )
 
         // Central Action: Verifikasi Hasil Ukur
-        Button(
+        MotecButton(
+          text = if (isCurrentVerified) "TERVERIFIKASI ✓" else "VERIFIKASI LANGKAH",
           onClick = { viewModel.openVerificationDialog() },
-          colors = ButtonDefaults.buttonColors(
-            containerColor = if (isCurrentVerified) SafetyGreen else if (isAllWiresChecked) SparkAmber else Color(0xFF1E2D40),
-            contentColor = if (isCurrentVerified || isAllWiresChecked) Color.Black else TextPrimaryDark
-          ),
-          shape = RoundedCornerShape(8.dp),
-          contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-          modifier = Modifier.height(38.dp)
-        ) {
-          Icon(
-            imageVector = if (isCurrentVerified) Icons.Default.CheckCircle else Icons.Default.Speed,
-            contentDescription = null,
-            modifier = Modifier.size(16.dp)
-          )
-          Spacer(modifier = Modifier.width(6.dp))
-          Text(
-            text = if (isCurrentVerified) "Terverifikasi ✓" else "Verifikasi Langkah",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold
-          )
-        }
+          color = if (isCurrentVerified) SafetyGreen else if (isAllWiresChecked) SparkAmber else BorderSubtle,
+          icon = if (isCurrentVerified) Icons.Default.CheckCircle else Icons.Default.Speed,
+          height = 32.dp,
+          modifier = Modifier.weight(1f).padding(horizontal = 6.dp)
+        )
 
         // Next Step
-        Button(
+        MotecButton(
+          text = "NEXT",
           onClick = { viewModel.nextStep() },
           enabled = uiState.selectedStepIndex < viewModel.allSteps.size - 1,
-          shape = RoundedCornerShape(8.dp),
-          colors = ButtonDefaults.buttonColors(
-            containerColor = ElectricCyan,
-            contentColor = Color.Black
-          ),
-          contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-          modifier = Modifier.height(38.dp)
-        ) {
-          Text("Next", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-          Spacer(modifier = Modifier.width(4.dp))
-          Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(14.dp))
-        }
+          color = if (uiState.selectedStepIndex < viewModel.allSteps.size - 1) ElectricCyan else TextMuted,
+          height = 32.dp,
+          modifier = Modifier.widthIn(min = 72.dp)
+        )
       }
     }
   }

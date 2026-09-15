@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import id.ns200.cdir7.CdiViewModel
 import id.ns200.cdir7.FirmwareRunMode
 import id.ns200.cdir7.McuPlatform
+import id.ns200.cdir7.ui.components.MotecButton
 import id.ns200.cdir7.ui.theme.*
 import kotlin.math.*
 
@@ -568,30 +569,23 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                     Spacer(modifier = Modifier.width(8.dp))
 
                     if (!isEngineOn) {
-                        Button(
+                        MotecButton(
+                            text = "STARTER",
                             onClick = { viewModel.simulateStartEngine() },
-                            colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            color = RacingLime,
+                            icon = Icons.Default.PlayArrow,
+                            height = 30.dp,
                             modifier = Modifier.testTag("dashboard_engine_starter_btn")
-                        ) {
-                            Icon(Icons.Default.PlayArrow, null, tint = CarbonDark, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("STARTER", color = CarbonDark, fontSize = 11.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
-                        }
+                        )
                     } else {
-                        OutlinedButton(
+                        MotecButton(
+                            text = "STOP MESIN",
                             onClick = { viewModel.simulateStopEngine() },
-                            border = BorderStroke(1.dp, RaceRedline),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = RaceRedline),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            color = RaceRedline,
+                            icon = Icons.Default.Stop,
+                            height = 30.dp,
                             modifier = Modifier.testTag("dashboard_engine_stop_btn")
-                        ) {
-                            Icon(Icons.Default.Stop, null, tint = RaceRedline, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("STOP MESIN", color = RaceRedline, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                        }
+                        )
                     }
                 }
             }
@@ -683,17 +677,13 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                             color = SensorAmber,
                             fontFamily = FontFamily.Monospace
                         )
-                        Button(
+                        MotecButton(
+                            text = "STARTER",
                             onClick = { viewModel.simulateStartEngine() },
-                            colors = ButtonDefaults.buttonColors(containerColor = RacingLime),
-                            shape = RoundedCornerShape(6.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 3.dp),
-                            modifier = Modifier.height(28.dp)
-                        ) {
-                            Icon(Icons.Default.PlayArrow, null, tint = CarbonDark, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("STARTER", color = CarbonDark, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                        }
+                            color = RacingLime,
+                            icon = Icons.Default.PlayArrow,
+                            height = 26.dp
+                        )
                     }
                 }
 
@@ -737,45 +727,37 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(
+                    MotecButton(
+                        text = "IDLE",
                         onClick = { viewModel.resetDemoThrottle() },
-                        colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        modifier = Modifier.weight(1f).height(34.dp)
-                    ) {
-                        Text("IDLE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = ElectricCyan, fontFamily = FontFamily.Monospace)
-                    }
+                        color = ElectricCyan,
+                        height = 30.dp,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                    Button(
+                    MotecButton(
+                        text = "5K",
                         onClick = { viewModel.setDemoRpmDirect(5000f) },
-                        colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        modifier = Modifier.weight(1f).height(34.dp)
-                    ) {
-                        Text("5K", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextPrimary, fontFamily = FontFamily.Monospace)
-                    }
+                        color = TextPrimary,
+                        height = 30.dp,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                    Button(
+                    MotecButton(
+                        text = "8K",
                         onClick = { viewModel.setDemoRpmDirect(8000f) },
-                        colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        modifier = Modifier.weight(1f).height(34.dp)
-                    ) {
-                        Text("8K", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MotecOrange, fontFamily = FontFamily.Monospace)
-                    }
+                        color = MotecOrange,
+                        height = 30.dp,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                    Button(
+                    MotecButton(
+                        text = "LIMITER",
                         onClick = { viewModel.setDemoRpmDirect(revLimit.toFloat()) },
-                        colors = ButtonDefaults.buttonColors(containerColor = SurfacePanel),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        modifier = Modifier.weight(1.2f).height(34.dp)
-                    ) {
-                        Text("LIMITER", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = RaceRedline, fontFamily = FontFamily.Monospace)
-                    }
+                        color = RaceRedline,
+                        height = 30.dp,
+                        modifier = Modifier.weight(1.2f)
+                    )
 
                     // Momentary Quick Blip & Hold Gas Button (Simulasi Putar Tuas Gas)
                     Box(

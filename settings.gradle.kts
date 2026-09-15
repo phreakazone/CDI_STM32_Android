@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "NS200 CDI R7.2"
+rootProject.name = "IGNITRA CDI"
 
 include(":app")

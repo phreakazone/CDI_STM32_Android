@@ -278,20 +278,15 @@ fun HarnessPinDetailCard(
 
       // Jump to Tutorial button if related step exists
       if (relatedStepNumber != null) {
-        Spacer(modifier = Modifier.height(10.dp))
-        Button(
+        Spacer(modifier = Modifier.height(8.dp))
+        id.ns200.cdir7.ui.components.MotecButton(
+          text = "BUKA TUTORIAL LANGKAH $relatedStepNumber",
           onClick = { onNavigateToStep(relatedStepNumber) },
-          colors = ButtonDefaults.buttonColors(
-            containerColor = SparkAmber.copy(alpha = 0.2f),
-            contentColor = SparkAmber
-          ),
-          shape = RoundedCornerShape(8.dp),
+          color = SparkAmber,
+          icon = Icons.AutoMirrored.Filled.ArrowForward,
+          height = 30.dp,
           modifier = Modifier.fillMaxWidth()
-        ) {
-          Text("Buka Tutorial Langkah $relatedStepNumber", fontWeight = FontWeight.Bold)
-          Spacer(modifier = Modifier.width(6.dp))
-          Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
-        }
+        )
       }
     }
   }

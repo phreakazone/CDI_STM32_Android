@@ -1,4 +1,4 @@
-# CDI Universal R9 (v9.0.0) — Android Tuning, Dual-MCU Firmware & OTA
+# IGNITRA CDI R9 (v9.0.0) — Android Tuning, Dual-MCU Firmware & OTA
 
 
 > **Sumber firmware lengkap yang dapat dibuild:** gunakan
@@ -512,6 +512,46 @@ Menu **Pinout MCU** dalam aplikasi menyediakan visualisasi ganda (**Mode Tabel 2
 ---
 
 ## 📝 Catatan Rilis (Changelog)
+
+### Versi 9.2.0 (Aktivasi BLE & GPS Satu-Sentuhan, Desain Instrumentasi MoTeC M1, & Layout Padat)
+- **Penanganan Aktivasi GPS Otomatis (In-App GPS Dialog & Auto-Resume)**:
+  - Mengatasi kendala pemindaian BLE yang kosong/gagal akibat Layanan Lokasi (GPS) ponsel yang nonaktif (khususnya pada Android 6–11 dan perangkat Android 12+ tertentu dengan proteksi vendor kernel).
+  - Saat tombol "PINDAI BLE" ditekan dan Layanan Lokasi belum aktif, aplikasi langsung menampilkan dialog konfirmasi satu-sentuhan. Tombol "AKTIFKAN" langsung membuka switch pengaturan Lokasi sistem HP, dan begitu diaktifkan lalu pengguna kembali ke aplikasi, pemindaian BLE otomatis berjalan tanpa perlu menekan tombol ulang.
+  - Scanner BLE dioptimalkan dengan `ScanSettings.SCAN_MODE_LOW_LATENCY` dan batas waktu 12 detik untuk responsivitas terbaik menangkap interval sinyal modul CDI.
+- **Koneksi Cepat Langsung via MAC (100% Bebas GPS)**:
+  - Menyediakan tombol "KONEK MAC" untuk menghubungkan aplikasi ke MAC address modul CDI secara langsung (`BluetoothDevice.connectGatt`). Jalur ini **100% tidak memerlukan Layanan Lokasi / GPS aktif** di semua versi Android, ideal bagi pengguna yang ingin menghemat daya baterai atau tidak ingin mengaktifkan GPS.
+- **Perombakan Total Tombol & Komponen Bergaya Instrumentasi Balap MoTeC M1**:
+  - Tombol **MotecButton**: Menggunakan sudut kotak/persegi tegas (`RoundedCornerShape(3.dp)`), warna semi-transparan (`alpha = 0.14f`), dan garis tepi (border) tajam `1.dp` dengan kontras tinggi khas konsol dashboard tuning MoTeC M1.
+  - Kartu-kartu berbingkai sudut kotak tegas (`RoundedCornerShape(3.dp)`) menggantikan bentuk rounded melengkung yang tumpul.
+- **Optimalisasi Layout Padat & Ramping (Zero Wasted Space)**:
+  - Membatasi lebar kontainer pada `740.dp` dengan posisi terpusat di layar tablet dan ponsel lebar, mencegah tampilan melar dan menyisakan ruang kosong di tengah layar.
+  - Memangkas kalimat-kalimat panjang yang bertele-tele menjadi terminologi teknis instrumentasi yang ringkas dan padat.
+  - Matriks spesifikasi GATT ditata ulang dalam format grid 2 kolom yang hemat ruang dan rapi.
+- **Koreksi & Klarifikasi UUID Profil GATT**:
+  - Mengoreksi catatan dokumentasi versi terdahulu yang sebelumnya mencantumkan referensi serial generik SPP/HM-10 (`0000ffe0...`). Aplikasi resmi IGNITRA CDI R7/R8/R9 menggunakan arsitektur UUID 128-bit resmi:
+    - Service: `7a8f1000-6c9d-4e40-a45f-0b4b4e533230`
+    - Karakteristik Telemetri: `7a8f1001-6c9d-4e40-a45f-0b4b4e533230`
+    - Karakteristik Command: `7a8f1002-6c9d-4e40-a45f-0b4b4e533230`
+    - Karakteristik Response: `7a8f1003-6c9d-4e40-a45f-0b4b4e533230`
+    - Karakteristik OTA Data/Status: `7a8f1004...` / `7a8f1005...`
+- **Peta Rencana Lisensi Modul (Upcoming Roadmap)**:
+  - Fitur penguncian MAC address modul dialokasikan untuk pembaruan mendatang sebagai fondasi sistem lisensi perangkat.
+
+### Versi 9.1.0 (Rebranding Menjadi "IGNITRA CDI", Penyelarasan Alur BLE Hardware Scanner, & Perbaikan Pemindaian)
+- **Rebranding Menyeluruh "IGNITRA CDI"**:
+  - Memperbarui identitas aplikasi di Android (`app_name`, TopBar, `metadata.json`, `settings.gradle.kts`, `McuPlatform`, dan dokumentasi).
+  - Teks header aplikasi resmi berganti dari "CDI-UNIVERSAL" menjadi **IGNITRA CDI** (dengan badge aksen R9).
+- **Perbaikan & Penguatan Pemindaian BLE ("Gagal Memindai BLE")**:
+  - **Penanganan Izin Runtime Android 12+ (API 31+) & Android 6–11**: Penambahan pengecekan dan permintaan izin `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`, serta `ACCESS_FINE_LOCATION` dan `ACCESS_COARSE_LOCATION`. Callback permintaan izin kini secara otomatis melanjutkan aksi (*auto-resume*) saat izin disetujui (memulai scan, koneksi langsung, atau toggle connect) tanpa perlu menekan tombol ulang.
+  - **Dukungan ScanSettings Low Latency**: Scanner BLE menggunakan `ScanSettings.SCAN_MODE_LOW_LATENCY` dan `setReportDelay(0)` untuk deteksi cepat dan andal pada semua chipset Android.
+  - **Pesan Diagnostik Scan yang Jelas**: Menangani kode kegagalan BLE (`SCAN_FAILED_ALREADY_STARTED`, `SCAN_FAILED_APPLICATION_REGISTRATION_FAILED`, `SCAN_FAILED_INTERNAL_ERROR`, dll.) dengan pesan solusi yang informatif bagi pengguna.
+  - **Penyelarasan Menu BLE HARDWARE CDI SCANNER**:
+    - Pemindaian BLE menangkap semua perangkat di sekitar (*broad scan*) agar modul dengan nama custom atau paket advert parsial tetap terdeteksi.
+    - Dilengkapi **Filter Chips**: `Semua BLE` vs `Hanya Target CDI` (mendeteksi `"IGNITRA"`, `"IGNITRA-CDI"`, `"NS200-CDI"`, `"CDI"`).
+    - Penanda visual badge jelas: `TARGET CDI` (hijau balap) vs `BLE LAIN` (abu-abu).
+    - Tombol "KONEK" instan pada tiap kartu perangkat untuk menghubungkan perangkat target tanpa proses pairing/bonding manual.
+- **Penyelarasan Alur ke Firmware Dual-MCU (ESP32 & STM32WB55)**:
+  - Protokol komunikasi tetap mempertahankan struktur stabil: UUID Service `7a8f1000-6c9d-4e40-a45f-0b4b4e533230`, framing telemetri biner header `15 CD 03` (20-byte V3 Core/Diagnostic) pada frekuensi 20 Hz, serta format perintah teks ASCII berbasis koma (`GET,CAPS`, `SET,PROFILE`, `MAP,BEGIN`, `OTA,BEGIN`, dll.).
 
 ### Versi 9.0.0 (Standardisasi Identitas BLE "NS200-CDI", Integrasi Core R9 32x16, & Penyelarasan Firmware ESP32)
 - **Standardisasi Identitas BLE Permanen ("NS200-CDI")**:

@@ -195,86 +195,38 @@ fun DynoLiveTuneCard(vm: CdiViewModel) {
                 }
             }
 
-            // Action Buttons
+            // Action Buttons (MotecButton)
             if (!active) {
-                Button(
+                id.ns200.cdir7.ui.components.MotecButton(
+                    text = "MULAI LIVE DYNO TUNE",
                     onClick = vm::beginDynoTune,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(38.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MotecOrange,
-                        contentColor = CarbonDark
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "MULAI LIVE DYNO TUNE",
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
+                    color = MotecOrange,
+                    icon = Icons.Default.PlayArrow,
+                    height = 34.dp,
+                    modifier = Modifier.fillMaxWidth()
+                )
             } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Button(
+                    id.ns200.cdir7.ui.components.MotecButton(
+                        text = "COMMIT MAP",
                         onClick = { vm.finishDynoTune(true) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(38.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = RacingLime,
-                            contentColor = CarbonDark
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "COMMIT MAP",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
+                        color = RacingLime,
+                        icon = Icons.Default.Check,
+                        height = 34.dp,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                    OutlinedButton(
+                    id.ns200.cdir7.ui.components.MotecButton(
+                        text = "ABORT",
                         onClick = { vm.finishDynoTune(false) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(38.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, RaceRedline),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = RaceRedline
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "ABORT",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
+                        color = RaceRedline,
+                        icon = Icons.Default.Close,
+                        height = 34.dp,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
 

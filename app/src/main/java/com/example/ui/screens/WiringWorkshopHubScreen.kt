@@ -106,24 +106,24 @@ fun WiringWorkshopHubScreen(
                     )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     // STM32 Toggle
                     val isStm = activePlatform == McuPlatform.STM32WB55
                     Surface(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(RoundedCornerShape(3.dp))
                             .clickable {
                                 wiringViewModel.setMcuPlatform(McuPlatform.STM32WB55)
                                 cdiViewModel.setMcuPlatform(McuPlatform.STM32WB55)
                             },
-                        color = if (isStm) ElectricCyan.copy(alpha = 0.25f) else Color.Transparent,
-                        border = BorderStroke(1.dp, if (isStm) ElectricCyan else Color(0xFF263342)),
-                        shape = RoundedCornerShape(4.dp)
+                        color = if (isStm) ElectricCyan.copy(alpha = 0.22f) else Color.Transparent,
+                        border = BorderStroke(1.dp, if (isStm) ElectricCyan else BorderSubtle),
+                        shape = RoundedCornerShape(3.dp)
                     ) {
                         Text(
                             text = "STM32",
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                             color = if (isStm) ElectricCyan else TextMuted,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
@@ -134,19 +134,19 @@ fun WiringWorkshopHubScreen(
                     val isEsp = activePlatform == McuPlatform.ESP32_WROOM
                     Surface(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(RoundedCornerShape(3.dp))
                             .clickable {
                                 wiringViewModel.setMcuPlatform(McuPlatform.ESP32_WROOM)
                                 cdiViewModel.setMcuPlatform(McuPlatform.ESP32_WROOM)
                             },
-                        color = if (isEsp) SparkAmber.copy(alpha = 0.25f) else Color.Transparent,
-                        border = BorderStroke(1.dp, if (isEsp) SparkAmber else Color(0xFF263342)),
-                        shape = RoundedCornerShape(4.dp)
+                        color = if (isEsp) SparkAmber.copy(alpha = 0.22f) else Color.Transparent,
+                        border = BorderStroke(1.dp, if (isEsp) SparkAmber else BorderSubtle),
+                        shape = RoundedCornerShape(3.dp)
                     ) {
                         Text(
                             text = "ESP32",
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                             color = if (isEsp) SparkAmber else TextMuted,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
@@ -167,8 +167,8 @@ fun WiringWorkshopHubScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(scrollState)
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 WorkshopSubTab.entries.forEach { subTab ->
@@ -185,37 +185,37 @@ fun WiringWorkshopHubScreen(
 
                     Surface(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(3.dp))
                             .clickable { activeSubTab = subTab }
                             .testTag("subtab_${subTab.name.lowercase()}"),
-                        color = if (isSelected) pillColor.copy(alpha = 0.18f) else CardBackground,
-                        shape = RoundedCornerShape(8.dp),
+                        color = if (isSelected) pillColor.copy(alpha = 0.22f) else CardBackground,
+                        shape = RoundedCornerShape(3.dp),
                         border = BorderStroke(
                             1.dp,
                             if (isSelected) pillColor else BorderSubtle
                         )
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
                                 imageVector = subTab.icon,
                                 contentDescription = null,
                                 tint = if (isSelected) pillColor else TextSecondaryDark,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(12.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = subTab.title,
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isSelected) TextPrimaryDark else TextSecondaryDark,
                                 fontFamily = FontFamily.Monospace
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Surface(
-                                shape = RoundedCornerShape(4.dp),
+                                shape = RoundedCornerShape(2.dp),
                                 color = if (isSelected) pillColor.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.3f)
                             ) {
                                 Text(
@@ -224,11 +224,11 @@ fun WiringWorkshopHubScreen(
                                         WorkshopSubTab.MCU_PINOUT -> if (activePlatform == McuPlatform.STM32WB55) "35 PIN" else "38 PIN"
                                         else -> subTab.badge
                                     },
-                                    fontSize = 8.sp,
+                                    fontSize = 7.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace,
                                     color = if (isSelected) pillColor else TextMuted,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
                                 )
                             }
                         }
