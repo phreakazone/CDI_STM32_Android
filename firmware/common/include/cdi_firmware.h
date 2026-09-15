@@ -45,6 +45,8 @@ typedef struct {
     void (*set_ignition)(bool enabled);
     void (*set_charger)(bool enabled);
     void (*set_fan)(bool enabled);
+    void (*set_strobe)(bool enabled);
+    uint16_t (*read_raw_tps)(void);
     bool (*load_config)(void *data, size_t size);
     bool (*save_config)(const void *data, size_t size);
     bool (*ota_begin)(uint32_t size, uint32_t crc32);
@@ -81,10 +83,26 @@ typedef struct {
     cdi_profile_t map_slots[CDI_MAX_MAP_SLOTS];
     uint16_t limiter_rpm;
     uint16_t normal_limiter_rpm;
+    uint16_t soft_band_rpm;
+    uint8_t limiter_type;        /* 0 = SOFT, 1 = HARD */
     cdi_fan_mode_t fan_mode;
     int16_t fan_on_x10;
     int16_t fan_off_x10;
     cdi_temp_point_t temp_cal[3];
+    uint8_t firmware_stage;       /* 0=BARU, 1=PULSER, 2=TDC, 3=FIRST_START, 4=READY */
+    uint8_t pickup_edge;          /* 0=FALLING, 1=RISING */
+    uint16_t gate_us;             /* Gate pulse width in microseconds (40..150) */
+    uint16_t tps_closed_adc;      /* ADC raw at throttle closed 0% */
+    uint16_t tps_open_adc;        /* ADC raw at throttle wide open 100% */
+    int16_t side_offset_cdeg;     /* Side plug offset in centidegrees */
+    uint16_t target_hv_volts;     /* Target HV DC bus voltage (220, 285, 345) */
+    bool pro_enabled;             /* Pro 345V mode */
+    bool diy_unplugged;           /* OEM CDI unplugged confirmed */
+    uint8_t run_mode;             /* 0=MANUAL, 1=OEM_LEARN, 2=DIY */
+    uint16_t quickshift_cut_ms;   /* Quickshifter cut time (ms) */
+    uint16_t launch_limiter_rpm;  /* 2-Step launch limiter */
+    bool launch_active;           /* 2-Step active */
+    uint8_t spark_channel_mask;   /* Bit 0=Center, Bit 1=Side L, Bit 2=Side R */
 } cdi_config_t;
 
 typedef struct {

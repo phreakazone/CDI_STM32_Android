@@ -1,4 +1,5 @@
 #include "cdi_firmware.h"
+#include "cdi_ble.h"
 #include "driver/gpio.h"
 #include "esp_adc/adc_oneshot.h"
 #include "esp_attr.h"
@@ -16,6 +17,7 @@
 #define CDI_GPIO_CHARGER_A GPIO_NUM_18
 #define CDI_GPIO_CHARGER_B GPIO_NUM_19
 #define CDI_GPIO_FAN GPIO_NUM_13
+#define CDI_GPIO_STROBE GPIO_NUM_27
 #define CDI_ADC_TPS ADC_CHANNEL_0   /* GPIO36 */
 #define CDI_ADC_TEMP ADC_CHANNEL_3  /* GPIO39 */
 #define CDI_ADC_HV_CENTER ADC_CHANNEL_7 /* GPIO35 */
@@ -32,21 +34,29 @@ static esp_ota_handle_t s_ota_handle;
 static nvs_handle_t s_nvs;
 static adc_oneshot_unit_handle_t s_adc;
 
-extern void cdi_ble_init(void (*rx)(const uint8_t*,size_t));
-extern void cdi_ble_notify(const uint8_t *data,size_t size);
-extern void cdi_ble_notify_telemetry(const uint8_t *data,size_t size);
-extern void cdi_ble_notify_ota_status(const uint8_t *data,size_t size);
-
 static uint32_t port_micros(void){ return (uint32_t)esp_timer_get_time(); }
 static void set_ignition(bool v){
-    gpio_set_level(CDI_GPIO_IGNITION_CENTER,v);
-    gpio_set_level(CDI_GPIO_IGNITION_SIDE,v);
+    if (v) {
+        if (s_cdi.config.spark_channel_mask & 1u) gpio_set_level(CDI_GPIO_IGNITION_CENTER, 1);
+        if (s_cdi.config.spark_channel_mask & 2u) gpio_set_level(CDI_GPIO_IGNITION_SIDE, 1);
+    } else {
+        gpio_set_level(CDI_GPIO_IGNITION_CENTER, 0);
+        gpio_set_level(CDI_GPIO_IGNITION_SIDE, 0);
+    }
 }
 static void set_charger(bool v){
     gpio_set_level(CDI_GPIO_CHARGER_A,v);
     gpio_set_level(CDI_GPIO_CHARGER_B,v);
 }
 static void set_fan(bool v){ gpio_set_level(CDI_GPIO_FAN,v); }
+static void set_strobe(bool v){ gpio_set_level(CDI_GPIO_STROBE, v); }
+
+static uint16_t read_raw_tps(void){
+    int tps = 0;
+    adc_oneshot_read(s_adc, CDI_ADC_TPS, &tps);
+    return (uint16_t)(tps < 0 ? 0 : (tps > 4095 ? 4095 : tps));
+}
+
 static bool load_config(void *data,size_t size){ size_t n=size;return nvs_get_blob(s_nvs,"config",data,&n)==ESP_OK&&n==size; }
 static bool save_config(const void *data,size_t size){ return nvs_set_blob(s_nvs,"config",data,size)==ESP_OK&&nvs_commit(s_nvs)==ESP_OK; }
 
@@ -69,7 +79,8 @@ static void fire_now(void *arg){
     if(s_cdi.telemetry.ota_active) return;
     set_ignition(true);
     esp_timer_stop(s_fire_timer);
-    esp_timer_start_once(s_fire_timer,120);
+    uint32_t gate = s_cdi.config.gate_us ? s_cdi.config.gate_us : 80u;
+    esp_timer_start_once(s_fire_timer, gate);
 }
 
 static void IRAM_ATTR reference_isr(void *arg){
@@ -121,7 +132,7 @@ void app_main(void){
     nvs_open("cdi",NVS_READWRITE,&s_nvs);
     gpio_config_t out={.pin_bit_mask=(1ULL<<CDI_GPIO_IGNITION_CENTER)|
         (1ULL<<CDI_GPIO_IGNITION_SIDE)|(1ULL<<CDI_GPIO_CHARGER_A)|
-        (1ULL<<CDI_GPIO_CHARGER_B)|(1ULL<<CDI_GPIO_FAN),.mode=GPIO_MODE_OUTPUT};
+        (1ULL<<CDI_GPIO_CHARGER_B)|(1ULL<<CDI_GPIO_FAN)|(1ULL<<CDI_GPIO_STROBE),.mode=GPIO_MODE_OUTPUT};
     gpio_config(&out);
     adc_oneshot_unit_init_cfg_t adc_unit={.unit_id=ADC_UNIT_1};
     adc_oneshot_new_unit(&adc_unit,&s_adc);
@@ -136,10 +147,24 @@ void app_main(void){
     esp_timer_create(&delay_args,&s_delay_timer);
     esp_timer_create_args_t fire_args={.callback=fire_off,.name="cdi_fire_off"};
     esp_timer_create(&fire_args,&s_fire_timer);
-    cdi_hal_t hal={port_micros,set_ignition,set_charger,set_fan,load_config,save_config,ota_begin,ota_write,ota_finish,ota_abort};
+    cdi_hal_t hal={
+        .micros = port_micros,
+        .set_ignition = set_ignition,
+        .set_charger = set_charger,
+        .set_fan = set_fan,
+        .set_strobe = set_strobe,
+        .read_raw_tps = read_raw_tps,
+        .load_config = load_config,
+        .save_config = save_config,
+        .ota_begin = ota_begin,
+        .ota_write = ota_write,
+        .ota_finish = ota_finish,
+        .ota_abort = ota_abort
+    };
     cdi_init(&s_cdi,&hal);
     xTaskCreatePinnedToCore(trigger_task,"cdi_trigger",4096,NULL,configMAX_PRIORITIES-1,&s_trigger_task,1);
     gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
+    gpio_set_intr_type(CDI_GPIO_REFERENCE, s_cdi.config.pickup_edge == 1u ? GPIO_INTR_POSEDGE : GPIO_INTR_NEGEDGE);
     gpio_isr_handler_add(CDI_GPIO_REFERENCE,reference_isr,NULL);
     cdi_ble_init(ble_rx);
     uint16_t telemetry_sequence=0u;
@@ -150,7 +175,17 @@ void app_main(void){
         adc_oneshot_read(s_adc,CDI_ADC_TEMP,&temp);
         adc_oneshot_read(s_adc,CDI_ADC_HV_CENTER,&hvc);
         adc_oneshot_read(s_adc,CDI_ADC_HV_SIDE,&hvs);
-        uint8_t load=(uint8_t)((uint32_t)tps*100u/4095u);
+
+        uint16_t closed = s_cdi.config.tps_closed_adc;
+        uint16_t open = s_cdi.config.tps_open_adc > closed ? s_cdi.config.tps_open_adc : 4095u;
+        uint8_t load = 0u;
+        if ((uint16_t)tps > closed) {
+            uint32_t span = (uint32_t)(open - closed);
+            if (span > 0u) {
+                uint32_t pct = ((uint32_t)(tps - closed) * 100u) / span;
+                load = (uint8_t)(pct > 100u ? 100u : pct);
+            }
+        }
         uint16_t hv=(uint16_t)((uint32_t)(hvc>hvs?hvc:hvs)*CDI_HV_FULL_SCALE_X10/4095u);
         cdi_set_inputs(&s_cdi,load,(uint16_t)temp,hv);
         cdi_tick(&s_cdi);

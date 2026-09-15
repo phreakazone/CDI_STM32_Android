@@ -1,5 +1,5 @@
 {
-  "name": "NS200 CDI R8",
+  "name": "CDI Universal R9",
   "description": "Aplikasi kontrol CDI Programmable Pulsar NS200 Firmware R8: Alur OEM Learn, Kontrol Mode DIY/Manual, Otomatis First Start & Ready, Pengunggah APP.bin BLE OTA, Dashboard balap MoTeC, Kurva Pengapian 4 Slot, dan Bengkel Wiring.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

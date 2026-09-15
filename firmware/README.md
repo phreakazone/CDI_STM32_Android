@@ -1,73 +1,82 @@
-# Panduan build firmware CDI
+# Panduan Build Firmware CDI R9 (STM32WB55 & ESP32)
 
-## Pilih source yang benar
+Perlu dipahami:
+- Repository di GitHub (`phreakazone/Firmware_CDI_NS200` dan `phreakazone/Firmware_CDI_NS200_ESP32`) adalah baseline **R8**.
+- Kode yang sudah diselaraskan ke **R9 Protocol (v5)** ada di folder `/firmware` pada repository Android ini:
+  - `firmware/common/include/cdi_firmware.h` (Data model R9 & Protocol v5)
+  - `firmware/common/src/cdi_firmware.c` (Core Engine R9, Dyno Trim, Setup Wizard, Strobe, Map 32x16)
+  - `firmware/esp32/` (Port ESP32 mandiri dengan NimBLE R9 UUIDs & Partisi OTA)
+  - `firmware/stm32wb55/Core/` (Port STM32WB55 R9)
 
-Firmware lengkap yang sudah pernah dibuild berada pada dua repository yang sejak awal
-ditautkan oleh aplikasi:
+Jika Anda hanya meng-clone repo GitHub tanpa menambal file dari folder `/firmware` ini, firmware yang ter-build masih berupa versi lama R8.
 
-| Target | Source lengkap | Status yang tercatat |
-|---|---|---|
-| WeAct STM32WB55CGU6 | [Firmware_CDI_NS200](https://github.com/phreakazone/Firmware_CDI_NS200) | R8: CMake, bootloader, startup, linker, HAL/WPAN, release binary; build GNU Arm 13.2.1 terverifikasi |
-| ESP32-WROOM-32 | [Firmware_CDI_NS200_ESP32](https://github.com/phreakazone/Firmware_CDI_NS200_ESP32) | R8 port: NimBLE, board layer, GPTimer/MCPWM, OTA source; build ESP-IDF v6.1 terverifikasi |
+---
 
-**Jangan build folder kecil `firmware/stm32wb55` atau `firmware/esp32` di repository
-Android ini sebagai firmware produksi.** Folder tersebut adalah pekerjaan integrasi core
-R9 dan memang hanya berisi core/port ringkas, bukan pengganti proyek lengkap yang sudah
-ada pada dua tautan di atas.
+## 1. Build ESP32-WROOM-32 (R9)
 
-Itulah sebabnya source tampak sangat sedikit: yang terbuka adalah lapisan integrasi R9,
-bukan paket firmware R8 lengkap.
+Ada 2 cara:
 
-## Panduan sesuai VS Code Anda
-
-- [Build ESP32 dengan extension ESP-IDF](esp32/README.md)
-- [Build STM32WB55 dengan STM32Cube/CMake](stm32wb55/README.md)
-
-## Ringkasan paling cepat
-
-### ESP32
+### Cara A (Paling Cepat - Langsung dari Folder ini):
+Folder `firmware/esp32` sudah merupakan proyek ESP-IDF lengkap dan mandiri (berisi `CMakeLists.txt`, `sdkconfig.defaults`, `partitions.csv` dengan OTA slot, driver NimBLE BLE R9, dan `cdi_firmware.c` R9).
 
 ```bash
-git clone https://github.com/phreakazone/Firmware_CDI_NS200_ESP32.git
-cd Firmware_CDI_NS200_ESP32
+cd firmware/esp32
 idf.py set-target esp32
 idf.py build
 idf.py -p COM7 flash monitor
 ```
 
-Gunakan ESP-IDF **v6.1**, karena versi itu yang dicatat sudah berhasil membuild seluruh
-source termasuk `cdi_ble_nimble.c`.
+### Cara B (Menambal ke repo `Firmware_CDI_NS200_ESP32`):
+Jika Anda ingin tetap memakai repo hasil clone `phreakazone/Firmware_CDI_NS200_ESP32`:
+1. Clone repo:
+   ```bash
+   git clone https://github.com/phreakazone/Firmware_CDI_NS200_ESP32.git
+   ```
+2. Timpa file R9 dari folder ini ke repo tersebut:
+   - Salin `firmware/common/include/cdi_firmware.h` ke `Firmware_CDI_NS200_ESP32/components/cdi_core/include/` (atau folder include terkait).
+   - Salin `firmware/common/src/cdi_firmware.c` ke folder source terkait.
+   - Salin `firmware/esp32/main/cdi_ble.c` dan `cdi_ble.h` ke `main/`.
+   - Salin `firmware/esp32/main/cdi_port.c` ke `main/`.
+   - Salin `firmware/esp32/partitions.csv` ke root folder repo.
+3. Build & Flash:
+   ```bash
+   idf.py set-target esp32
+   idf.py build
+   idf.py -p COM7 flash monitor
+   ```
 
-### STM32WB55
+---
 
-```bash
-git clone https://github.com/phreakazone/Firmware_CDI_NS200.git
-cd Firmware_CDI_NS200
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi-gcc.cmake
-cmake --build build
-```
+## 2. Build STM32WB55 (R9)
 
-Flash pertama memakai:
+STM32WB55 memerlukan paket CMSIS/HAL vendor ST, linker script, startup, dan WPAN BLE stack (Cortex-M0+) yang ada di repo `phreakazone/Firmware_CDI_NS200`.
 
-```text
-build/NS200_CDI_R8_FACTORY.bin @ 0x08000000
-```
+### Langkah-langkah:
+1. Clone repository lengkap:
+   ```bash
+   git clone https://github.com/phreakazone/Firmware_CDI_NS200.git
+   ```
+2. Terapkan patch R9 dari folder `/firmware` ini:
+   - **Linux / macOS**:
+     ```bash
+     ./firmware/patch_stm32_repo.sh /path/ke/Firmware_CDI_NS200
+     ```
+   - **Windows**:
+     ```cmd
+     firmware\patch_stm32_repo.bat ..\Firmware_CDI_NS200
+     ```
+   *(Atau secara manual: timpa `Core/Src/cdi_port.c`, `Core/Inc/cdi_port.h`, serta `cdi_firmware.c` dan `cdi_firmware.h` di folder target).*
 
-Update BLE berikutnya memakai:
+3. Build dengan CMake + Ninja:
+   ```bash
+   cd Firmware_CDI_NS200
+   cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi-gcc.cmake
+   cmake --build build
+   ```
 
-```text
-build/NS200_CDI_R8_APP.bin
-```
+4. Flashing:
+   - **Flash Pertama (Kabel / DFU / ST-Link)**:
+     `build/NS200_CDI_R8_FACTORY.bin` di alamat `0x08000000`
+   - **Update OTA via Bluetooth Android**:
+     `build/NS200_CDI_R8_APP.bin` (jangan gunakan file FACTORY untuk OTA).
 
-Jangan mengirim `FACTORY.bin` melalui menu OTA Android.
-
-## Perbedaan build dan siap kendaraan
-
-Kedua proyek memiliki bukti build source. Itu tidak otomatis membuktikan rangkaian fisik
-aman. Sebelum ke kendaraan tetap diperlukan pemeriksaan BLE nyata, pin output, charger,
-pulser, sensor, brownout, serta timing/jitter di bench.
-
-Khusus ESP32, konfigurasi `sdkconfig` saat ini tercatat memakai single-app partition.
-Build/flash USB tetap dapat dilakukan, tetapi jalur BLE OTA perlu tabel partisi OTA sebelum
-boleh dianggap berfungsi. Jangan menganggap keberadaan file `cdi_r8_ota.c` saja sudah
-membuat partisi OTA tersedia.

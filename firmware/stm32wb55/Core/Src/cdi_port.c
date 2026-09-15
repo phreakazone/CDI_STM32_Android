@@ -30,8 +30,10 @@ extern bool CDI_NVM_Save(const void *data, size_t size);
 extern void CDI_SetIgnitionEnable(bool enabled);
 extern void CDI_SetChargerEnable(bool enabled);
 extern void CDI_SetFanEnable(bool enabled);
+extern void CDI_SetStrobeEnable(bool enabled) __attribute__((weak));
 extern void CDI_PulseIgnitionGate(uint16_t gate_us);
 extern uint8_t CDI_ADC_LoadPercent(void);
+extern uint16_t CDI_ADC_RawTps(void) __attribute__((weak));
 extern uint16_t CDI_ADC_TemperatureRaw(void);
 extern uint16_t CDI_ADC_HvMaximumX10(void);
 #if CDI_STM32_OTA_ENABLE
@@ -45,6 +47,11 @@ static uint32_t port_micros(void) { return __HAL_TIM_GET_COUNTER(&htim2); }
 static void set_ignition(bool enabled) { CDI_SetIgnitionEnable(enabled); }
 static void set_charger(bool enabled) { CDI_SetChargerEnable(enabled); }
 static void set_fan(bool enabled) { CDI_SetFanEnable(enabled); }
+static void set_strobe(bool enabled) { if (CDI_SetStrobeEnable) CDI_SetStrobeEnable(enabled); }
+static uint16_t read_raw_tps(void) {
+    if (CDI_ADC_RawTps) return CDI_ADC_RawTps();
+    return (uint16_t)((uint32_t)CDI_ADC_LoadPercent() * 4095u / 100u);
+}
 static bool load_config(void *data,size_t size){ return CDI_NVM_Load(data,size); }
 static bool save_config(const void *data,size_t size){ return CDI_NVM_Save(data,size); }
 
@@ -61,8 +68,20 @@ static void ota_abort(void){}
 #endif
 
 void cdi_stm32_port_init(cdi_context_t *ctx) {
-    cdi_hal_t hal={port_micros,set_ignition,set_charger,set_fan,load_config,save_config,
-                   ota_begin,ota_write,ota_finish,ota_abort};
+    cdi_hal_t hal = {
+        .micros = port_micros,
+        .set_ignition = set_ignition,
+        .set_charger = set_charger,
+        .set_fan = set_fan,
+        .set_strobe = set_strobe,
+        .read_raw_tps = read_raw_tps,
+        .load_config = load_config,
+        .save_config = save_config,
+        .ota_begin = ota_begin,
+        .ota_write = ota_write,
+        .ota_finish = ota_finish,
+        .ota_abort = ota_abort
+    };
     s_ctx=ctx;
     HAL_TIM_Base_Start(&htim2);
     HAL_TIM_OC_Start_IT(&htim1,TIM_CHANNEL_1);
@@ -133,5 +152,6 @@ void cdi_stm32_ble_rx(const uint8_t *data,uint16_t size) {
 /* Call from HAL_TIM_OC_DelayElapsedCallback for TIM1 channel 1. */
 void cdi_stm32_fire_compare_callback(void) {
     if(!s_ctx||s_ctx->telemetry.ota_active) return;
-    CDI_PulseIgnitionGate(80u);
+    uint16_t gate = s_ctx->config.gate_us ? s_ctx->config.gate_us : 80u;
+    CDI_PulseIgnitionGate(gate);
 }

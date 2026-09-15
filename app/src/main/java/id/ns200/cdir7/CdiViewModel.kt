@@ -2000,17 +2000,13 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             "ACK" -> {
                 clearSetupCommandPending()
                 val operation = f.getOrNull(1).orEmpty()
-                // R8 membalas "PONG_R7_2", R9 membalas "PONG_R9" -- cek prefix
-                // supaya token PONG generasi berikutnya juga otomatis terdeteksi
-                // tanpa perlu tambal lagi di sini setiap kali firmware naik versi.
-                val isPong = operation.startsWith("PONG")
-                if (isPong) {
+                if (operation == "PONG_R7_2") {
                     preflightPingOk = true
                     updateQuickSetupPreflightProgress()
                 }
                 if (operation == "TDC_SAVED" || operation == "TDC_MANUAL_SAVED")
                     _flashSaved.value = true
-                if (operation != "LIVE" && operation != "OFFSET" && !isPong)
+                if (operation !in setOf("LIVE", "OFFSET", "PONG_R7_2"))
                     Toast.makeText(context, "MCU ACK: $operation", Toast.LENGTH_SHORT).show()
 
                 val setupChangingOperations = setOf(
@@ -2091,7 +2087,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
                     operation == "LIVE" ||
                         operation == "OFFSET" ||
-                        isPong -> Unit
+                        operation == "PONG_R7_2" -> Unit
 
                     operation.startsWith("LOAD") ||
                         operation.startsWith("SAVE") ||
