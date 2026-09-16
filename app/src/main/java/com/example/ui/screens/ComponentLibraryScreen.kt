@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.data.WiringDataProvider
 import com.example.model.adaptToPlatform
 import com.example.ui.components.ComponentPinoutCard
@@ -49,21 +50,21 @@ fun ComponentLibraryScreen(
     modifier = modifier
       .fillMaxSize()
       .background(TechDarkBg)
-      .padding(horizontal = 16.dp),
-    verticalArrangement = Arrangement.spacedBy(14.dp),
-    contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
+      .padding(horizontal = 12.dp),
+    verticalArrangement = Arrangement.spacedBy(8.dp),
+    contentPadding = PaddingValues(top = 10.dp, bottom = 20.dp)
   ) {
     item {
       Text(
         text = "ENSIKLOPEDIA PIN KAKI & ORIENTASI KOMPONEN",
-        style = MaterialTheme.typography.titleMedium,
+        style = MaterialTheme.typography.titleSmall,
         color = ElectricCyan,
         fontWeight = FontWeight.Bold,
         fontFamily = FontFamily.Monospace
       )
       Text(
-        text = "Panduan fisik: Pin 1, 2, 3, Notch/Tab, dan aturan donasi dari PSU ATX PC bekas",
-        style = MaterialTheme.typography.bodySmall,
+        text = "Panduan fisik kaki pin, notch/tab, dan donor PSU ATX PC bekas",
+        style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
         color = TextSecondaryDark
       )
     }
@@ -72,14 +73,14 @@ fun ComponentLibraryScreen(
       OutlinedTextField(
         value = searchQuery,
         onValueChange = { searchQuery = it },
-        placeholder = { Text("Cari Komponen (contoh: BT151, IRF3205, LM339, Trafo)") },
+        placeholder = { Text("Cari Komponen (contoh: BT151, IRF3205, LM339, Trafo)", fontSize = 11.sp) },
         leadingIcon = {
-          Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = ElectricCyan)
+          Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = ElectricCyan, modifier = Modifier.size(18.dp))
         },
         trailingIcon = {
           if (searchQuery.isNotEmpty()) {
             IconButton(onClick = { searchQuery = "" }) {
-              Icon(imageVector = Icons.Default.Clear, contentDescription = null, tint = TextSecondaryDark)
+              Icon(imageVector = Icons.Default.Clear, contentDescription = null, tint = TextSecondaryDark, modifier = Modifier.size(16.dp))
             }
           }
         },
@@ -92,7 +93,7 @@ fun ComponentLibraryScreen(
           focusedContainerColor = TechSurfaceElevated,
           unfocusedContainerColor = TechSurfaceElevated
         ),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(8.dp),
         modifier = Modifier.fillMaxWidth()
       )
     }

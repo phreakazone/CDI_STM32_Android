@@ -1,5 +1,6 @@
 package id.ns200.cdir7.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -93,6 +94,8 @@ fun SetupScreen(viewModel: CdiViewModel) {
     val telemetry by viewModel.telemetry.collectAsState()
     val message by viewModel.quickSetupMessage.collectAsState()
     val selectedPlatform by viewModel.selectedPlatform.collectAsState()
+    val setupCanWrite by viewModel.setupCanWrite.collectAsState()
+    val setupWriteBlockReason by viewModel.setupWriteBlockReason.collectAsState()
     val stage = SetupStage.entries.getOrNull(page) ?: SetupStage.BARU
     val visibleProgress = maxOf(unlocked, telemetry.setupStage)
 
@@ -114,6 +117,46 @@ fun SetupScreen(viewModel: CdiViewModel) {
             },
             onSelect = viewModel::selectQuickSetupPage
         )
+
+        // Banner Proteksi Keselamatan Command Guard (setup_can_write)
+        if (!setupCanWrite && setupWriteBlockReason != null) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                color = RaceRedline.copy(alpha = 0.15f),
+                border = BorderStroke(1.dp, RaceRedline.copy(alpha = 0.8f)),
+                shape = RoundedCornerShape(6.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = RaceRedline,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = "COMMAND GUARD • setup_can_write() DIBLOKIR",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Black,
+                            color = RaceRedline,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = setupWriteBlockReason ?: "",
+                            fontSize = 8.5.sp,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+        }
 
         val fwMode by viewModel.firmwareMode.collectAsState()
 

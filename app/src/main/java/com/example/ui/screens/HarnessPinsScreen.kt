@@ -1,10 +1,12 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -32,7 +34,8 @@ import com.example.viewmodel.WiringViewModel
 @Composable
 fun HarnessPinsScreen(
   viewModel: WiringViewModel,
-  modifier: Modifier = Modifier
+  modifier: Modifier = Modifier,
+  onNavigateToTutorial: ((String) -> Unit)? = null
 ) {
   val uiState by viewModel.uiState.collectAsState()
   var searchQuery by remember { mutableStateOf("") }
@@ -59,12 +62,12 @@ fun HarnessPinsScreen(
     modifier = modifier
       .fillMaxSize()
       .background(TechDarkBg)
-      .padding(horizontal = 16.dp),
-    verticalArrangement = Arrangement.spacedBy(14.dp),
-    contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
+      .padding(horizontal = 12.dp),
+    verticalArrangement = Arrangement.spacedBy(8.dp),
+    contentPadding = PaddingValues(top = 10.dp, bottom = 20.dp)
   ) {
     item {
-      // Interactive Visualizer Socket
+      // Interactive Visualizer Socket (Compact)
       HarnessJ1Visualizer(
         pins = allPins,
         selectedPinNumber = uiState.selectedHarnessPin?.pinNumber,
@@ -75,18 +78,18 @@ fun HarnessPinsScreen(
     }
 
     item {
-      // Search Box
+      // Search Box (Compact)
       OutlinedTextField(
         value = searchQuery,
         onValueChange = { searchQuery = it },
-        placeholder = { Text("Cari Pin (contoh: 12, Coil, Brown, GND, Pulser)") },
+        placeholder = { Text("Cari Pin J1 (contoh: 12, Koil, 12V, GND, Pulser)", fontSize = 11.sp) },
         leadingIcon = {
-          Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = ElectricCyan)
+          Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = ElectricCyan, modifier = Modifier.size(18.dp))
         },
         trailingIcon = {
           if (searchQuery.isNotEmpty()) {
             IconButton(onClick = { searchQuery = "" }) {
-              Icon(imageVector = Icons.Default.Clear, contentDescription = null, tint = TextSecondaryDark)
+              Icon(imageVector = Icons.Default.Clear, contentDescription = null, tint = TextSecondaryDark, modifier = Modifier.size(16.dp))
             }
           }
         },
@@ -99,19 +102,31 @@ fun HarnessPinsScreen(
           focusedContainerColor = TechSurfaceElevated,
           unfocusedContainerColor = TechSurfaceElevated
         ),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(8.dp),
         modifier = Modifier.fillMaxWidth()
       )
     }
 
     item {
-      Text(
-        text = "DAFTAR DETAIL 12 PIN KONEKTOR HARNESS CDI NS200",
-        style = MaterialTheme.typography.labelMedium,
-        color = ElectricCyan,
-        fontWeight = FontWeight.Bold,
-        fontFamily = FontFamily.Monospace
-      )
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Text(
+          text = "DAFTAR 12 PIN SOKET HARNESS CDI J1",
+          style = MaterialTheme.typography.labelSmall,
+          color = ElectricCyan,
+          fontWeight = FontWeight.Bold,
+          fontFamily = FontFamily.Monospace
+        )
+        Text(
+          text = "${filteredPins.size} PIN DITEMUKAN",
+          style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+          color = TextTertiaryDark,
+          fontFamily = FontFamily.Monospace
+        )
+      }
     }
 
     items(filteredPins, key = { it.pinNumber }) { pin ->
@@ -124,6 +139,7 @@ fun HarnessPinsScreen(
             viewModel.selectStep(stepIndex)
             viewModel.setTab(AppTab.TUTORIAL)
           }
+          onNavigateToTutorial?.invoke(stepNumber)
         },
         onClick = { viewModel.selectHarnessPin(pin) }
       )
@@ -140,29 +156,33 @@ fun HarnessPinDetailCard(
 ) {
   val borderColor = if (isSelected) ElectricCyan else OutlineDark
 
-  // Map harness pin to relevant tutorial step
-  val relatedStepNumber = when (pin.pinNumber) {
-    12 -> "1.1" // Pin 12 Primary Coil Center
-    5 -> "1.2" // Pin 5 +12V Switched Ignition
-    11 -> "1.3" // Pin 11 Power Ground Star
-    10 -> "2.1" // Pin 10 Pulser + Signal
-    2 -> "2.4" // Pin 2 TPS Signal
-    4 -> "2.5" // Pin 4 TPS 5V Supply
-    3 -> "2.6" // Pin 3 Engine Temp Sensor
-    7 -> "3.4" // Pin 7 Radiator Fan Driver
-    6 -> "3.2" // Pin 6 Side Plugs Coil
-    else -> null
+  // Precise mapping of Bajaj Pulsar NS200 J1 Pins to Wiring Workshop Steps
+  val (relatedStepNumber, relatedStepTitle) = when (pin.pinNumber) {
+    1  -> Pair("6.1", "Inspeksi Pigtail J1 & Uji Isolasi Multimeter")
+    2  -> Pair("2.4", "Header J_TPS & ADC Gas")
+    3  -> Pair("2.3", "Sensor Suhu Coolant NTC (PA4)")
+    4  -> Pair("2.4", "Header J_TPS & ADC Gas")
+    5  -> Pair("1.2", "Proteksi Input Catu Daya 12V")
+    6  -> Pair("5.2", "Kapasitor Pulsa Koil Side C_SIDE")
+    7  -> Pair("2.6", "Driver Relay Fan Radiator (PB5)")
+    8  -> Pair("2.2", "Sinyal OEM Learn Side (PB4)")
+    9  -> Pair("2.2", "Sinyal OEM Learn Center (PB3)")
+    10 -> Pair("2.5", "Komparator Pulser LM339 (PA0)")
+    11 -> Pair("1.1", "Ground Bintang GND_STAR")
+    12 -> Pair("5.1", "Kapasitor Pulsa Koil Center C_CENTER")
+    else -> Pair("6.1", "Inspeksi Soket Harness J1")
   }
 
   Card(
-    shape = RoundedCornerShape(14.dp),
+    shape = RoundedCornerShape(8.dp),
     colors = CardDefaults.cardColors(containerColor = if (isSelected) Color(0xFF132338) else TechSurfaceElevated),
     border = CardDefaults.outlinedCardBorder().copy(brush = Brush.linearGradient(listOf(borderColor, borderColor.copy(alpha = 0.5f)))),
     modifier = Modifier
       .fillMaxWidth()
       .clickable { onClick() }
   ) {
-    Column(modifier = Modifier.padding(14.dp)) {
+    Column(modifier = Modifier.padding(8.dp)) {
+      // Header: PIN number, Wire color, Status
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -170,41 +190,49 @@ fun HarnessPinDetailCard(
       ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
           Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = if (pin.pinNumber == 12 || pin.pinNumber == 5) SparkAmber.copy(alpha = 0.2f) else ElectricCyan.copy(alpha = 0.2f),
+            shape = RoundedCornerShape(4.dp),
+            color = if (pin.pinNumber in listOf(5, 6, 12)) SparkAmber.copy(alpha = 0.2f) else ElectricCyan.copy(alpha = 0.2f),
             border = CardDefaults.outlinedCardBorder().copy(
               brush = Brush.linearGradient(listOf(SparkAmber, SparkAmberDark))
             )
           ) {
             Text(
               text = "PIN ${pin.pinNumber}",
-              modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-              style = MaterialTheme.typography.labelSmall,
-              color = if (pin.pinNumber == 12 || pin.pinNumber == 5) SparkAmber else ElectricCyan,
+              modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp),
+              style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+              color = if (pin.pinNumber in listOf(5, 6, 12)) SparkAmber else ElectricCyan,
               fontWeight = FontWeight.Black,
               fontFamily = FontFamily.Monospace
             )
           }
 
-          Spacer(modifier = Modifier.width(10.dp))
+          Spacer(modifier = Modifier.width(6.dp))
 
           Column {
             Text(
               text = pin.name,
-              style = MaterialTheme.typography.titleMedium,
+              style = MaterialTheme.typography.titleSmall.copy(fontSize = 11.5.sp),
               color = TextPrimaryDark,
               fontWeight = FontWeight.Bold
             )
-            Text(
-              text = "Warna Kabel: ${pin.wireColor}",
-              style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-              color = SparkAmber
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Box(
+                modifier = Modifier
+                  .size(4.dp)
+                  .background(SparkAmber, CircleShape)
+              )
+              Spacer(modifier = Modifier.width(3.dp))
+              Text(
+                text = pin.wireColor,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp),
+                color = SparkAmber
+              )
+            }
           }
         }
 
         Surface(
-          shape = RoundedCornerShape(6.dp),
+          shape = RoundedCornerShape(3.dp),
           color = when (pin.status) {
             "DIGUNAKAN" -> SafetyGreen.copy(alpha = 0.15f)
             "KOSONG (NC)" -> Color(0xFF475569).copy(alpha = 0.2f)
@@ -213,8 +241,8 @@ fun HarnessPinDetailCard(
         ) {
           Text(
             text = pin.status,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
             color = when (pin.status) {
               "DIGUNAKAN" -> SafetyGreen
               "KOSONG (NC)" -> Color(0xFF94A3B8)
@@ -225,69 +253,71 @@ fun HarnessPinDetailCard(
         }
       }
 
-      Spacer(modifier = Modifier.height(10.dp))
+      Spacer(modifier = Modifier.height(4.dp))
 
-      Text(
-        text = "Arah & Fungsi: ${pin.direction}",
-        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-        color = TextPrimaryDark
-      )
-
-      Spacer(modifier = Modifier.height(8.dp))
-
-      // Destination Net
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .clip(RoundedCornerShape(8.dp))
-          .background(Color(0xFF0D1520))
-          .padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+      // Compact Destination & Circuit Net Box
+      Surface(
+        shape = RoundedCornerShape(5.dp),
+        color = Color(0xFF0D1520),
+        border = BorderStroke(0.5.dp, Color(0xFF1F2E40)),
+        modifier = Modifier.fillMaxWidth()
       ) {
-        Text(
-          text = "Tujuan di PCB: ",
-          style = MaterialTheme.typography.labelSmall,
-          color = TextTertiaryDark
-        )
-        Text(
-          text = pin.destination,
-          style = MaterialTheme.typography.labelSmall,
-          color = SafetyGreen,
-          fontWeight = FontWeight.Bold,
-          fontFamily = FontFamily.Monospace
-        )
+        Column(modifier = Modifier.padding(5.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Text(
+                text = "Tujuan PCB: ",
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
+                color = TextTertiaryDark
+              )
+              Text(
+                text = pin.destination,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                color = SafetyGreen,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace
+              )
+            }
+            Text(
+              text = pin.direction,
+              style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
+              color = TextSecondaryDark
+            )
+          }
+
+          Spacer(modifier = Modifier.height(2.dp))
+
+          Text(
+            text = "Jalur: ${pin.completePath}",
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 8.5.sp),
+            color = TextSecondaryDark
+          )
+
+          Spacer(modifier = Modifier.height(1.5.dp))
+
+          Text(
+            text = "Panduan: ${pin.detailGuide}",
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 8.sp),
+            color = TextTertiaryDark
+          )
+        }
       }
 
-      Spacer(modifier = Modifier.height(6.dp))
-
-      // Complete Path
-      Text(
-        text = "Rangkaian Jalur: ${pin.completePath}",
-        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-        color = TextSecondaryDark
+      // Action Button: Jump directly to connected step in tutorial
+      Spacer(modifier = Modifier.height(5.dp))
+      id.ns200.cdir7.ui.components.MotecButton(
+        text = "BUKA TUTORIAL LANGKAH $relatedStepNumber: $relatedStepTitle",
+        onClick = { onNavigateToStep(relatedStepNumber) },
+        color = SparkAmber,
+        icon = Icons.AutoMirrored.Filled.ArrowForward,
+        height = 26.dp,
+        fontSize = 8.5.sp,
+        modifier = Modifier.fillMaxWidth()
       )
-
-      Spacer(modifier = Modifier.height(6.dp))
-
-      // Detail Guide
-      Text(
-        text = "Panduan Pemasangan: ${pin.detailGuide}",
-        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-        color = TextTertiaryDark
-      )
-
-      // Jump to Tutorial button if related step exists
-      if (relatedStepNumber != null) {
-        Spacer(modifier = Modifier.height(8.dp))
-        id.ns200.cdir7.ui.components.MotecButton(
-          text = "BUKA TUTORIAL LANGKAH $relatedStepNumber",
-          onClick = { onNavigateToStep(relatedStepNumber) },
-          color = SparkAmber,
-          icon = Icons.AutoMirrored.Filled.ArrowForward,
-          height = 30.dp,
-          modifier = Modifier.fillMaxWidth()
-        )
-      }
     }
   }
 }

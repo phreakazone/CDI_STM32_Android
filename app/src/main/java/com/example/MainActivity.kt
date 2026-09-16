@@ -18,6 +18,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,9 +33,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -302,6 +306,17 @@ fun MotorsportTopBar(
                 .statusBarsPadding()
                 .padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
+            val infiniteTransition = rememberInfiniteTransition(label = "ElectricPulse")
+            val electricGlow by infiniteTransition.animateFloat(
+                initialValue = 0.45f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(750, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "ElectricGlow"
+            )
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -328,26 +343,60 @@ fun MotorsportTopBar(
                     Spacer(modifier = Modifier.width(8.dp))
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Electric lightning badge
+                            Box(
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF00E5FF).copy(alpha = 0.2f * electricGlow + 0.1f))
+                                    .border(
+                                        1.dp,
+                                        Color(0xFF00E5FF).copy(alpha = electricGlow),
+                                        CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Bolt,
+                                    contentDescription = "Electric Discharge",
+                                    tint = if (electricGlow > 0.72f) Color(0xFF00E5FF) else Color(0xFFFFC107),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(5.dp))
                             Text(
-                                text = "IGNITRA CDI",
+                                text = "IgniTra CDI",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Black,
                                 fontFamily = FontFamily.Monospace,
-                                color = TextPrimary
+                                style = TextStyle(
+                                    brush = Brush.horizontalGradient(
+                                        listOf(
+                                            Color.White,
+                                            Color(0xFF00E5FF),
+                                            Color(0xFFFFB300)
+                                        )
+                                    )
+                                )
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Surface(
                                 shape = RoundedCornerShape(4.dp),
-                                color = MotecOrange.copy(alpha = 0.2f)
+                                color = MotecOrange.copy(alpha = 0.2f),
+                                border = BorderStroke(0.8.dp, Color(0xFFFFB300).copy(alpha = electricGlow))
                             ) {
-                                Text(
-                                    text = "R9",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = MotecOrange,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                ) {
+                                    Text(
+                                        text = "⚡ R9",
+                                        fontSize = 8.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = MotecOrange
+                                    )
+                                }
                             }
                         }
                         Text(

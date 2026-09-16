@@ -1,6 +1,6 @@
 {
-  "name": "IGNITRA CDI",
-  "description": "Aplikasi kendali tuning pengapian IGNITRA CDI R9 (Dual-MCU ESP32 & STM32WB55): Telemetri balap MoTeC, Pemetaan Kurva 4-Slot, BLE Hardware Scanner, Alur Safe DIY & OEM Learn, serta BLE OTA Firmware Flasher.",
+  "name": "IgniTra CDI",
+  "description": "Aplikasi kendali tuning pengapian IgniTra CDI R9 (Dual-MCU ESP32 & STM32WB55): Telemetri balap MoTeC, Pemetaan Kurva 4-Slot, BLE Hardware Scanner, Alur Safe DIY & OEM Learn, serta BLE OTA Firmware Flasher.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

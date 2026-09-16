@@ -178,6 +178,7 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
     val quickSetupUnlockedStage by viewModel.quickSetupUnlockedStage.collectAsState()
     val preflightBusy by viewModel.quickSetupPreflightBusy.collectAsState()
     val preflightMessage by viewModel.quickSetupMessage.collectAsState()
+    val pickupDiagnostic by viewModel.pickupDiagnosticMessage.collectAsState()
     val listState = rememberLazyListState()
     val visibleProgress = maxOf(t.setupStage, quickSetupUnlockedStage)
     var strobeModeChoice by remember { mutableIntStateOf(1) } // 0 = Strobo MCU, 1 = Manual Tanpa Strobo (Default)
@@ -350,6 +351,43 @@ private fun QuickSetupFlowView(viewModel: CdiViewModel, t: id.ns200.cdir7.Teleme
                     fontFamily = FontFamily.Monospace,
                     lineHeight = 13.sp
                 )
+
+                if (pickupDiagnostic != null) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Surface(
+                        color = if (t.pickupQuality >= 10) RacingLime.copy(alpha = 0.12f) else MotecOrange.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(4.dp),
+                        border = BorderStroke(1.dp, if (t.pickupQuality >= 10) RacingLime.copy(alpha = 0.5f) else MotecOrange.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(6.dp)) {
+                            Text(
+                                text = "DIAGNOSIS FIRMWARE / SELFTEST:",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (t.pickupQuality >= 10) RacingLime else MotecOrange,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            Text(
+                                text = pickupDiagnostic ?: "",
+                                fontSize = 9.5.sp,
+                                color = TextPrimary,
+                                fontFamily = FontFamily.Monospace,
+                                lineHeight = 12.sp
+                            )
+                            if (t.pickupQuality < 10) {
+                                Text(
+                                    text = "💡 Petunjuk: Pada meja uji (bench), hubungkan jumper GPIO5 ke ${selectedPlatform.pulserPin}. Pada motor, periksa kabel pulser J1.10 dan putar starter.",
+                                    fontSize = 8.5.sp,
+                                    color = TextSecondary,
+                                    fontFamily = FontFamily.Monospace,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(6.dp))
 
                 PulserAdvancedSettings(viewModel)

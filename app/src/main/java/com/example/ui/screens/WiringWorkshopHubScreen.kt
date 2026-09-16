@@ -45,7 +45,7 @@ enum class WorkshopSubTab(
 ) {
     STEPS("Langkah Solder", Icons.Default.Build, "18 STEP"),
     PCB_SIM("Simulator PCB", Icons.Default.GridView, "25x30"),
-    HARNESS_J1("Soket J1", Icons.Default.Cable, "16 PIN"),
+    HARNESS_J1("Soket J1", Icons.Default.Cable, "12 PIN"),
     MCU_PINOUT("Pinout MCU", Icons.Default.Memory, "PINOUT"),
     BOM_LIST("Daftar Belanja", Icons.Default.ShoppingCart, "BOM"),
     PINOUT_LIB("Katalog Part", Icons.Default.Layers, "SPECS"),
@@ -227,7 +227,16 @@ fun WiringWorkshopHubScreen(
                     }
                 }
                 WorkshopSubTab.HARNESS_J1 -> {
-                    HarnessPinsScreen(viewModel = wiringViewModel)
+                    HarnessPinsScreen(
+                        viewModel = wiringViewModel,
+                        onNavigateToTutorial = { stepNumber ->
+                            val stepIndex = wiringViewModel.allSteps.indexOfFirst { it.stepNumber == stepNumber }
+                            if (stepIndex >= 0) {
+                                wiringViewModel.selectStep(stepIndex)
+                            }
+                            activeSubTab = WorkshopSubTab.STEPS
+                        }
+                    )
                 }
                 WorkshopSubTab.MCU_PINOUT -> {
                     WeActHeaderScreen(viewModel = wiringViewModel)

@@ -6,14 +6,20 @@ import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
@@ -201,6 +207,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     )
     val quickSetupMessage: StateFlow<String> = _quickSetupMessage.asStateFlow()
 
+    private val _pickupDiagnosticMessage = MutableStateFlow<String?>(null)
+    val pickupDiagnosticMessage: StateFlow<String?> = _pickupDiagnosticMessage.asStateFlow()
+
     private var preflightPingOk = false
     private var preflightStatusOk = false
     private var preflightSetupOk = false
@@ -306,6 +315,93 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         _selectedPlatform.value = platform
         cdiPrefs.edit().putString("mcu_platform", platform.id).apply()
         appendLog("Platform Hardware aktif dialihkan ke: ${platform.displayName} (${platform.architecture})")
+    }
+
+    // ==========================================
+    // WATCHDOG UI (Visual Timeout 500ms)
+    // ==========================================
+    // Penanganan Data "Menggantung":
+    // Setiap kali notifikasi GATT berisi RPM datang, timer di-reset.
+    // Jika timer menyentuh angka 500ms tanpa data baru, paksa RPM dan indikator ke 0.
+    private val watchdogHandler = Handler(Looper.getMainLooper())
+    private val WATCHDOG_TIMEOUT_MS = 500L
+    private val _isTelemetryStreaming = MutableStateFlow(false)
+    val isTelemetryStreaming: StateFlow<Boolean> = _isTelemetryStreaming.asStateFlow()
+
+    private val watchdogRunnable = Runnable {
+        if (_isConnected.value && !_isSimulationMode.value) {
+            _isTelemetryStreaming.value = false
+            val current = _telemetry.value
+            if (current.rpm > 0 || current.outputFlags != 0 || current.limiter != 0) {
+                _telemetry.value = current.copy(
+                    rpm = 0,
+                    outputFlags = 0,
+                    limiter = 0,
+                    pickupQuality = 0
+                )
+                engineSound.stop()
+                appendLog("Watchdog UI: 500ms tanpa paket RPM -> Paksa RPM & Indikator ke 0")
+            }
+        }
+    }
+
+    private fun kickTelemetryWatchdog() {
+        watchdogHandler.removeCallbacks(watchdogRunnable)
+        _isTelemetryStreaming.value = true
+        watchdogHandler.postDelayed(watchdogRunnable, WATCHDOG_TIMEOUT_MS)
+    }
+
+    // ==========================================
+    // LOGIKA KEAMANAN TOMBOL (COMMAND GUARDS)
+    // ==========================================
+    // Evaluasi aturan keselamatan setup_can_write() firmware secara reaktif.
+    // Mencegah pengguna mengirim perintah jika menyalahi aturan keselamatan (RPM > 0, HV > 30V, antrean sibuk, dll).
+    private fun computeSetupWriteBlockReason(
+        t: Telemetry,
+        connected: Boolean,
+        isSim: Boolean,
+        pending: Boolean,
+        isBusy: Boolean,
+        learning: Boolean
+    ): String? {
+        if (!connected && !isSim) {
+            return "CDI belum terhubung. Hubungkan BLE atau aktifkan Mode Simulasi."
+        }
+        if (t.rpm > 0) {
+            return "Mesin sedang menyala (${t.rpm} RPM). Matikan mesin (RPM 0) demi aturan keselamatan setup_can_write()!"
+        }
+        if (connected && !isSim && (t.hvEnabled || t.hvCenter >= 30 || t.hvSide >= 30)) {
+            return "Tegangan HV masih aktif (Center ${t.hvCenter}V, Side ${t.hvSide}V). Tunggu kapasitor discharge di bawah 30V."
+        }
+        if (learning) {
+            return "Proses OEM Learn sedang aktif. Selesaikan atau simpan pembelajaran terlebih dahulu."
+        }
+        if (pending || isBusy) {
+            return "Antrean perintah BLE sedang memproses request sebelumnya. Tunggu ACK selesai."
+        }
+        return null
+    }
+
+    val setupWriteBlockReason: StateFlow<String?> = combine(
+        combine(_telemetry, _isConnected, _isSimulationMode) { t, conn, sim -> Triple(t, conn, sim) },
+        combine(_setupCommandPending, bleClient.isBusy, _isOemLearning) { pending, busy, learning -> Triple(pending, busy, learning) }
+    ) { (t, conn, sim), (pending, busy, learning) ->
+        computeSetupWriteBlockReason(t, conn, sim, pending, busy, learning)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val setupCanWrite: StateFlow<Boolean> = setupWriteBlockReason.map { it == null }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    /**
+     * Mengosongkan dan mengisolasi seluruh state simulasi/demo agar tidak pernah merembes ke mode nyata.
+     */
+    fun resetDemoState() {
+        _demoEngineRunning.value = false
+        _isRevving.value = false
+        _demoThrottleSlider.value = 0f
+        simRpm = 0f
+        simTps = 0f
+        engineSound.stop()
     }
 
     // Maps State - 4 Flash Memory Slots (ECO, STREET, RAIN, PRO) with two flash pages & CRC32
@@ -541,11 +637,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             return
         }
         _isSimulationMode.value = false
-        _isRevving.value = false
-        _demoThrottleSlider.value = 0f
-        simRpm = 0f
-        simTps = 0f
-        engineSound.stop()
+        resetDemoState()
         val name = bleClient.savedDeviceName.value ?: "IGNITRA CDI"
         appendLog("Koneksi langsung ke $name [$savedMac] (Mode Hemat Baterai, GPS tidak aktif)...")
         bleClient.connectSavedDevice()
@@ -553,11 +645,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun connectDirectAddress(mac: String, name: String? = null) {
         _isSimulationMode.value = false
-        _isRevving.value = false
-        _demoThrottleSlider.value = 0f
-        simRpm = 0f
-        simTps = 0f
-        engineSound.stop()
+        resetDemoState()
         appendLog("Koneksi langsung ke MAC: $mac (Bebas GPS / Hemat Baterai)...")
         val ok = bleClient.connectAddress(mac, name)
         if (!ok) {
@@ -582,11 +670,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun startBleScan() {
         _isSimulationMode.value = false
-        _isRevving.value = false
-        _demoThrottleSlider.value = 0f
-        simRpm = 0f
-        simTps = 0f
-        engineSound.stop()
+        resetDemoState()
         appendLog("Memindai perangkat BLE sekitar (Hemat Daya)...")
         bleClient.startScan(discoveryOnly = true)
     }
@@ -599,11 +683,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     @SuppressLint("MissingPermission")
     fun connectBleDevice(device: BluetoothDevice) {
         _isSimulationMode.value = false
-        _isRevving.value = false
-        _demoThrottleSlider.value = 0f
-        simRpm = 0f
-        simTps = 0f
-        engineSound.stop()
+        resetDemoState()
         val dName = try {
             if (bleClient.hasPermissions()) device.name ?: device.address else "perangkat BLE"
         } catch (_: SecurityException) {
@@ -1216,18 +1296,19 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         }
     }
 
-    private fun checkSetupWriteSafety(action: String): Boolean {
-        val t = _telemetry.value
-        if (t.rpm > 0) {
-            val msg = "DITOLAK: $action hanya boleh saat RPM 0 (sekarang ${t.rpm} RPM)."
+    fun checkSetupWriteSafety(action: String): Boolean {
+        val reason = computeSetupWriteBlockReason(
+            _telemetry.value,
+            _isConnected.value,
+            _isSimulationMode.value,
+            _setupCommandPending.value,
+            bleClient.isBusy.value,
+            _isOemLearning.value
+        )
+        if (reason != null) {
+            val msg = "SAFETY GUARD: Perintah '$action' diblokir! $reason"
             Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-            appendLog("SAFETY: $msg")
-            return false
-        }
-        if ((t.hvEnabled || t.hvCenter >= 30 || t.hvSide >= 30) && _isConnected.value) {
-            val msg = "DITOLAK: $action mensyaratkan charger/HV OFF dan kedua bank <30V (CENTER ${t.hvCenter}V, SIDE ${t.hvSide}V)."
-            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-            appendLog("SAFETY: $msg")
+            appendLog("GUARD [setup_can_write]: $msg")
             return false
         }
         return true
@@ -1486,6 +1567,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (!checkSetupWriteSafety("Perubahan mode firmware")) return
         val (cPin, sPin) = if (selectedPlatform.value == McuPlatform.STM32WB55) Pair("PB3", "PB4") else Pair("GPIO16", "GPIO17")
         val mcuName = selectedPlatform.value.displayName
+        _firmwareMode.value = mode
         when (mode) {
             FirmwareRunMode.OEM_LEARN -> {
                 if (bleClient.gattReady) {
@@ -1494,7 +1576,6 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     bleClient.send("GET,MODE")
                     appendLog("BLE Send: MODE,OEM_LEARN ($cPin/$sPin)")
                 } else {
-                    _firmwareMode.value = mode
                     appendLog("Mode: OEM_LEARN aktif di Demo ($cPin/$sPin pada $mcuName)")
                 }
                 Toast.makeText(context, "Mode OEM LEARN Aktif (baca CDI OEM via $cPin/$sPin pada $mcuName)", Toast.LENGTH_SHORT).show()
@@ -1506,7 +1587,6 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     bleClient.send("GET,MODE")
                     appendLog("BLE Send: MODE,MANUAL")
                 } else {
-                    _firmwareMode.value = mode
                     appendLog("Mode: MANUAL aktif di Demo ($mcuName)")
                 }
                 Toast.makeText(context, "Mode MANUAL Aktif (Strobo/TDC darurat)", Toast.LENGTH_SHORT).show()
@@ -1522,7 +1602,6 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     bleClient.send("GET,MODE")
                     appendLog("BLE Send: MODE,DIY,OEM_UNPLUGGED")
                 } else {
-                    _firmwareMode.value = mode
                     appendLog("Mode: DIY aktif di Demo (OEM terlepas, $mcuName mandiri)")
                 }
                 Toast.makeText(context, "Mode DIY Aktif (CDI mandiri)", Toast.LENGTH_SHORT).show()
@@ -1535,6 +1614,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         val (cPin, sPin) = if (selectedPlatform.value == McuPlatform.STM32WB55) Pair("PB3", "PB4") else Pair("GPIO16", "GPIO17")
         val mcuName = selectedPlatform.value.displayName
         if (!checkSetupWriteSafety("Mulai OEM Learn")) return
+        _isOemLearning.value = true
+        _firmwareMode.value = FirmwareRunMode.OEM_LEARN
         if (bleClient.gattReady) {
             markSetupCommandPending()
             bleClient.send("MODE,OEM_LEARN")
@@ -1543,8 +1624,6 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             bleClient.send("GET,LEARN")
             appendLog("BLE Send: MODE,OEM_LEARN & LEARN,START ($cPin/$sPin)")
         } else {
-            _isOemLearning.value = true
-            _firmwareMode.value = FirmwareRunMode.OEM_LEARN
             _demoEngineRunning.value = true // Mesin hidup via CDI OEM menghasilkan pulsa ke optocoupler
             appendLog("OEM Learn Dimulai: membaca pulsa $cPin/$sPin ($mcuName)...")
         }
@@ -1555,13 +1634,13 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (!requireMcuOrDemo("stop OEM Learn")) return
         val mcuName = selectedPlatform.value.displayName
         if (!checkSetupWriteSafety("Simpan OEM Learn")) return
+        _isOemLearning.value = false
         if (bleClient.gattReady) {
             markSetupCommandPending()
             bleClient.send("LEARN,STOP")
             bleClient.send("GET,LEARN")
             appendLog("BLE Send: LEARN,STOP (Simpan Map OEM ke Flash $mcuName)")
         } else {
-            _isOemLearning.value = false
             _flashSaved.value = true
             _demoEngineRunning.value = false // Matikan mesin setelah rekaman selesai
             simRpm = 0f
@@ -1572,14 +1651,14 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun confirmOemUnplugged() {
         if (!checkSetupWriteSafety("Aktivasi DIY/OEM_UNPLUGGED")) return
+        _isOemUnpluggedConfirmed.value = true
+        _firmwareMode.value = FirmwareRunMode.DIY
         if (bleClient.gattReady) {
             markSetupCommandPending()
             bleClient.send("MODE,DIY,OEM_UNPLUGGED")
             bleClient.send("GET,MODE")
             appendLog("BLE Send: MODE,DIY,OEM_UNPLUGGED")
         } else {
-            _isOemUnpluggedConfirmed.value = true
-            _firmwareMode.value = FirmwareRunMode.DIY
             appendLog("Konfirmasi OEM Unplugged Diterima. Mode DIY Aktif.")
             advanceSetupStage(SetupStage.FIRST_START.code)
         }
@@ -1785,16 +1864,17 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             simTps = 0f
             engineSound.stop()
             resetBleStatistics()
+            _pickupDiagnosticMessage.value = "Menghubungkan ke MCU • menunggu verifikasi pulser loopback..."
             telemetryWatchdogJob = viewModelScope.launch {
                 while (_isConnected.value) {
                     delay(1_000)
                     val now = SystemClock.elapsedRealtime()
                     when {
-                        _telemetryPacketCount.value == 0L && now - lastTelemetryPacketAtMs >= 3_000L -> {
+                        _telemetryPacketCount.value == 0L && now - lastTelemetryPacketAtMs >= 5_000L -> {
                             _telemetryRxMessage.value =
-                                "TIDAK ADA FRAME • Response 1003 dapat hidup walau Telemetry 1001 tidak notify"
+                                "MENUNGGU FRAME • Telemetry 1001 belum notify (MCU selftest/loopback aktif)"
                         }
-                        lastTelemetryPacketAtMs > 0L && now - lastTelemetryPacketAtMs >= 1_500L -> {
+                        lastTelemetryPacketAtMs > 0L && now - lastTelemetryPacketAtMs >= 3_000L -> {
                             _packetRateHz.value = 0
                             _telemetryRxMessage.value =
                                 "TELEMETRY TERHENTI • tidak ada frame baru selama ${(now - lastTelemetryPacketAtMs) / 1000}s"
@@ -1812,6 +1892,16 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             bleClient.send("GET,LEARN")
             bleClient.send("GET,OTA")
         } else {
+            watchdogHandler.removeCallbacks(watchdogRunnable)
+            _isTelemetryStreaming.value = false
+            engineSound.stop()
+            val currentT = _telemetry.value
+            _telemetry.value = currentT.copy(
+                rpm = 0,
+                outputFlags = 0,
+                limiter = 0,
+                pickupQuality = 0
+            )
             setupSyncedThisConnection = false
             _mcuCapabilities.value = emptySet()
             oemLearnPollJob?.cancel()
@@ -1825,6 +1915,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     }
 
     override fun onTelemetry(value: Telemetry) {
+        if (!_isSimulationMode.value) {
+            kickTelemetryWatchdog()
+        }
         val current = _telemetry.value
 
         var targetStage = current.setupStage
@@ -1846,6 +1939,12 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         _telemetry.value = merged
         _selectedMapSlot.value = merged.slot.coerceIn(0, 3)
         _strobeActive.value = merged.strobeEnabled
+
+        if (merged.pickupQuality < 10 && merged.rpm == 0) {
+            _pickupDiagnosticMessage.value = "Belum ada pulsa loopback terdeteksi (cek kabel jumper & sinyal pickup)"
+        } else {
+            _pickupDiagnosticMessage.value = "Pulser Terdeteksi: ${merged.pickupQuality}/100 • ${merged.rpm} RPM"
+        }
 
         if (!merged.strobeEnabled && _pulserOffsetDeg.value == 0f) {
             triggerEditBaseCdeg = merged.triggerCdeg.coerceIn(0, 35999)
@@ -1876,6 +1975,10 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             packet = bytes,
             previous = _telemetry.value
         ) != null
+
+        if (valid && !_isSimulationMode.value) {
+            kickTelemetryWatchdog()
+        }
 
         _telemetryRxMessage.value = if (valid) {
             "AKTIF • frame #${_telemetryPacketCount.value} dari Telemetry 1001"
@@ -1923,6 +2026,11 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     override fun onResponse(value: String) {
         appendLog("RX: $value")
+        if (value.contains("loopback", ignoreCase = true) ||
+            value.contains("selftest", ignoreCase = true) ||
+            value.contains("pickup", ignoreCase = true)) {
+            _pickupDiagnosticMessage.value = value.trim()
+        }
         val f = value.split(',')
         when (f.firstOrNull()) {
             "PONG" -> {
@@ -2126,6 +2234,18 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
                 when {
                     operation == "MODE" -> {
+                        val modeParam = f.getOrNull(2)?.trim()?.uppercase()
+                        if (modeParam != null) {
+                            val parsedMode = when (modeParam) {
+                                "0", "MANUAL" -> FirmwareRunMode.MANUAL
+                                "1", "OEM_LEARN", "LEARN" -> FirmwareRunMode.OEM_LEARN
+                                "2", "DIY" -> FirmwareRunMode.DIY
+                                else -> modeParam.toIntOrNull()?.let { FirmwareRunMode.fromFirmwareCode(it) }
+                            }
+                            if (parsedMode != null) {
+                                _firmwareMode.value = parsedMode
+                            }
+                        }
                         bleClient.send("GET,MODE")
                         bleClient.send("GET,SETUP")
                         bleClient.send("GET,STATUS")
@@ -2235,20 +2355,19 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 val realBleReady = bleClient.gattReady
                 val slider = _demoThrottleSlider.value
 
-                // If real BLE is connected, hardware telemetry governs everything unless user explicitly enabled demo simulation
-                if (realBleReady && !isSim) {
-                    // Motor is on real BLE. If real motor is off (RPM < 100), ensure sound is silent
-                    if (_telemetry.value.rpm < 100) {
+                // Pemisahan Ketat (Strict Mode Separation: Demo vs Real):
+                // Jika aplikasi TIDAK sedang berada dalam Mode Simulasi (_isSimulationMode == false),
+                // thread simulasi ini DILARANG KERAS menyentuh atau memodifikasi _telemetry.value!
+                // Seluruh telemetri di mode nyata murni datang dari paket Bluetooth GATT dan dikawal oleh Watchdog UI (500ms).
+                if (!isSim) {
+                    if (engineSound.isPlaying && _telemetry.value.rpm < 100) {
                         engineSound.stop()
                     }
                     continue
                 }
 
-                // If real motorcycle engine is running (RPM > 100 on BLE), prioritize real telemetry.
-                // Otherwise (engine off, test bench, or simulation), simulate based on slider/revving.
-                val realEngineRunning = realBleReady && _telemetry.value.rpm > 100
                 val demoStarterOn = _demoEngineRunning.value
-                val shouldSimulate = !realEngineRunning && (isSim || demoStarterOn || revving || slider > 0.01f || simRpm > 50f || simTps > 0.01f)
+                val shouldSimulate = demoStarterOn || revving || slider > 0.01f || simRpm > 50f || simTps > 0.01f
                 if (shouldSimulate) {
                     // Update simulated throttle & RPM
                     if (revving) {
@@ -2379,7 +2498,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     } else {
                         engineSound.stop()
                     }
-                } else if (!realEngineRunning) {
+                } else {
                     engineSound.stop()
                 }
             }
@@ -2388,6 +2507,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     override fun onCleared() {
         super.onCleared()
+        watchdogHandler.removeCallbacks(watchdogRunnable)
         simulationJob?.cancel()
         oemLearnPollJob?.cancel()
         bleClient.release()

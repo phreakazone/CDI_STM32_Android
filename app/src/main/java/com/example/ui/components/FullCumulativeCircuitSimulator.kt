@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -388,91 +389,175 @@ fun FullCumulativeCircuitSimulator(
 }
 
 /**
- * 1. Harness Section: 12-pin plug NS200
+ * 1. Harness Section: 12-pin plug NS200 (Full 12 Pins with status indicators & scroll)
  */
 @Composable
 private fun HarnessAssemblySection(
   activeStage: Int,
   pulseAlpha: Float
 ) {
+  // All 12 Pins of Bajaj Pulsar 200NS CDI Harness J1
+  data class HarnessPinItem(
+    val pin: String,
+    val colorLabel: String,
+    val func: String,
+    val requiredStage: Int?,
+    val isOemProbe: Boolean = false,
+    val isNc: Boolean = false
+  )
+
+  val all12Pins = remember {
+    listOf(
+      HarnessPinItem("J1.1", "KOSONG / NC", "Tidak Terhubung", null, isNc = true),
+      HarnessPinItem("J1.2", "HIJAU-PUTIH", "TPS A (Sensor Gas)", 2),
+      HarnessPinItem("J1.3", "HITAM-PUTIH", "Suhu Coolant (NTC)", 2),
+      HarnessPinItem("J1.4", "ABU-ABU", "TPS B (Sensor Gas)", 2),
+      HarnessPinItem("J1.5", "ORANYE", "+12V Kontak Kunci", 1),
+      HarnessPinItem("J1.6", "HITAM-MERAH", "Koil Samping HV (2 Busi)", 5),
+      HarnessPinItem("J1.7", "BIRU-KUNING", "Kontrol Relay Fan", 2),
+      HarnessPinItem("J1.8", "NC / KABEL", "OEM Side Probe (PB4)", 2, isOemProbe = true),
+      HarnessPinItem("J1.9", "NC / KABEL", "OEM Ctr Probe (PB3)", 2, isOemProbe = true),
+      HarnessPinItem("J1.10", "PUTIH-MERAH", "Pulser Spul Magnet", 2),
+      HarnessPinItem("J1.11", "HITAM-KUNING", "Massa Utama (GND Star)", 1),
+      HarnessPinItem("J1.12", "ORANYE-KUNING", "Koil Center HV (Busi Utama)", 5)
+    )
+  }
+
   Surface(
     shape = RoundedCornerShape(10.dp),
     color = Color(0xFF131B26),
     border = BorderStroke(1.dp, Color(0xFF2D3E53)),
     modifier = Modifier
-      .width(130.dp)
-      .height(400.dp)
+      .width(152.dp)
+      .height(410.dp)
   ) {
     Column(
       modifier = Modifier
         .fillMaxSize()
-        .padding(8.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.SpaceBetween
+        .padding(horizontal = 6.dp, vertical = 6.dp),
+      horizontalAlignment = Alignment.CenterHorizontally
     ) {
+      // Header Section with 12 PIN badge
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Text(
+          text = "SOKET J1",
+          fontSize = 9.sp,
+          fontWeight = FontWeight.Black,
+          color = SparkAmber,
+          fontFamily = FontFamily.Monospace
+        )
+        Surface(
+          shape = RoundedCornerShape(3.dp),
+          color = SparkAmber.copy(alpha = 0.2f),
+          border = BorderStroke(0.5.dp, SparkAmber.copy(alpha = 0.6f))
+        ) {
+          Text(
+            text = "12 PIN",
+            fontSize = 7.5.sp,
+            fontWeight = FontWeight.Black,
+            color = SparkAmber,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+            fontFamily = FontFamily.Monospace
+          )
+        }
+      }
+
       Text(
-        text = "SOKET HARNESS J1\n(PULSAR NS200)",
-        fontSize = 8.sp,
-        fontWeight = FontWeight.Black,
-        color = SparkAmber,
-        textAlign = TextAlign.Center,
-        fontFamily = FontFamily.Monospace
+        text = "Bajaj Pulsar NS200",
+        fontSize = 7.sp,
+        color = TextTertiaryDark,
+        modifier = Modifier.fillMaxWidth()
       )
 
-      // Harness 12-Pin List
+      Spacer(modifier = Modifier.height(4.dp))
+
+      // Scrollable 12-Pin List (Fixes truncation so all 12 pins are clearly visible)
       Column(
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        modifier = Modifier.fillMaxWidth()
+        verticalArrangement = Arrangement.spacedBy(3.5.dp),
+        modifier = Modifier
+          .fillMaxWidth()
+          .weight(1f)
+          .verticalScroll(rememberScrollState())
       ) {
-        listOf(
-          Triple("J1.11", "HITAM-KUNING", "Massa Utama"),
-          Triple("J1.5", "ORANYE", "+12V Kontak"),
-          Triple("J1.10", "PUTIH-MERAH", "Pulser Spul"),
-          Triple("J1.2", "HIJAU-PUTIH", "TPS A"),
-          Triple("J1.4", "ABU-ABU", "TPS B"),
-          Triple("J1.3", "HITAM-PUTIH", "Suhu Coolant"),
-          Triple("J1.7", "BIRU-KUNING", "Kontrol Relay Fan"),
-          Triple("J1.12", "ORANYE-KUNING", "Koil Tengah HV"),
-          Triple("J1.6", "ORANYE-HITAM", "Koil Samping HV")
-        ).forEach { (pin, colorLabel, func) ->
-          val isPinActive = when (pin) {
-            "J1.11", "J1.5" -> activeStage >= 1
-            "J1.10", "J1.2", "J1.4", "J1.3", "J1.7" -> activeStage >= 2
-            "J1.12", "J1.6" -> activeStage >= 5
+        all12Pins.forEach { item ->
+          val isPinActive = when {
+            item.isNc -> false
+            item.isOemProbe -> activeStage >= 2
+            item.requiredStage != null -> activeStage >= item.requiredStage
             else -> false
+          }
+
+          val statusText = when {
+            item.isNc -> "KOSONG"
+            isPinActive -> "AKTIF"
+            item.isOemProbe -> "OEM LEARN"
+            item.requiredStage != null -> "TAHAP ${item.requiredStage}"
+            else -> "STANDBY"
+          }
+
+          val statusColor = when {
+            item.isNc -> Color(0xFF64748B)
+            isPinActive -> SafetyGreen
+            item.isOemProbe -> ElectricCyan
+            else -> SparkAmber.copy(alpha = 0.8f)
           }
 
           Surface(
             shape = RoundedCornerShape(4.dp),
-            color = if (isPinActive) Color(0xFF1E2E42) else Color(0xFF0F1722),
+            color = if (isPinActive) Color(0xFF18283D) else Color(0xFF0F1722),
             border = BorderStroke(
               0.8.dp,
-              if (isPinActive) ElectricCyan else Color(0xFF1E293B)
+              if (isPinActive) ElectricCyan.copy(alpha = 0.8f) else Color(0xFF1E293B)
             ),
             modifier = Modifier.fillMaxWidth()
           ) {
             Row(
-              modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+              modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.5.dp),
               verticalAlignment = Alignment.CenterVertically
             ) {
+              // Status dot
               Box(
                 modifier = Modifier
                   .size(6.dp)
-                  .background(if (isPinActive) SafetyGreen else Color.Gray, CircleShape)
+                  .background(statusColor, CircleShape)
               )
               Spacer(modifier = Modifier.width(4.dp))
-              Column {
+              Column(modifier = Modifier.weight(1f)) {
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Text(
+                    text = item.pin,
+                    fontSize = 7.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isPinActive) ElectricCyan else TextPrimaryDark,
+                    fontFamily = FontFamily.Monospace
+                  )
+                  Text(
+                    text = statusText,
+                    fontSize = 6.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = statusColor,
+                    fontFamily = FontFamily.Monospace
+                  )
+                }
                 Text(
-                  text = "$pin: $colorLabel",
-                  fontSize = 7.sp,
-                  fontWeight = FontWeight.Bold,
+                  text = item.colorLabel,
+                  fontSize = 6.5.sp,
                   color = if (isPinActive) TextPrimaryDark else TextTertiaryDark,
-                  fontFamily = FontFamily.Monospace
+                  maxLines = 1
                 )
                 Text(
-                  text = func,
+                  text = item.func,
                   fontSize = 6.sp,
-                  color = if (isPinActive) ElectricCyan else TextTertiaryDark
+                  color = if (isPinActive) Color(0xFF81D4FA) else TextTertiaryDark,
+                  maxLines = 1
                 )
               }
             }
@@ -480,10 +565,12 @@ private fun HarnessAssemblySection(
         }
       }
 
+      Spacer(modifier = Modifier.height(2.dp))
       Text(
-        text = "Soket Original NS200",
-        fontSize = 7.sp,
-        color = TextTertiaryDark
+        text = "↕ Gulir 12 Pin • Klip Atas",
+        fontSize = 6.5.sp,
+        color = TextTertiaryDark,
+        fontFamily = FontFamily.Monospace
       )
     }
   }

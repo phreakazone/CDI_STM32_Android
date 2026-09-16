@@ -151,6 +151,9 @@ class EngineSound(private val context: Context) {
             }
         }
 
+    val isPlaying: Boolean
+        get() = tracks.any { it?.playState == AudioTrack.PLAYSTATE_PLAYING } || (customPlayer?.isPlaying == true)
+
     private fun loadPcmFromResource(resId: Int): ByteArray? {
         return try {
             context.resources.openRawResource(resId).use { input ->

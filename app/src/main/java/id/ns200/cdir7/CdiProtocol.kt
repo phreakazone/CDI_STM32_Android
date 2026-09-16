@@ -169,16 +169,30 @@ object CdiProtocol {
     fun response(frame: String): ProtocolResponse? {
         val clean = frame.trim()
         val prefix = clean.firstOrNull() ?: return null
-        if (prefix != '@' && prefix != '$') return null
         val star = clean.lastIndexOf('*')
-        if (star <= 1 || clean.length < star + 5) return null
-        val payload = clean.substring(1, star)
-        val supplied = clean.substring(star + 1, star + 5).toIntOrNull(16) ?: return null
-        if (crc16(payload.toByteArray(Charsets.US_ASCII)) != supplied) return null
-        val comma = payload.indexOf(',')
-        if (comma < 1) return null
-        return ProtocolResponse(payload.substring(0, comma).toIntOrNull() ?: return null,
-            payload.substring(comma + 1))
+        if ((prefix == '@' || prefix == '$') && star > 1 && clean.length >= star + 5) {
+            val payload = clean.substring(1, star)
+            val supplied = clean.substring(star + 1, star + 5).toIntOrNull(16)
+            if (supplied != null && crc16(payload.toByteArray(Charsets.US_ASCII)) == supplied) {
+                val comma = payload.indexOf(',')
+                return if (comma >= 1 && payload.substring(0, comma).toIntOrNull() != null) {
+                    ProtocolResponse(payload.substring(0, comma).toInt(), payload.substring(comma + 1))
+                } else {
+                    ProtocolResponse(0, payload)
+                }
+            }
+        }
+
+        // Fallback untuk frame ASCII plain dari firmware (tanpa CRC atau log selftest)
+        val stripped = clean.removePrefix("@").removePrefix("$")
+        val withoutCrc = if (stripped.contains('*')) stripped.substringBefore('*') else stripped
+        val comma = withoutCrc.indexOf(',')
+        val seq = if (comma >= 1) withoutCrc.substring(0, comma).toIntOrNull() else null
+        val body = if (seq != null) withoutCrc.substring(comma + 1) else withoutCrc
+        if (body.isNotBlank()) {
+            return ProtocolResponse(seq ?: 0, body)
+        }
+        return null
     }
 
     fun firmwareMode(body: String): FirmwareModeStatus? {

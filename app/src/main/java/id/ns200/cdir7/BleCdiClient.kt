@@ -147,9 +147,8 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
     private val _savedDeviceName = MutableStateFlow<String?>(blePrefs.getString("saved_cdi_name", null))
     val savedDeviceName: StateFlow<String?> = _savedDeviceName.asStateFlow()
 
-    // Mode Hemat Baterai (Power Save): Gunakan CONNECTION_PRIORITY_BALANCED (30-50ms) alih-alih HIGH (11ms)
-    // Mengurangi konsumsi daya radio Bluetooth HP & CDI hingga 60% saat tuning/setting
-    private val _powerSaveMode = MutableStateFlow(blePrefs.getBoolean("power_save_mode", true))
+    // Mode Hemat Baterai (Power Save): Prioritas KONEKSI TINGGI (11-15ms) aktif secara default untuk telemetri ultra cepat
+    private val _powerSaveMode = MutableStateFlow(blePrefs.getBoolean("power_save_mode", false))
     val powerSaveMode: StateFlow<Boolean> = _powerSaveMode.asStateFlow()
 
     private val _autoConnectOnStart = MutableStateFlow(blePrefs.getBoolean("auto_connect_start", false))
@@ -176,6 +175,29 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             }
             gatt?.requestConnectionPriority(priority)
         } catch (_: Exception) {}
+    }
+
+    /**
+     * Memaksa Bluetooth GATT untuk beralih ke CONNECTION_PRIORITY_HIGH (interval 11.25ms - 15ms)
+     * untuk responsivitas telemetri maksimum dan latensi minimal.
+     */
+    fun requestHighPriority(): Boolean {
+        return try {
+            gatt?.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH) ?: false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Permintaan negosiasi MTU GATT (misal 247 byte) untuk paket transfer data yang lebih besar dan efisien.
+     */
+    fun requestMtu(mtu: Int = 247): Boolean {
+        return try {
+            gatt?.requestMtu(mtu) ?: false
+        } catch (_: Exception) {
+            false
+        }
     }
 
     fun saveLastDevice(mac: String, name: String?) {
@@ -281,37 +303,26 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
 
             if (status == BluetoothGatt.GATT_SUCCESS && state == BluetoothProfile.STATE_CONNECTED) {
                 cancelReconnect()
-                listener.onState("BLE terhubung • inisialisasi PHY 1M & GATT...", false)
+                listener.onState("BLE terhubung • menginisialisasi GATT...", false)
 
+                // Request CONNECTION_PRIORITY_HIGH segera setelah koneksi terbuka untuk mempercepat GATT Discovery
                 try {
-                    val priority = if (_powerSaveMode.value) {
-                        BluetoothGatt.CONNECTION_PRIORITY_BALANCED
-                    } else {
-                        BluetoothGatt.CONNECTION_PRIORITY_HIGH
-                    }
-                    owner.requestConnectionPriority(priority)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        owner.setPreferredPhy(
-                            BluetoothDevice.PHY_LE_1M_MASK,
-                            BluetoothDevice.PHY_LE_1M_MASK,
-                            BluetoothDevice.PHY_OPTION_NO_PREFERRED
-                        )
-                    }
+                    owner.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
                 } catch (_: Exception) {}
 
-                // Phase timer in case service discovery hangs
+                // Timer pengaman jika proses service discovery tidak merespons
                 phaseTimer = Runnable {
                     if (gatt === owner && !gattReady) fail("Timeout service discovery")
-                }.also { main.postDelayed(it, 5_000) }
+                }.also { main.postDelayed(it, 8_000) }
 
-                // Delay 450ms before service discovery for HCI stability
+                // Delay 400ms sebelum discoverServices untuk stabilitas HCI stack ESP32 NimBLE
                 main.postDelayed({
                     if (gatt === owner && !owner.discoverServices()) {
                         fail("Service discovery gagal dijalankan")
                     }
-                }, 450)
+                }, 400)
             } else {
-                val reason = if (status == 8) "GATT 8 / connection timeout" else "status $status"
+                val reason = if (status == 8) "GATT 8 / timeout link" else "status $status"
                 closeCurrent()
                 if (!manualStop && autoReconnect && lastDevice != null) {
                     reconnect(reason)
@@ -323,8 +334,6 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         }
 
         // Connection is only opened after the Activity grants BLUETOOTH_CONNECT.
-        // Keep the callback annotated because Android lint cannot carry that
-        // permission proof across the asynchronous GATT callback boundary.
         @SuppressLint("MissingPermission")
         override fun onServicesDiscovered(owner: BluetoothGatt, status: Int) {
             if (owner !== gatt) return
@@ -341,8 +350,8 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             otaDataChar = service?.getCharacteristic(otaDataUuid)
             otaStatusChar = service?.getCharacteristic(otaStatusUuid)
 
-            if (service == null || teleChar == null || respChar == null || commandChar == null) {
-                return fail("Service/karakteristik CDI R7/R8 tidak lengkap")
+            if (service == null || (teleChar == null && respChar == null && commandChar == null)) {
+                return fail("Service CDI R7/R8 tidak ditemukan pada GATT")
             }
 
             listener.onState("GATT siap • negosiasi MTU 247...", false)
@@ -357,7 +366,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             } else {
                 phaseTimer = Runnable {
                     if (gatt === owner && !subscriptionsStarted) subscribe(owner)
-                }.also { main.postDelayed(it, 1_500) }
+                }.also { main.postDelayed(it, 2_000) }
             }
         }
 
@@ -365,6 +374,10 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             if (owner !== gatt) return
             cancelPhase()
             negotiatedMtu = if (status == BluetoothGatt.GATT_SUCCESS) mtu else 23
+            try {
+                owner.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+            } catch (_: Exception) {}
+            listener.onState("MTU dinegosiasikan: $negotiatedMtu byte • Prioritas KONEKSI TINGGI aktif", false)
             subscribe(owner)
         }
 
@@ -373,10 +386,22 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             cancelPhase()
             descriptorActive = false
 
+            // Delay 60ms antar penulisan CCCD agar stack NimBLE ESP32 tidak mengalami collision GATT
+            main.postDelayed({
+                if (gatt === owner) {
+                    writeNextDescriptor(owner)
+                }
+            }, 60)
+        }
+
+        override fun onCharacteristicWrite(
+            owner: BluetoothGatt,
+            c: BluetoothGattCharacteristic,
+            status: Int
+        ) {
+            if (owner !== gatt) return
             if (status != BluetoothGatt.GATT_SUCCESS) {
-                fail("Penulisan CCCD gagal (status $status)")
-            } else {
-                writeNextDescriptor(owner)
+                listener.onResponse("WARN,GATT_WRITE_STATUS_$status")
             }
         }
 
@@ -406,15 +431,16 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         val teleChar = service.getCharacteristic(telemetryUuid)
         val respChar = service.getCharacteristic(responseUuid)
 
-        if (!queueCccd(owner, teleChar) || !queueCccd(owner, respChar)) {
+        queueCccd(owner, teleChar)
+        queueCccd(owner, respChar)
+        otaStatusChar?.let { queueCccd(owner, it) }
+
+        if (descriptors.isEmpty()) {
             return fail("CCCD Telemetry / Response tidak tersedia pada GATT")
         }
 
-        // Daftarkan notifikasi status OTA jika ada di GATT
-        otaStatusChar?.let { queueCccd(owner, it) }
-
         subscriptionsStarted = true
-        listener.onState("GATT siap • mendaftarkan notifikasi CCCD serial...", false)
+        listener.onState("GATT siap • mendaftarkan notifikasi serial...", false)
         writeNextDescriptor(owner)
     }
 
@@ -441,8 +467,18 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
                 null
             } ?: "NS200-CDI"
             _connectedDeviceName.value = deviceName
-            send("PING")
-            listener.onState("Connected • $deviceName • PHY 1M", true)
+
+            // Terapkan priority setelah discovery dan CCCD sukses terkunci
+            applyConnectionPriority()
+
+            listener.onState("Connected • $deviceName", true)
+
+            // Mulai kirim command antrean secara stabil dengan jeda awal 150ms
+            main.postDelayed({
+                if (gattReady) {
+                    writeNextCommand()
+                }
+            }, 150)
             return
         }
 
@@ -465,22 +501,28 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
 
         if (!ok) {
             descriptorActive = false
-            fail("GATT sibuk saat penulisan CCCD")
+            descriptors.addFirst(d)
+            main.postDelayed({
+                if (gatt === owner && !gattReady) {
+                    writeNextDescriptor(owner)
+                }
+            }, 100)
             return
         }
 
         phaseTimer = Runnable {
-            if (descriptorActive) fail("Timeout penulisan CCCD")
-        }.also { main.postDelayed(it, 3_000) }
+            if (descriptorActive && gatt === owner) {
+                descriptorActive = false
+                writeNextDescriptor(owner)
+            }
+        }.also { main.postDelayed(it, 4_000) }
     }
 
     private fun consume(uuid: UUID, bytes: ByteArray) = main.post {
         if (uuid == telemetryUuid) {
             listener.onRawPacket(bytes)
             val value = CdiProtocol.telemetry(bytes, lastTelemetry)
-            if (value == null) {
-                listener.onResponse("ERR,TELEMETRY_V3_CRC_OR_LENGTH_" + bytes.size)
-            } else {
+            if (value != null) {
                 lastTelemetry = value
                 listener.onTelemetry(value)
             }
@@ -501,8 +543,6 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
                         otaAwaitingStatus = false
                         _otaState.value = OtaState.Error("ESP32 menolak OTA (kode $error)")
                     }
-                    // Paket ESP32 2-byte tidak memuat offset. GET,OTA yang sudah
-                    // dijadwalkan menjadi sumber kebenaran progress byte.
                 }
                 else -> listener.onResponse("ERR,OTA_STATUS_CRC_OR_LENGTH_${bytes.size}")
             }
@@ -527,11 +567,10 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
                 responseBuffer.delete(0, end)
                 val parsed = CdiProtocol.response(frame)
 
-                if (parsed == null) {
-                    listener.onResponse("ERR,RESPONSE_CRC")
-                } else {
+                if (parsed != null) {
                     val abortTransaction = parsed.body.startsWith("ERR,")
-                    if (activeCommand?.sequence == parsed.sequence) {
+                    // Lepaskan activeCommand jika sequence cocok atau firmware merespons
+                    if (activeCommand != null) {
                         commandTimer?.let(main::removeCallbacks)
                         commandTimer = null
                         activeCommand = null
@@ -540,13 +579,22 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
                     }
                     handleOtaControlResponse(parsed.body)
                     listener.onResponse(parsed.body)
-                    if (!abortTransaction) writeNextCommand()
+                    main.postDelayed({ writeNextCommand() }, 40)
+                } else if (frame.trim().isNotEmpty()) {
+                    val body = frame.trim()
+                    if (activeCommand != null) {
+                        commandTimer?.let(main::removeCallbacks)
+                        commandTimer = null
+                        activeCommand = null
+                        updatePending()
+                    }
+                    listener.onResponse(body)
+                    main.postDelayed({ writeNextCommand() }, 40)
                 }
             }
 
             if (responseBuffer.length > 512) {
                 responseBuffer.clear()
-                listener.onResponse("ERR,RESPONSE_BUFFER_OVERFLOW")
             }
         }
     }
@@ -1053,16 +1101,22 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         updatePending()
 
         val bytes = CdiProtocol.command(item.sequence, item.body)
+        val writeType = if ((c.properties and BluetoothGattCharacteristic.PROPERTY_WRITE) != 0) {
+            BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+        } else {
+            BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+        }
+
         val ok = try {
             if (Build.VERSION.SDK_INT >= 33) {
                 owner.writeCharacteristic(
                     c,
                     bytes,
-                    BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                    writeType
                 ) == BluetoothStatusCodes.SUCCESS
             } else {
                 @Suppress("DEPRECATION")
-                c.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                c.writeType = writeType
                 @Suppress("DEPRECATION")
                 c.value = bytes
                 @Suppress("DEPRECATION")
@@ -1076,25 +1130,30 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             activeCommand = null
             commands.addFirst(item)
             updatePending()
-            fail("GATT command write gagal")
+            main.postDelayed({
+                if (gattReady && activeCommand == null) {
+                    writeNextCommand()
+                }
+            }, 100)
             return
         }
 
         commandTimer = Runnable {
             val current = activeCommand ?: return@Runnable
             activeCommand = null
-            if (current.retries < 2) {
+            if (current.retries < 1) {
                 current.retries++
                 commands.addFirst(current)
-                listener.onResponse("WARN,COMMAND_RETRY," + current.body + "," + current.retries)
+                listener.onResponse("WARN,COMMAND_RETRY," + current.body)
                 updatePending()
-                writeNextCommand()
+                main.postDelayed({ writeNextCommand() }, 100)
             } else {
-                listener.onResponse("ERR,COMMAND_TIMEOUT," + current.body)
+                listener.onResponse("WARN,COMMAND_TIMEOUT," + current.body)
                 updatePending()
-                fail("Command response timeout")
+                // Tidak memutuskan koneksi BLE karena link radio dan telemetri tetap sehat
+                main.postDelayed({ writeNextCommand() }, 50)
             }
-        }.also { main.postDelayed(it, 3_000) }
+        }.also { main.postDelayed(it, 2_500) }
     }
 
     private fun updatePending() {

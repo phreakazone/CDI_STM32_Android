@@ -56,11 +56,22 @@ fun DashboardScreen(viewModel: CdiViewModel) {
     val targetHv by viewModel.targetHvVoltage.collectAsState()
     val isPro by viewModel.isProVoltageConfigured.collectAsState()
     val selectedPlatform by viewModel.selectedPlatform.collectAsState()
+    val isTelemetryStreaming by viewModel.isTelemetryStreaming.collectAsState()
+    val isSimulationMode by viewModel.isSimulationMode.collectAsState()
     val scrollState = rememberScrollState()
 
     val currentRpm = telemetry.rpm
     val isAtLimiter = telemetry.limiter > 0 || currentRpm >= revLimit
     val isBleConnected = viewModel.bleClient.gattReady
+
+    // Animasi jarum tachometer sangat responsif dengan interpolasi halus.
+    // Jika Watchdog UI memicu timeout 500ms, jarum langsung turun ke 0 secara presisi dan tidak pernah menggantung.
+    val targetRpmFraction = (currentRpm / 12000f).coerceIn(0f, 1f)
+    val animatedRpmFraction by animateFloatAsState(
+        targetValue = targetRpmFraction,
+        animationSpec = tween(durationMillis = 80, easing = LinearOutSlowInEasing),
+        label = "animated_rpm_gauge"
+    )
 
     // Slider tacho interaktif: mengikuti RPM aktual secara dinamis (live BLE maupun simulasi demo)
     var userDragFraction by remember { mutableStateOf<Float?>(null) }
@@ -236,9 +247,8 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                             style = Stroke(width = 20.dp.toPx(), cap = StrokeCap.Round)
                         )
 
-                        // Active Sweep Progress
-                        val rpmFraction = (currentRpm / 12000f).coerceIn(0f, 1f)
-                        val activeSweep = sweepAngle * rpmFraction
+                        // Active Sweep Progress (Interpolasi dinamis jarum watchdog)
+                        val activeSweep = sweepAngle * animatedRpmFraction
 
                         val strokeBrush = Brush.sweepGradient(
                             listOf(
@@ -280,9 +290,29 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                                 strokeWidth = if (i % 2 == 0) 3.dp.toPx() else 1.5.dp.toPx()
                             )
                         }
+
+                        // Jarum Tachometer Dinamis (Pointer Needle)
+                        val needleAngleRad = Math.toRadians((startAngle + (sweepAngle * animatedRpmFraction)).toDouble())
+                        val needleLength = radius - 14.dp.toPx()
+                        val needleEnd = Offset(
+                            (center.x + needleLength * cos(needleAngleRad)).toFloat(),
+                            (center.y + needleLength * sin(needleAngleRad)).toFloat()
+                        )
+                        drawLine(
+                            color = if (isAtLimiter) RaceRedline else ElectricCyan,
+                            start = center,
+                            end = needleEnd,
+                            strokeWidth = 3.dp.toPx(),
+                            cap = StrokeCap.Round
+                        )
+                        drawCircle(
+                            color = if (isAtLimiter) RaceRedline else MotecOrange,
+                            radius = 6.dp.toPx(),
+                            center = center
+                        )
                     }
 
-                    // Digital RPM Readout
+                    // Digital RPM Readout & Watchdog Status
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -304,6 +334,27 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                             fontFamily = FontFamily.Monospace,
                             color = MotecOrange
                         )
+                        if (isConnected && !isSimulationMode) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(top = 2.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isTelemetryStreaming) RacingLime else SensorAmber)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (isTelemetryStreaming) "LIVE • 20Hz" else "STANDBY • WATCHDOG 0 RPM",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isTelemetryStreaming) RacingLime else SensorAmber,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
                     }
                 }
 
