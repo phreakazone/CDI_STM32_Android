@@ -334,27 +334,6 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                             fontFamily = FontFamily.Monospace,
                             color = MotecOrange
                         )
-                        if (isConnected && !isSimulationMode) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(top = 2.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(if (isTelemetryStreaming) RacingLime else SensorAmber)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = if (isTelemetryStreaming) "LIVE • 20Hz" else "STANDBY • WATCHDOG 0 RPM",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isTelemetryStreaming) RacingLime else SensorAmber,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            }
-                        }
                     }
                 }
 

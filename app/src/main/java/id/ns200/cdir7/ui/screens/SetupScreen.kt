@@ -560,6 +560,16 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: M
                             )
                         }
 
+                        // Tombol Uji Bench Test Meja Kerja
+                        MotecButton(
+                            text = "⚡ UJI PULSA SIMULASI (BENCH TEST +10)",
+                            onClick = { viewModel.testSimulateOemPulses(10) },
+                            enabled = true,
+                            color = ElectricCyan,
+                            height = 28.dp,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
                         // Tombol Transisi Langsung setelah simpan data OEM
                         if (flashSaved || oemCenterPulses >= 5) {
                             MotecButton(
@@ -733,6 +743,32 @@ private fun OemLearnTdcCheckpointStage(viewModel: CdiViewModel, t: Telemetry, se
             CompactStatusRow("SAMPEL OEM SIDE ($sideLabel)", "$oemSideSamples sampel", oemSideSamples > 0)
             CompactStatusRow("STATUS PEREKAMAN", if (isOemLearning) "SEDANG MEREKAM DARI CDI OEM..." else if (oemCenterPulses > 0) "TEREKAM (${oemCenterPulses} pulsa)" else "SIAP REKAM", isOemLearning || oemCenterPulses > 0)
 
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(CarbonDark, RoundedCornerShape(4.dp))
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Text(
+                    text = "ASAL DATA PULSA & CARA KERJA MIKROKONTROLER:",
+                    color = SensorAmber,
+                    fontSize = 8.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+                Text(
+                    text = "• PULSA CENTER ($centerLabel): Sadapan kabel koil tengah J1.12 via optocoupler PC817 ke pin $centerLabel.\n" +
+                        "• SAMPEL SIDE ($sideLabel): Sadapan kabel koil samping J1.6 via optocoupler PC817 ke pin $sideLabel.\n" +
+                        "• REFERENSI KRUK AS: Sensor pulser magnet J1.10 ke pin PA0/GPIO34 membaca referensi timing mesin.\n" +
+                        "• CATATAN: Angka masih 0 jika motor belum dinyalakan dengan CDI OEM atau optocoupler belum terhubung.",
+                    color = TextPrimary,
+                    fontSize = 7.5.sp,
+                    lineHeight = 11.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+
             McuPinGuidance(
                 selectedPlatform = selectedPlatform,
                 stmPin = "Center: PB3 (H_TOP.9) | Side: PB4 (H_TOP.8)",
@@ -761,6 +797,15 @@ private fun OemLearnTdcCheckpointStage(viewModel: CdiViewModel, t: Telemetry, se
                     modifier = Modifier.weight(1f)
                 )
             }
+
+            MotecButton(
+                text = "⚡ UJI PULSA SIMULASI (BENCH TEST +10)",
+                onClick = { viewModel.testSimulateOemPulses(10) },
+                enabled = true,
+                color = ElectricCyan,
+                height = 28.dp,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
         StageCard(

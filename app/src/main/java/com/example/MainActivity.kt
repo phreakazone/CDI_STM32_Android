@@ -207,6 +207,7 @@ fun MainAppScreen(
     val isBleScanning by cdiViewModel.isBleScanning.collectAsState()
     val telemetry by cdiViewModel.telemetry.collectAsState()
     val packetRateHz by cdiViewModel.packetRateHz.collectAsState()
+    val isTelemetryStreaming by cdiViewModel.isTelemetryStreaming.collectAsState()
     val verificationProgress by wiringViewModel.verificationProgress.collectAsState()
     val connectedDeviceName by cdiViewModel.connectedDeviceName.collectAsState()
     val selectedPlatform by cdiViewModel.selectedPlatform.collectAsState()
@@ -224,6 +225,7 @@ fun MainAppScreen(
                 isBleScanning = isBleScanning,
                 telemetry = telemetry,
                 packetRateHz = packetRateHz,
+                isTelemetryStreaming = isTelemetryStreaming,
                 verificationProgress = verificationProgress,
                 connectedDeviceName = connectedDeviceName,
                 onConnectClick = {
@@ -289,6 +291,7 @@ fun MotorsportTopBar(
     isBleScanning: Boolean,
     telemetry: Telemetry,
     packetRateHz: Int = 0,
+    isTelemetryStreaming: Boolean = false,
     verificationProgress: Pair<Int, Int>,
     connectedDeviceName: String?,
     onConnectClick: () -> Unit,
@@ -403,7 +406,11 @@ fun MotorsportTopBar(
                             text = when {
                                 isConnected -> {
                                     val dev = if (!connectedDeviceName.isNullOrBlank()) connectedDeviceName else "BLE"
-                                    if (packetRateHz > 0) "ONLINE • $dev • ${packetRateHz}Hz" else "ONLINE • $dev"
+                                    if (isTelemetryStreaming && packetRateHz > 0) {
+                                        "ONLINE • $dev • ${packetRateHz}Hz"
+                                    } else {
+                                        "ONLINE • $dev • SIAP"
+                                    }
                                 }
                                 isSimulation -> "SIMULASI • 50Hz • ${telemetry.rpm} RPM"
                                 isBleScanning -> "MEMINDAI BLE..."

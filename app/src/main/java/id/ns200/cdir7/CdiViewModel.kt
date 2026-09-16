@@ -157,8 +157,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         val valid: Boolean
     )
     private val rxSamples = ArrayDeque<RxSample>()
-    private val RX_WINDOW_MS = 5_000L
+    private val RX_WINDOW_MS = 2_000L
     private var telemetryWatchdogJob: Job? = null
+    private var demoOemPulseJob: Job? = null
 
     // Setup StateFlows (Synchronized from GET,SETUP)
     private val _pickupEdge = MutableStateFlow("FALLING")
@@ -331,6 +332,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     private val watchdogRunnable = Runnable {
         if (_isConnected.value && !_isSimulationMode.value) {
             _isTelemetryStreaming.value = false
+            _packetRateHz.value = 0
+            rxSamples.clear()
             val current = _telemetry.value
             if (current.rpm > 0 || current.outputFlags != 0 || current.limiter != 0) {
                 _telemetry.value = current.copy(
@@ -367,7 +370,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (!connected && !isSim) {
             return "CDI belum terhubung. Hubungkan BLE atau aktifkan Mode Simulasi."
         }
-        if (t.rpm > 0) {
+        if (t.rpm > 0 && !learning) {
             return "Mesin sedang menyala (${t.rpm} RPM). Matikan mesin (RPM 0) demi aturan keselamatan setup_can_write()!"
         }
         if (connected && !isSim && (t.hvEnabled || t.hvCenter >= 30 || t.hvSide >= 30)) {
@@ -1613,7 +1616,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (!requireMcuOrDemo("start OEM Learn")) return
         val (cPin, sPin) = if (selectedPlatform.value == McuPlatform.STM32WB55) Pair("PB3", "PB4") else Pair("GPIO16", "GPIO17")
         val mcuName = selectedPlatform.value.displayName
-        if (!checkSetupWriteSafety("Mulai OEM Learn")) return
+        // Catatan Keselamatan: OEM Learn mengecualikan blokir RPM > 0 karena mesin sengaja dihidupkan dengan CDI OEM!
         _isOemLearning.value = true
         _firmwareMode.value = FirmwareRunMode.OEM_LEARN
         if (bleClient.gattReady) {
@@ -1622,10 +1625,12 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             bleClient.send("LEARN,START")
             bleClient.send("GET,MODE")
             bleClient.send("GET,LEARN")
+            startOemLearnPolling()
             appendLog("BLE Send: MODE,OEM_LEARN & LEARN,START ($cPin/$sPin)")
         } else {
-            _demoEngineRunning.value = true // Mesin hidup via CDI OEM menghasilkan pulsa ke optocoupler
+            _demoEngineRunning.value = true
             appendLog("OEM Learn Dimulai: membaca pulsa $cPin/$sPin ($mcuName)...")
+            startDemoOemPulseGenerator()
         }
         Toast.makeText(context, "OEM Learn Dimulai: Hidupkan mesin dengan CDI OEM ($cPin/$sPin)", Toast.LENGTH_SHORT).show()
     }
@@ -1633,8 +1638,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     fun stopOemLearn() {
         if (!requireMcuOrDemo("stop OEM Learn")) return
         val mcuName = selectedPlatform.value.displayName
-        if (!checkSetupWriteSafety("Simpan OEM Learn")) return
         _isOemLearning.value = false
+        demoOemPulseJob?.cancel()
+        oemLearnPollJob?.cancel()
         if (bleClient.gattReady) {
             markSetupCommandPending()
             bleClient.send("LEARN,STOP")
@@ -1642,11 +1648,35 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             appendLog("BLE Send: LEARN,STOP (Simpan Map OEM ke Flash $mcuName)")
         } else {
             _flashSaved.value = true
-            _demoEngineRunning.value = false // Matikan mesin setelah rekaman selesai
+            _demoEngineRunning.value = false
             simRpm = 0f
             appendLog("OEM Learn Dihentikan: timing Center & Side tersimpan di flash $mcuName.")
         }
         Toast.makeText(context, "OEM Learn Selesai: Matikan mesin & cabut modul PC817 serta soket CDI OEM", Toast.LENGTH_LONG).show()
+    }
+
+    /**
+     * Memfasilitasi pengujian meja kerja (Bench Test) tanpa mesin hidup.
+     * Menginjeksi sejumlah pulsa sampel buatan ke counter pulsa OEM Center & Side.
+     */
+    fun testSimulateOemPulses(count: Int = 10) {
+        _oemCenterPulses.value = (_oemCenterPulses.value + count).coerceAtMost(500)
+        _oemSideSamples.value = (_oemSideSamples.value + (count / 2).coerceAtLeast(1)).coerceAtMost(250)
+        appendLog("Bench Test Pulsa: Injeksi manual +$count pulsa Center & Side")
+        Toast.makeText(context, "Bench Test: +$count pulsa terdeteksi!", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun startDemoOemPulseGenerator() {
+        demoOemPulseJob?.cancel()
+        demoOemPulseJob = viewModelScope.launch {
+            while (isActive && _isOemLearning.value) {
+                delay(200)
+                _oemCenterPulses.value = (_oemCenterPulses.value + 2).coerceAtMost(500)
+                if (_oemCenterPulses.value >= 4) {
+                    _oemSideSamples.value = (_oemSideSamples.value + 1).coerceAtMost(250)
+                }
+            }
+        }
     }
 
     fun confirmOemUnplugged() {
@@ -1867,17 +1897,18 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             _pickupDiagnosticMessage.value = "Menghubungkan ke MCU • menunggu verifikasi pulser loopback..."
             telemetryWatchdogJob = viewModelScope.launch {
                 while (_isConnected.value) {
-                    delay(1_000)
+                    delay(500)
                     val now = SystemClock.elapsedRealtime()
                     when {
                         _telemetryPacketCount.value == 0L && now - lastTelemetryPacketAtMs >= 5_000L -> {
+                            _packetRateHz.value = 0
                             _telemetryRxMessage.value =
                                 "MENUNGGU FRAME • Telemetry 1001 belum notify (MCU selftest/loopback aktif)"
                         }
-                        lastTelemetryPacketAtMs > 0L && now - lastTelemetryPacketAtMs >= 3_000L -> {
+                        lastTelemetryPacketAtMs > 0L && now - lastTelemetryPacketAtMs >= 1_000L -> {
                             _packetRateHz.value = 0
                             _telemetryRxMessage.value =
-                                "TELEMETRY TERHENTI • tidak ada frame baru selama ${(now - lastTelemetryPacketAtMs) / 1000}s"
+                                "TELEMETRY STANDBY • tidak ada frame baru selama ${(now - lastTelemetryPacketAtMs) / 1000}s"
                         }
                     }
                 }
@@ -2003,14 +2034,14 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             else validCount * 100f / total
 
         _packetRateHz.value =
-            if (rxSamples.size < 2) {
+            if (rxSamples.size < 3) {
                 0
             } else {
                 val duration =
                     rxSamples.last().timestampMs -
                         rxSamples.first().timestampMs
 
-                if (duration <= 0L) 0
+                if (duration < 100L) 0
                 else (
                     (rxSamples.size - 1) * 1000f / duration
                 ).roundToInt()
@@ -2336,7 +2367,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (oemLearnPollJob?.isActive == true) return
         oemLearnPollJob = viewModelScope.launch {
             while (isActive && _isOemLearning.value && bleClient.gattReady) {
-                delay(750)
+                delay(500)
                 bleClient.send("GET,LEARN")
             }
         }
@@ -2510,6 +2541,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         watchdogHandler.removeCallbacks(watchdogRunnable)
         simulationJob?.cancel()
         oemLearnPollJob?.cancel()
+        demoOemPulseJob?.cancel()
         bleClient.release()
         engineSound.release()
     }

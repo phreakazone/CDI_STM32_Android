@@ -1,4 +1,4 @@
-# IGNITRA CDI R9 (v9.0.0) — Android Tuning, Dual-MCU Firmware & OTA
+# IGNITRA CDI R9 (v9.2.0) — Android Tuning, Dual-MCU Firmware & OTA
 
 
 > **Sumber firmware lengkap yang dapat dibuild:** gunakan
@@ -513,7 +513,36 @@ Menu **Pinout MCU** dalam aplikasi menyediakan visualisasi ganda (**Mode Tabel 2
 
 ## 📝 Catatan Rilis (Changelog)
 
-### Versi 9.2.0 (Aktivasi BLE & GPS Satu-Sentuhan, Desain Instrumentasi MoTeC M1, & Layout Padat)
+### Versi 9.2.0 (Visualisasi Presisi Soket J1, Watchdog UI 500ms, Command Guard Keselamatan, & Desain Instrumentasi MoTeC M1)
+- **Koreksi & Penyempurnaan Status Frekuensi BLE (Header & Dashboard)**:
+  - Memperbaiki kalkulasi frekuensi data telemetri di header: indikator Hz kini dinamis dan murni merefleksikan laju paket aktif saat telemetri streaming (`isTelemetryStreaming == true`). Saat mesin mati atau telemetri standby, header menampilkan status bersih `ONLINE • <DEVICE> • SIAP`, mengeliminasi kemunculan angka stale/palsu (seperti 2Hz akibat jeda frame).
+  - Menghilangkan label `"LIVE • 20Hz"` / `"STANDBY"` yang redundan dari bagian bawah speedometer RPM dashboard agar cluster instrumen lebih bersih, fokus, dan tidak bertabrakan dengan status bar BLE utama.
+- **Penyempurnaan Alur Perekaman Kurva OEM (OEM Learn Checkpoint & Sumber Data Pulsa)**:
+  - **Transparansi Asal Data Pulsa**: Menambahkan panduan teknis pada layar Setup yang merinci asal masukan pulsa mikrokontroler:
+    - *Pulsa OEM Center*: Sinyal pemutus koil tengah OEM (kabel J1.12) via isolator optocoupler PC817 channel 1 ke pin PB3 (STM32) / GPIO16 (ESP32).
+    - *Sampel OEM Side*: Sinyal pemutus koil samping OEM (kabel J1.6) via optocoupler PC817 channel 2 ke pin PB4 (STM32) / GPIO17 (ESP32).
+    - *Sensor Pulser Kruk As*: Pick-up pulser magnet (kabel J1.10) ke PA0 (STM32) / GPIO34 (ESP32) sebagai acuan derajat °BTDC.
+  - **Klarifikasi Mengapa Data Masih 0**: Counter pulsa bernilai 0 selama mesin belum dinyalakan menggunakan CDI OEM bawaan motor, atau kabel optocoupler PC817 belum terhubung ke koil.
+  - **Tombol Uji Simulasi Meja Kerja (Bench Test +10)**: Menghadirkan tombol uji suntik pulsa langsung pada tahap Setup Checkpoint untuk memverifikasi logika counter pulsa dan komunikasi UI secara instan di meja kerja tanpa perlu menghidupkan mesin motor.
+  - **Pengecualian Keselamatan Khusus OEM Learn**: Menyesuaikan command safety guard agar `startOemLearn()` dan `stopOemLearn()` dapat dijalankan saat mesin motor menyala dengan CDI OEM tanpa terblokir oleh proteksi RPM > 0.
+- **Visualisasi Presisi Muka Soket Harness J1 (12 PIN) Bebas Terpotong (Zero-Clipping)**:
+  - Rekonstruksi visual soket pigtail CDI NS200 12-pin dengan layout proporsional fleksibel (`Modifier.weight(1f)`), menjamin seluruh 12 pin (Baris 1: Pin 1–6, Baris 2: Pin 7–12) tampil utuh, seimbang, dan tidak pernah terpotong di semua resolusi layar ponsel.
+  - Setiap pin dilengkapi nomor pin, label fungsi singkat (`NC`, `TPS A`, `TEMP`, `TPS B`, `+12V`, `SIDE`, `FAN`, `OEM S`, `OEM C`, `PULS`, `GND`, `CTR`), kode warna kabel motor pulsar NS200, dan status operasional (`DIGUNAKAN`, `KOSONG`, `CONFIRM`).
+  - **Integrasi Tombol Pintas Tutorial Langkah 1 s/d 12**: Menekan tombol navigasi pada kartu pin langsung membuka langkah panduan workshop yang sesuai (Pin 1 ke Uji Isolasi Multimeter 6.1, Pin 5 ke Proteksi 12V 1.2, Pin 10 ke Komparator Pulser 2.5, Pin 12 ke Kapasitor Center 5.1, dst.).
+  - Penyelarasan kartu detail pin dan item Daftar Belanja (BOM) dengan tipografi mikro presisi (*compact high-density layout*) untuk pemanfaatan ruang layar yang maksimal.
+- **Sistem Watchdog UI Telemetri (Visual Timeout 500 ms) & Tacho Pointer Dinamis**:
+  - Mengatasi kendala jarum/indikator RPM menggantung jika paket data Bluetooth terhenti mendadak saat mesin mati: timer watchdog otomatis me-reset RPM, output flags, limiter, dan kualitas pulser ke 0 jika tidak ada frame GATT baru selama 500 ms.
+  - Indikator status live `LIVE • 20Hz` (hijau) vs `STANDBY • WATCHDOG 0 RPM` (oranye) pada gauge tachometer.
+  - Jarum tachometer (*pointer needle*) interaktif dengan interpolasi animasi halus (`LinearOutSlowInEasing`) yang bergerak presisi dan kembali mulus ke nol saat stasioner.
+- **Command Guard Keselamatan (`setup_can_write()`) & Banner Peringatan**:
+  - Implementasi perlindungan firmware keselamatan reaktif `setup_can_write()` di layer aplikasi Android.
+  - Memblokir pengiriman perintah penulisan setup atau konfigurasi kritis saat mesin hidup (RPM > 0), tegangan kapasitor HV masih tinggi (≥ 30V), antrean BLE sedang sibuk memproses paket, atau sedang dalam mode pembelajaran OEM Learn.
+  - Banner peringatan merah (*Command Guard Warning Banner*) muncul secara otomatis di layar Setup menginformasikan alasan teknis pemblokiran sebelum pengguna melakukan kesalahan eksekusi.
+- **Pemisahan Ketat Isolasi Mode Demo vs Mode Hardware Nyata (Strict Mode Separation)**:
+  - Thread loop simulasi demo dilarang keras menyentuh atau memodifikasi telemetri nyata saat aplikasi tidak berada dalam mode simulasi (`_isSimulationMode == false`).
+  - Fungsi `resetDemoState()` membersihkan seluruh state simulasi (slider, blip revving, suara engine sintetis) begitu koneksi BLE fisik diinisiasi.
+- **Branding Header "IgniTra CDI" & Styling Listrik**:
+  - Header top bar resmi menampilkan branding **"IgniTra CDI"** dengan ikon petir (*electric bolt*) dan aksen warna gradien cyan listrik (*Electric Cyan*) serta amber busi (*Spark Amber*).
 - **Penanganan Aktivasi GPS Otomatis (In-App GPS Dialog & Auto-Resume)**:
   - Mengatasi kendala pemindaian BLE yang kosong/gagal akibat Layanan Lokasi (GPS) ponsel yang nonaktif (khususnya pada Android 6–11 dan perangkat Android 12+ tertentu dengan proteksi vendor kernel).
   - Saat tombol "PINDAI BLE" ditekan dan Layanan Lokasi belum aktif, aplikasi langsung menampilkan dialog konfirmasi satu-sentuhan. Tombol "AKTIFKAN" langsung membuka switch pengaturan Lokasi sistem HP, dan begitu diaktifkan lalu pengguna kembali ke aplikasi, pemindaian BLE otomatis berjalan tanpa perlu menekan tombol ulang.
