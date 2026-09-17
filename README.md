@@ -78,18 +78,20 @@ Mendukung Arsitektur Lintas Platform (*Dual-Platform*): [**WeAct STM32WB55**](ht
 
 ---
 
-## ⚡ Pembaruan Besar Firmware R8 & Aplikasi v8.3.2
+## ⚡ Evolusi Pembaruan Firmware: R7 ➔ R8 ➔ R9 (v9.2.0)
 
-| Fitur | Firmware R7 Lama | Firmware R8 / Aplikasi v8.3.2 Baru |
-|---|---|---|
-| **Alur Akuisisi Timing** | Wajib strobo manual / timing light tanda T | **OEM Learn Pasif**: Rekam kurva CDI OEM langsung via Input MCU. |
-| **Pilihan Perakitan Hardware** | Wajib solder puluhan komponen diskrit di perfboard | **Hybrid Modular**: PC817 4-ch, buck MP1584EN, relay kipas, dan komparator pulser boleh berupa modul; charger HV/SCR tetap diskrit agar sesuai kendali firmware. |
-| **Interlock Fisik** | Mengharuskan jumper `JP_HV`, `SW_ARM`, `JP_PRO` | **Software Interlock & Safety Confirmation**: Menghilangkan batasan saklar fisik; kontrol mode terpadu di aplikasi. |
-| **Aktivasi Mode DIY** | Manual via jumper dan langkah rumit | **Safe DIY Mode**: Wajib konfirmasi `OEM_UNPLUGGED` (tidak ada pengambilalihan otomatis berbahaya). |
-| **First Start & Ready** | Mengharuskan pencabutan jumper berulang kali | **Verifikasi Flash Nyata**: Deteksi idle stabil ≥3s mengunci kalibrasi, lalu aplikasi menunggu status `READY` nyata dari flash MCU. |
-| **Level Tegangan HV** | Terkunci pada 240V–280V | **Dual Target R8 Aktif**: NORMAL (285 V) dan PRO (345 V) via pemuatan profil firmware R8 sesungguhnya. |
-| **Handshake Protokol BLE** | Terbatas pada GET,STATUS | **Kontrak Lengkap**: Mengenali `GET,CAPS`, `MODE`, `LEARN`, `OTA`, sambil menjaga kompatibilitas UUID dan paket telemetri biner v3. |
-| **Update Firmware MCU** | Wajib buka bodi & ST-Link V2 / DFU USB | **BLE OTA Flashing**: Unggah image aplikasi STM32/ESP32 yang sesuai lewat aplikasi Android dengan proteksi CRC32. |
+| Fitur CDI | Firmware R7 (Lama) | Firmware R8 (Transisi) | Firmware R9 / Aplikasi v9.2.0 (Terbaru) |
+|---|---|---|---|
+| **Resolusi Peta Pengapian** | Maksimal 16x8 (128 titik) | Maksimal 16x8 (128 titik) | **Ekstrem 32x16 Matrix**: Dukungan kalkulasi interpolasi presisi tinggi hingga 512 titik. |
+| **Batas Putaran Mesin (RPM)** | Terkunci di limit bawaan | 10.500 (Normal) / 11.500 RPM (PRO) | **Absolute Cap 30.000 RPM**: Mendukung mesin *high-revving* ekstrem dengan filter *debounce*. |
+| **Konektivitas BLE & GPS** | Handshake terbatas, wajib GPS | Kontrak lengkap, wajib izin GPS | **Direct MAC Connect**: 100% Bebas GPS, identitas perangkat dibekukan jadi "NS200-CDI". |
+| **Keandalan Instrumen (UI)** | Rentan *ghost telemetry* | Jarum RPM bisa "menggantung" | **Watchdog UI 2000ms**: Reset otomatis indikator ke 0 secara aman jika paket data terhenti 2 detik. |
+| **Proteksi Penulisan (Flash)**| Mengandalkan sakelar/jumper fisik | Software interlock & konfirmasi layar | **Command Guard Keselamatan**: Blokir otomatis jika mesin hidup (RPM>0) atau tegangan HV>30V. |
+| **Alur Akuisisi Timing** | Wajib strobo manual / timing light | **OEM Learn Pasif**: Rekam kurva via MCU | **Dipertahankan**: Tambahan dukungan skema *Inverter* PC817 khusus untuk pengujian meja. |
+| **Pilihan Perakitan Hardware** | Solder puluhan komponen diskrit | **Hybrid Modular**: PC817, Buck MP1584 | **Sama dengan R8**: Skema hybrid modular dipertahankan. |
+| **Aktivasi DIY & First Start** | Cabut-pasang jumper rumit | Wajib `OEM_UNPLUGGED` & verifikasi flash | **Sama dengan R8**: Deteksi *idle* stabil ≥3s untuk mengunci kalibrasi. |
+| **Level Tegangan HV** | Terkunci pada 240V–280V | **Dual Target Aktif**: 285 V & 345 V (PRO) | **Sama dengan R8**. |
+| **Update Firmware MCU** | Buka bodi & colok ST-Link / USB | **BLE OTA Flashing**: Unggah via Android | **BLE OTA Partisi A/B Nyata**: Konfigurasi memori aman pada Flash 4MB ESP32. |
 
 ---
 
@@ -114,10 +116,22 @@ Untuk mengurangi kerumitan wiring kabel dan solder-menyolder komponen diskrit, s
 ### Detail Pemasangan Modul Optocoupler PC817 4-Channel (OEM Training / Learn)
 Modul ini digunakan HANYA pada Fase 1 (OEM_LEARN) untuk membaca sinyal timing koil pengapian CDI OEM secara pasif dan aman tanpa risiko merusak mikrokontroler.
 
-> **Catatan Sadapan Kabel OEM Learn**:
-> Sinyal asli dari koil memiliki tegangan ratusan volt yang akan merusak MCU jika tidak diisolasi. Buat 2 kabel cabang/paralel (*pigtail probe*) dari soket motor:
-> - **Kabel Sadap Utama** ➔ Diambil dari sambungan paralel **J1.12** (Koil Center OEM). Masuk ke IN1+ modul PC817 via R 47kΩ 2W.
-> - **Kabel Sadap Samping** ➔ Diambil dari sambungan paralel **J1.6** (Koil Side OEM). Masuk ke IN2+ modul PC817 via R 47kΩ 2W.
+Terdapat dua skema pengkabelan tergantung pada lokasi pengujian Anda:
+
+**A. SKEMA MOTOR SUNGGUHAN (Standar Active-High)**
+Digunakan saat CDI langsung dipasang ke kelistrikan motor. Buat 2 kabel cabang/paralel (*pigtail probe*) dari soket motor:
+- **Kabel Sadap Utama** ➔ Diambil dari paralel **J1.12** (Koil Center). Masuk ke IN1+ modul PC817 via R 47kΩ 2W.
+- **Kabel Sadap Samping** ➔ Diambil dari paralel **J1.6** (Koil Side). Masuk ke IN2+ modul PC817 via R 47kΩ 2W.
+- **VCC Modul** ➔ Ke 3V3 MCU | **GND Modul** ➔ Ke GND MCU.
+- **OUT1 & OUT2** ➔ Ke pin input pembaca MCU (PB3/PB4 atau GPIO16/GPIO17).
+*(Pasang jumper JP1 & JP2 modul pada posisi VCC).*
+
+**B. SKEMA UJI MEJA / BENCH TEST (Pembalikan Sinyal / Active-Low Inverter)**
+Jika Anda ingin menguji dan menaikkan angka sampel aplikasi Android di atas meja menggunakan alat Generator Sinyal, sinyal harus dibalik agar timing pulser dan koil sinkron:
+- **IN1 & U1 (VCC)** ➔ Keduanya dihubungkan langsung ke **3.3V** MCU.
+- **G (Input/GND)** ➔ Dihubungkan ke kabel sinyal **f-Generator**.
+- **G (Output/Emiter)** ➔ Dihubungkan ke pin input pembaca MCU (GPIO16/17).
+*Cara Kerja: Saat f-Generator turun ke 0V, listrik 3.3V menembus modul PC817, mengirim pulsa sinkron ke MCU sehingga aplikasi Android mencatat penambahan pulsa.*
 
 ```text
 ┌───────────────────────────────────────────────────────────────┐
@@ -579,6 +593,12 @@ Tabel ini memetakan fungsi kabel harness bawaan motor NS200 ke pin yang tepat un
 | 10 | PULSER | Putih-Merah | **PA0** | **GPIO4** | Input sensor magnet. Tersambung permanen ke MCU via modul komparator LM393. |
 | 11 | GND | Hitam-Kuning | GND | GND | Ground utama massa motor. |
 | 12 | COIL_CENTER | Oranye | **PA1** | **GPIO25** | **OUTPUT (DIY):** Menembak koil tengah via SCR driver menuju J1.12. |
+
+### ⚠️ CATATAN KHUSUS PENGUJIAN MEJA (BENCH TEST & SIMULATOR)
+Jika Anda menguji aplikasi Android dan MCU (khususnya ESP32) di atas meja kerja menggunakan daya USB dan alat Simulator Sinyal (seperti GM328A), Anda WAJIB mematuhi 3 aturan ini agar indikator di aplikasi merespons:
+1. **Wajib Bypass Sensor Aki:** Ubah kode pada firmware menjadi `#define BENCH_TEST_MODE 1`. Jika dibiarkan `0`, sensor ADC akan membaca tegangan aki 0V, mencabut izin operasi (`output_permission = false`), dan jarum RPM di Android akan terkunci mati di angka 0.
+2. **Gunakan Menu f-Generator, JANGAN PWM:** Jarum RPM Android tidak akan bergerak jika Anda menyuapkan sinyal dari menu `10-bit PWM`. Frekuensinya yang sangat rapat (~7.8kHz) otomatis ditolak sebagai *noise* oleh algoritma filter *debounce* (2000µs) di firmware R9. Gunakan murni menu **f-Generator** (misal: 25 Hz untuk 1.500 RPM).
+3. **Memori Bluetooth ESP32:** Pastikan parameter `NimBLE Host task stack size` di `menuconfig` ESP32 sudah diubah ke **8192** bytes. Jika tidak, pengiriman paket telemetri 20Hz ke Android akan menyebabkan tumpukan memori penuh dan MCU melakukan *Watchdog Reset*.
 
 ### ⚠️ PERHATIAN: Transisi Hardware (Fase LEARN ➔ Fase DIY)
 Untuk menghindari benturan arus driver koil dan memastikan keselamatan mikrokontroler, fungsionalitas pin J1.12 dan J1.6 diperlakukan berbeda secara fisik sesuai fasenya.
