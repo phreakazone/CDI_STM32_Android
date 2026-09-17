@@ -104,75 +104,78 @@ fun MapsScreen(viewModel: CdiViewModel) {
             }
         }
 
-        // MODE TOGGLE: PRESET SLOTS VS CUSTOM ADVANCE MAP
+        // MODE TOGGLE: PRESET SLOTS VS CUSTOM ADVANCE MAP (Sharp-cornered semi-transparent)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(SurfacePanel, RoundedCornerShape(10.dp))
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                .background(SurfacePanel, RoundedCornerShape(2.dp))
+                .border(1.dp, BorderSubtle, RoundedCornerShape(2.dp))
+                .padding(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (!isCustomMapMode) MotecOrange else Color.Transparent)
+                    .clip(RoundedCornerShape(1.dp))
+                    .background(if (!isCustomMapMode) MotecOrange.copy(alpha = 0.22f) else Color.Transparent)
+                    .border(1.dp, if (!isCustomMapMode) MotecOrange.copy(alpha = 0.85f) else Color.Transparent, RoundedCornerShape(1.dp))
                     .clickable { isCustomMapMode = false }
-                    .padding(vertical = 8.dp),
+                    .padding(vertical = 6.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "PRESET SLOTS (1-4)",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Black,
                     fontFamily = FontFamily.Monospace,
-                    color = if (!isCustomMapMode) CarbonDark else TextSecondary
+                    color = if (!isCustomMapMode) Color.White else TextSecondary
                 )
             }
 
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (isCustomMapMode) MotecOrange else Color.Transparent)
+                    .clip(RoundedCornerShape(1.dp))
+                    .background(if (isCustomMapMode) MotecOrange.copy(alpha = 0.22f) else Color.Transparent)
+                    .border(1.dp, if (isCustomMapMode) MotecOrange.copy(alpha = 0.85f) else Color.Transparent, RoundedCornerShape(1.dp))
                     .clickable { isCustomMapMode = true }
-                    .padding(vertical = 8.dp),
+                    .padding(vertical = 6.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "MAP ADVANCE CUSTOM",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Black,
                     fontFamily = FontFamily.Monospace,
-                    color = if (isCustomMapMode) CarbonDark else TextSecondary
+                    color = if (isCustomMapMode) Color.White else TextSecondary
                 )
             }
         }
 
         if (!isCustomMapMode) {
             // 4 SLOT SELECTION GRID
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 viewModel.mapPresets.forEach { mapData ->
                     val isSelected = mapData.slot == selectedSlot
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .border(
-                                1.5.dp,
-                                if (isSelected) MotecOrange else BorderSubtle,
-                                RoundedCornerShape(12.dp)
+                                1.dp,
+                                if (isSelected) MotecOrange.copy(alpha = 0.85f) else BorderSubtle,
+                                RoundedCornerShape(2.dp)
                             )
                             .clickable { viewModel.selectMapSlot(mapData.slot) }
                             .testTag("map_slot_${mapData.slot}"),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (isSelected) CardHover else CardBackground
+                            containerColor = if (isSelected) MotecOrange.copy(alpha = 0.14f) else CardBackground
                         ),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(2.dp)
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(12.dp),
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
@@ -182,33 +185,33 @@ fun MapsScreen(viewModel: CdiViewModel) {
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(RoundedCornerShape(8.dp))
+                                        .size(28.dp)
+                                        .clip(RoundedCornerShape(1.dp))
                                         .background(if (isSelected) MotecOrange else SurfacePanel)
-                                        .border(1.dp, if (isSelected) MotecOrange else BorderSubtle, RoundedCornerShape(8.dp)),
+                                        .border(1.dp, if (isSelected) MotecOrange else BorderSubtle, RoundedCornerShape(1.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
                                         text = "M${mapData.slot + 1}",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Black,
                                         color = if (isSelected) CarbonDark else TextPrimary,
                                         fontFamily = FontFamily.Monospace
                                     )
                                 }
-                                Spacer(modifier = Modifier.width(12.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Column {
                                     Text(
                                         text = mapData.name,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isSelected) TextPrimary else TextSecondary,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = if (isSelected) Color.White else TextPrimary,
                                         fontFamily = FontFamily.Monospace
                                     )
                                     Text(
                                         text = mapData.description,
-                                        fontSize = 11.sp,
-                                        color = TextMuted,
+                                        fontSize = 9.5.sp,
+                                        color = TextSecondary,
                                         maxLines = 1
                                     )
                                 }
@@ -217,14 +220,15 @@ fun MapsScreen(viewModel: CdiViewModel) {
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(
                                     text = "Max: ${mapData.revLimit} RPM",
-                                    fontSize = 11.sp,
+                                    fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isSelected) RaceRedline else TextSecondary,
                                     fontFamily = FontFamily.Monospace
                                 )
                                 Text(
                                     text = "Peak: %.1f°".format(mapData.peakAdvance),
-                                    fontSize = 10.sp,
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Bold,
                                     color = ElectricCyan,
                                     fontFamily = FontFamily.Monospace
                                 )

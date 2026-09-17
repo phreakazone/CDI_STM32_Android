@@ -221,6 +221,10 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         listener.onState("Modul CDI tersimpan telah dihapus", false)
     }
 
+    fun isBluetoothEnabled(): Boolean {
+        return adapter?.isEnabled == true
+    }
+
     fun hasPermissions(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&

@@ -312,27 +312,28 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                         )
                     }
 
-                    // Digital RPM Readout & Watchdog Status
+                    // Digital RPM Readout & Title (Diposisikan di atas titik pivot jarum agar tidak menutupi jarum)
                     Column(
                         modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .offset(y = (-10).dp),
+                            .align(Alignment.Center)
+                            .offset(y = 12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(
-                            text = "$currentRpm",
-                            fontSize = 44.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = FontFamily.Monospace,
-                            color = if (isAtLimiter) RaceRedline else TextPrimary,
-                            letterSpacing = 1.sp
-                        )
                         Text(
                             text = "ENGINE RPM",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
-                            color = MotecOrange
+                            color = MotecOrange,
+                            letterSpacing = 1.sp
+                        )
+                        Text(
+                            text = "$currentRpm",
+                            fontSize = 42.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = FontFamily.Monospace,
+                            color = if (isAtLimiter) RaceRedline else TextPrimary,
+                            letterSpacing = 1.sp
                         )
                     }
                 }

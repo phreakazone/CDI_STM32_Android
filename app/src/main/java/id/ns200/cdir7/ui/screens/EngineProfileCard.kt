@@ -120,15 +120,15 @@ fun EngineProfileCard(vm: CdiViewModel) {
                 )
             }
 
-            // Segmented Profile Switcher
+            // Segmented Profile Switcher (Sharp corners semi-transparent)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(2.dp))
                     .background(SurfacePanel)
-                    .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
-                    .padding(3.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(2.dp))
+                    .padding(2.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp)
             ) {
                 ProfileSegmentButton(
                     modifier = Modifier.weight(1f),
@@ -213,28 +213,30 @@ private fun ProfileSegmentButton(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (selected) MotecOrange else Color.Transparent)
+            .clip(RoundedCornerShape(1.dp))
+            .background(if (selected) MotecOrange.copy(alpha = 0.22f) else Color.Transparent)
+            .border(1.dp, if (selected) MotecOrange.copy(alpha = 0.85f) else Color.Transparent, RoundedCornerShape(1.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 7.dp),
+            .padding(vertical = 5.dp, horizontal = 4.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Text(
                 text = title,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Black,
                 fontFamily = FontFamily.Monospace,
-                color = if (selected) CarbonDark else TextPrimary
+                color = if (selected) Color.White else TextSecondary
             )
             Text(
                 text = subtitle,
-                fontSize = 8.5.sp,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
-                color = if (selected) CarbonDark.copy(alpha = 0.8f) else TextMuted
+                color = if (selected) MotecOrange else TextMuted
             )
         }
     }

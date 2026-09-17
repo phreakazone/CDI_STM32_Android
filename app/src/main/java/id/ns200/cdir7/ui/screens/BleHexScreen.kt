@@ -46,6 +46,7 @@ enum class LinkQuality(val label: String, val color: Color) {
     STABIL("STABIL", Color(0xFF00E676)),
     CUKUP("CUKUP", Color(0xFFFFB300)),
     BURUK("BURUK", Color(0xFFFF3D00)),
+    STANDBY("STANDBY", Color(0xFF00E5FF)),
     TERPUTUS("TERPUTUS", Color(0xFF757575))
 }
 
@@ -54,13 +55,16 @@ fun evaluateLinkQuality(
     rateHz: Int,
     crcPercent: Float
 ): LinkQuality {
-    if (!connected || rateHz <= 0) {
+    if (!connected) {
         return LinkQuality.TERPUTUS
+    }
+    if (rateHz <= 0) {
+        return LinkQuality.STANDBY
     }
 
     return when {
-        crcPercent < 95f || rateHz < 12 -> LinkQuality.BURUK
-        rateHz in 18..22 && crcPercent >= 99f -> LinkQuality.STABIL
+        crcPercent < 90f || rateHz < 8 -> LinkQuality.BURUK
+        rateHz in 16..24 && crcPercent >= 98f -> LinkQuality.STABIL
         else -> LinkQuality.CUKUP
     }
 }
@@ -247,7 +251,7 @@ fun BleHexScreen(
                             Text(
                                 text = when {
                                     isConnected && isSimulation -> "MODE SIMULASI CDI R9"
-                                    isConnected && telemetryPacketCount < 2L -> "BLE TERHUBUNG • STANDBY"
+                                    isConnected && packetRate <= 0 -> "BLE TERHUBUNG • SIAP (STANDBY)"
                                     isConnected -> "BLE TERHUBUNG • ${packetRate} Hz"
                                     isBusy -> "BLE: MENGHUBUNGKAN..."
                                     else -> "BLE OFFLINE / TERPUTUS"
@@ -300,18 +304,14 @@ fun BleHexScreen(
                             onClick = {
                                 if (!isConnected) {
                                     val hasSaved = !savedDeviceMac.isNullOrBlank()
-                                    if (hasSaved) {
-                                        if (!viewModel.hasConnectPermission() && onRequestPermissions != null) {
-                                            onRequestPermissions(false) { viewModel.toggleConnect() }
-                                        } else {
-                                            viewModel.toggleConnect()
-                                        }
+                                    val isScanRequired = !hasSaved
+                                    val hasPerms = if (isScanRequired) viewModel.hasBlePermissions() else viewModel.hasConnectPermission()
+                                    val isBtEnabled = viewModel.isBluetoothEnabled()
+
+                                    if ((!hasPerms || !isBtEnabled) && onRequestPermissions != null) {
+                                        onRequestPermissions(isScanRequired) { viewModel.toggleConnect() }
                                     } else {
-                                        if (!viewModel.hasBlePermissions() && onRequestPermissions != null) {
-                                            onRequestPermissions(true) { viewModel.toggleConnect() }
-                                        } else {
-                                            viewModel.toggleConnect()
-                                        }
+                                        viewModel.toggleConnect()
                                     }
                                 } else {
                                     viewModel.toggleConnect()
@@ -405,7 +405,9 @@ fun BleHexScreen(
                                 if (isScanning) {
                                     viewModel.stopBleScan()
                                 } else {
-                                    if (onRequestPermissions != null) {
+                                    val hasPerms = viewModel.hasBlePermissions()
+                                    val isBtEnabled = viewModel.isBluetoothEnabled()
+                                    if ((!hasPerms || !isBtEnabled) && onRequestPermissions != null) {
                                         onRequestPermissions(true) { viewModel.startBleScan() }
                                     } else {
                                         viewModel.startBleScan()
@@ -616,7 +618,9 @@ fun BleHexScreen(
                                     MotecButton(
                                         text = "KONEK",
                                         onClick = {
-                                            if (onRequestPermissions != null) {
+                                            val hasPerms = viewModel.hasConnectPermission()
+                                            val isBtEnabled = viewModel.isBluetoothEnabled()
+                                            if ((!hasPerms || !isBtEnabled) && onRequestPermissions != null) {
                                                 onRequestPermissions(false) { viewModel.connectBleDevice(item.device) }
                                             } else {
                                                 viewModel.connectBleDevice(item.device)

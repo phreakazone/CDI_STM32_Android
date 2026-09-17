@@ -233,18 +233,16 @@ fun MainAppScreen(
                         cdiViewModel.toggleConnect()
                     } else {
                         val hasSaved = !cdiViewModel.savedDeviceMac.value.isNullOrBlank()
-                        if (hasSaved) {
-                            if (cdiViewModel.hasConnectPermission()) {
+                        val isScanRequired = !hasSaved
+                        val hasPerms = if (isScanRequired) cdiViewModel.hasBlePermissions() else cdiViewModel.hasConnectPermission()
+                        val isBtEnabled = cdiViewModel.isBluetoothEnabled()
+
+                        if (!hasPerms || !isBtEnabled) {
+                            onRequestBleAction?.invoke(isScanRequired) {
                                 cdiViewModel.toggleConnect()
-                            } else {
-                                onRequestBleAction?.invoke(false) { cdiViewModel.toggleConnect() } ?: cdiViewModel.toggleConnect()
-                            }
+                            } ?: cdiViewModel.toggleConnect()
                         } else {
-                            if (cdiViewModel.hasBlePermissions()) {
-                                cdiViewModel.toggleConnect()
-                            } else {
-                                onRequestBleAction?.invoke(true) { cdiViewModel.toggleConnect() } ?: cdiViewModel.toggleConnect()
-                            }
+                            cdiViewModel.toggleConnect()
                         }
                     }
                 },
@@ -383,30 +381,19 @@ fun MotorsportTopBar(
                                 )
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = MotecOrange.copy(alpha = 0.2f),
-                                border = BorderStroke(0.8.dp, Color(0xFFFFB300).copy(alpha = electricGlow))
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                ) {
-                                    Text(
-                                        text = "⚡ R9",
-                                        fontSize = 8.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace,
-                                        color = MotecOrange
-                                    )
-                                }
-                            }
+                            Text(
+                                text = "⚡ R9",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Black,
+                                fontFamily = FontFamily.Monospace,
+                                color = MotecOrange
+                            )
                         }
                         Text(
                             text = when {
                                 isConnected -> {
                                     val dev = if (!connectedDeviceName.isNullOrBlank()) connectedDeviceName else "BLE"
-                                    if (isTelemetryStreaming && packetRateHz > 0) {
+                                    if (isTelemetryStreaming && packetRateHz >= 10) {
                                         "ONLINE • $dev • ${packetRateHz}Hz"
                                     } else {
                                         "ONLINE • $dev • SIAP"
@@ -537,16 +524,15 @@ fun MotorsportBottomNav(
     onTabSelect: (ScreenTab) -> Unit
 ) {
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, BorderSubtle),
-        color = SurfacePanel
+        modifier = Modifier.fillMaxWidth(),
+        color = Color(0xFF0F141C),
+        tonalElevation = 8.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(vertical = 4.dp, horizontal = 2.dp),
+                .padding(vertical = 6.dp, horizontal = 4.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -572,16 +558,15 @@ fun MotorsportBottomNav(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
                         .clickable { onTabSelect(tab) }
-                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
                         .testTag("nav_tab_${tab.name.lowercase()}")
                 ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = tab.title,
                         tint = if (isSelected) activeColor else TextSecondary,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(21.dp)
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
@@ -589,7 +574,7 @@ fun MotorsportBottomNav(
                         fontSize = 10.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                         fontFamily = FontFamily.Monospace,
-                        color = if (isSelected) TextPrimary else TextSecondary
+                        color = if (isSelected) activeColor else TextSecondary
                     )
                 }
             }

@@ -293,7 +293,7 @@ private fun CompactSetupHeader(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 SetupStage.entries.forEach { item ->
                     val selected = item == stage
@@ -301,34 +301,34 @@ private fun CompactSetupHeader(
                     val completed = item.code < visibleProgress && unlocked
                     Surface(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(RoundedCornerShape(2.dp))
                             .clickable { onSelect(item.code) },
                         color = when {
-                            selected -> MotecOrange.copy(alpha = 0.18f)
-                            completed -> RacingLime.copy(alpha = 0.10f)
+                            selected -> MotecOrange.copy(alpha = 0.22f)
+                            completed -> RacingLime.copy(alpha = 0.14f)
                             else -> CardBackground
                         },
-                        shape = RoundedCornerShape(6.dp),
+                        shape = RoundedCornerShape(2.dp),
                         border = androidx.compose.foundation.BorderStroke(
                             1.dp,
                             when {
-                                selected -> MotecOrange
-                                completed -> RacingLime.copy(alpha = 0.65f)
+                                selected -> MotecOrange.copy(alpha = 0.9f)
+                                completed -> RacingLime.copy(alpha = 0.75f)
                                 else -> BorderSubtle
                             }
                         )
                     ) {
                         Text(
                             text = "${item.code + 1} ${item.label}",
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                             color = when {
-                                selected -> MotecOrange
+                                selected -> Color.White
                                 completed -> RacingLime
-                                unlocked -> TextSecondary
+                                unlocked -> TextPrimary
                                 else -> TextMuted
                             },
-                            fontSize = 8.sp,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 8.5.sp,
+                            fontWeight = if (selected || completed) FontWeight.Black else FontWeight.Medium,
                             fontFamily = FontFamily.Monospace
                         )
                     }
@@ -560,16 +560,6 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: M
                             )
                         }
 
-                        // Tombol Uji Bench Test Meja Kerja
-                        MotecButton(
-                            text = "⚡ UJI PULSA SIMULASI (BENCH TEST +10)",
-                            onClick = { viewModel.testSimulateOemPulses(10) },
-                            enabled = true,
-                            color = ElectricCyan,
-                            height = 28.dp,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
                         // Tombol Transisi Langsung setelah simpan data OEM
                         if (flashSaved || oemCenterPulses >= 5) {
                             MotecButton(
@@ -797,15 +787,6 @@ private fun OemLearnTdcCheckpointStage(viewModel: CdiViewModel, t: Telemetry, se
                     modifier = Modifier.weight(1f)
                 )
             }
-
-            MotecButton(
-                text = "⚡ UJI PULSA SIMULASI (BENCH TEST +10)",
-                onClick = { viewModel.testSimulateOemPulses(10) },
-                enabled = true,
-                color = ElectricCyan,
-                height = 28.dp,
-                modifier = Modifier.fillMaxWidth()
-            )
         }
 
         StageCard(

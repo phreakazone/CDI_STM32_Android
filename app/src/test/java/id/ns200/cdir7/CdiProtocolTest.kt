@@ -105,23 +105,24 @@ class CdiProtocolTest {
 
     @Test
     fun testEvaluateLinkQuality() {
-        // Disconnected or 0 Hz -> TERPUTUS
+        // Disconnected -> TERPUTUS
         assertEquals(LinkQuality.TERPUTUS, evaluateLinkQuality(connected = false, rateHz = 20, crcPercent = 100f))
-        assertEquals(LinkQuality.TERPUTUS, evaluateLinkQuality(connected = true, rateHz = 0, crcPercent = 100f))
+        // Connected but 0 Hz -> STANDBY
+        assertEquals(LinkQuality.STANDBY, evaluateLinkQuality(connected = true, rateHz = 0, crcPercent = 100f))
 
-        // Stable: 18..22 Hz, CRC >= 99%
+        // Stable: 16..24 Hz, CRC >= 98%
         assertEquals(LinkQuality.STABIL, evaluateLinkQuality(connected = true, rateHz = 20, crcPercent = 100f))
         assertEquals(LinkQuality.STABIL, evaluateLinkQuality(connected = true, rateHz = 18, crcPercent = 99.0f))
 
-        // Fair: 12..17 Hz or CRC 95..98.9%
+        // Fair: 8..15 Hz or CRC 90..97.9%
         assertEquals(LinkQuality.CUKUP, evaluateLinkQuality(connected = true, rateHz = 15, crcPercent = 99.0f))
-        assertEquals(LinkQuality.CUKUP, evaluateLinkQuality(connected = true, rateHz = 20, crcPercent = 96.5f))
+        assertEquals(LinkQuality.CUKUP, evaluateLinkQuality(connected = true, rateHz = 20, crcPercent = 95.0f))
         assertEquals(LinkQuality.CUKUP, evaluateLinkQuality(connected = true, rateHz = 12, crcPercent = 95.0f))
 
-        // Poor: <12 Hz or CRC < 95%
-        assertEquals(LinkQuality.BURUK, evaluateLinkQuality(connected = true, rateHz = 10, crcPercent = 99.0f))
-        assertEquals(LinkQuality.BURUK, evaluateLinkQuality(connected = true, rateHz = 20, crcPercent = 90.0f))
-        assertEquals(LinkQuality.BURUK, evaluateLinkQuality(connected = true, rateHz = 8, crcPercent = 85.0f))
+        // Poor: <8 Hz or CRC < 90%
+        assertEquals(LinkQuality.BURUK, evaluateLinkQuality(connected = true, rateHz = 5, crcPercent = 99.0f))
+        assertEquals(LinkQuality.BURUK, evaluateLinkQuality(connected = true, rateHz = 20, crcPercent = 85.0f))
+        assertEquals(LinkQuality.BURUK, evaluateLinkQuality(connected = true, rateHz = 7, crcPercent = 85.0f))
     }
 
     @Test

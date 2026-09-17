@@ -319,40 +319,12 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     }
 
     // ==========================================
-    // WATCHDOG UI (Visual Timeout 500ms)
+    // STATUS STREAMING & WATCHDOG TELEMETRI
     // ==========================================
-    // Penanganan Data "Menggantung":
-    // Setiap kali notifikasi GATT berisi RPM datang, timer di-reset.
-    // Jika timer menyentuh angka 500ms tanpa data baru, paksa RPM dan indikator ke 0.
-    private val watchdogHandler = Handler(Looper.getMainLooper())
-    private val WATCHDOG_TIMEOUT_MS = 500L
+    // Watchdog toleransi 2000ms untuk mencegah false-timeout / fluktuasi 2Hz semu.
+    // Menjamin stabilitas status online real-time murni dari hardware.
     private val _isTelemetryStreaming = MutableStateFlow(false)
     val isTelemetryStreaming: StateFlow<Boolean> = _isTelemetryStreaming.asStateFlow()
-
-    private val watchdogRunnable = Runnable {
-        if (_isConnected.value && !_isSimulationMode.value) {
-            _isTelemetryStreaming.value = false
-            _packetRateHz.value = 0
-            rxSamples.clear()
-            val current = _telemetry.value
-            if (current.rpm > 0 || current.outputFlags != 0 || current.limiter != 0) {
-                _telemetry.value = current.copy(
-                    rpm = 0,
-                    outputFlags = 0,
-                    limiter = 0,
-                    pickupQuality = 0
-                )
-                engineSound.stop()
-                appendLog("Watchdog UI: 500ms tanpa paket RPM -> Paksa RPM & Indikator ke 0")
-            }
-        }
-    }
-
-    private fun kickTelemetryWatchdog() {
-        watchdogHandler.removeCallbacks(watchdogRunnable)
-        _isTelemetryStreaming.value = true
-        watchdogHandler.postDelayed(watchdogRunnable, WATCHDOG_TIMEOUT_MS)
-    }
 
     // ==========================================
     // LOGIKA KEAMANAN TOMBOL (COMMAND GUARDS)
@@ -630,6 +602,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         }
     }
 
+    fun isBluetoothEnabled() = bleClient.isBluetoothEnabled()
     fun hasBlePermissions() = bleClient.hasPermissions()
     fun hasConnectPermission() = bleClient.hasConnectPermission()
 
@@ -1655,17 +1628,6 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         Toast.makeText(context, "OEM Learn Selesai: Matikan mesin & cabut modul PC817 serta soket CDI OEM", Toast.LENGTH_LONG).show()
     }
 
-    /**
-     * Memfasilitasi pengujian meja kerja (Bench Test) tanpa mesin hidup.
-     * Menginjeksi sejumlah pulsa sampel buatan ke counter pulsa OEM Center & Side.
-     */
-    fun testSimulateOemPulses(count: Int = 10) {
-        _oemCenterPulses.value = (_oemCenterPulses.value + count).coerceAtMost(500)
-        _oemSideSamples.value = (_oemSideSamples.value + (count / 2).coerceAtLeast(1)).coerceAtMost(250)
-        appendLog("Bench Test Pulsa: Injeksi manual +$count pulsa Center & Side")
-        Toast.makeText(context, "Bench Test: +$count pulsa terdeteksi!", Toast.LENGTH_SHORT).show()
-    }
-
     private fun startDemoOemPulseGenerator() {
         demoOemPulseJob?.cancel()
         demoOemPulseJob = viewModelScope.launch {
@@ -1895,20 +1857,40 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             engineSound.stop()
             resetBleStatistics()
             _pickupDiagnosticMessage.value = "Menghubungkan ke MCU • menunggu verifikasi pulser loopback..."
+            telemetryWatchdogJob?.cancel()
             telemetryWatchdogJob = viewModelScope.launch {
                 while (_isConnected.value) {
-                    delay(500)
+                    delay(300)
                     val now = SystemClock.elapsedRealtime()
+                    val silence = if (lastTelemetryPacketAtMs > 0L) now - lastTelemetryPacketAtMs else 0L
+
                     when {
-                        _telemetryPacketCount.value == 0L && now - lastTelemetryPacketAtMs >= 5_000L -> {
+                        _telemetryPacketCount.value == 0L && silence >= 4_000L -> {
                             _packetRateHz.value = 0
+                            _isTelemetryStreaming.value = false
                             _telemetryRxMessage.value =
                                 "MENUNGGU FRAME • Telemetry 1001 belum notify (MCU selftest/loopback aktif)"
                         }
-                        lastTelemetryPacketAtMs > 0L && now - lastTelemetryPacketAtMs >= 1_000L -> {
-                            _packetRateHz.value = 0
+                        lastTelemetryPacketAtMs > 0L && silence >= 2_000L -> {
+                            // 2000ms tanpa paket telemetri 1001 -> Mesin mati / Telemetry Standby
+                            if (_isTelemetryStreaming.value || _packetRateHz.value > 0) {
+                                _packetRateHz.value = 0
+                                _isTelemetryStreaming.value = false
+                                rxSamples.clear()
+                                val current = _telemetry.value
+                                if (current.rpm > 0 || current.outputFlags != 0 || current.limiter != 0) {
+                                    _telemetry.value = current.copy(
+                                        rpm = 0,
+                                        outputFlags = 0,
+                                        limiter = 0,
+                                        pickupQuality = 0
+                                    )
+                                    engineSound.stop()
+                                    appendLog("Watchdog UI: 2000ms tanpa paket -> RPM & Indikator 0 (Standby)")
+                                }
+                            }
                             _telemetryRxMessage.value =
-                                "TELEMETRY STANDBY • tidak ada frame baru selama ${(now - lastTelemetryPacketAtMs) / 1000}s"
+                                "TELEMETRY STANDBY • mesin mati / tidak ada frame baru (${silence / 1000}s)"
                         }
                     }
                 }
@@ -1923,8 +1905,10 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             bleClient.send("GET,LEARN")
             bleClient.send("GET,OTA")
         } else {
-            watchdogHandler.removeCallbacks(watchdogRunnable)
+            telemetryWatchdogJob?.cancel()
             _isTelemetryStreaming.value = false
+            _packetRateHz.value = 0
+            rxSamples.clear()
             engineSound.stop()
             val currentT = _telemetry.value
             _telemetry.value = currentT.copy(
@@ -1947,7 +1931,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     override fun onTelemetry(value: Telemetry) {
         if (!_isSimulationMode.value) {
-            kickTelemetryWatchdog()
+            _isTelemetryStreaming.value = true
         }
         val current = _telemetry.value
 
@@ -2008,7 +1992,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         ) != null
 
         if (valid && !_isSimulationMode.value) {
-            kickTelemetryWatchdog()
+            _isTelemetryStreaming.value = true
         }
 
         _telemetryRxMessage.value = if (valid) {
@@ -2030,22 +2014,15 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         val validCount = rxSamples.count { it.valid }
 
         _crcValidPercent.value =
-            if (total == 0) 0f
+            if (total == 0) 100f
             else validCount * 100f / total
 
-        _packetRateHz.value =
-            if (rxSamples.size < 3) {
-                0
-            } else {
-                val duration =
-                    rxSamples.last().timestampMs -
-                        rxSamples.first().timestampMs
-
-                if (duration < 100L) 0
-                else (
-                    (rxSamples.size - 1) * 1000f / duration
-                ).roundToInt()
+        if (rxSamples.size >= 4) {
+            val duration = rxSamples.last().timestampMs - rxSamples.first().timestampMs
+            if (duration >= 300L) {
+                _packetRateHz.value = ((rxSamples.size - 1) * 1000f / duration).roundToInt()
             }
+        }
     }
 
     private fun refreshSetupAfterAck() {
@@ -2338,7 +2315,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
                     operation == "LIVE" ||
                         operation == "OFFSET" ||
-                        operation == "PONG_R7_2" -> Unit
+                        operation.startsWith("PONG") -> Unit
 
                     operation.startsWith("LOAD") ||
                         operation.startsWith("SAVE") ||
@@ -2538,7 +2515,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     override fun onCleared() {
         super.onCleared()
-        watchdogHandler.removeCallbacks(watchdogRunnable)
+        telemetryWatchdogJob?.cancel()
         simulationJob?.cancel()
         oemLearnPollJob?.cancel()
         demoOemPulseJob?.cancel()

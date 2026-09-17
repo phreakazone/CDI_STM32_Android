@@ -496,12 +496,12 @@ fun SoundScreen(viewModel: CdiViewModel) {
             }
         }
 
-        // Category Filter Chips with Horizontal Scroll (Eliminates Empty Space)
+        // Category Filter Chips with Horizontal Scroll (Sharp corners semi-transparent)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             categories.forEach { cat ->
                 val isFilterSelected = cat == selectedCategoryFilter
@@ -514,38 +514,39 @@ fun SoundScreen(viewModel: CdiViewModel) {
                 }
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (isFilterSelected) ElectricCyan.copy(alpha = 0.2f) else SurfacePanel)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(if (isFilterSelected) ElectricCyan.copy(alpha = 0.22f) else SurfacePanel)
                         .border(
                             1.dp,
-                            if (isFilterSelected) ElectricCyan else BorderSubtle,
-                            RoundedCornerShape(6.dp)
+                            if (isFilterSelected) ElectricCyan.copy(alpha = 0.85f) else BorderSubtle,
+                            RoundedCornerShape(2.dp)
                         )
                         .clickable { selectedCategoryFilter = cat }
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
                             text = cat,
-                            fontSize = 10.sp,
-                            fontWeight = if (isFilterSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isFilterSelected) ElectricCyan else TextSecondary,
+                            fontSize = 9.5.sp,
+                            fontWeight = if (isFilterSelected) FontWeight.Black else FontWeight.Bold,
+                            color = if (isFilterSelected) Color.White else TextSecondary,
                             fontFamily = FontFamily.Monospace
                         )
                         Box(
                             modifier = Modifier
-                                .clip(CircleShape)
-                                .background(if (isFilterSelected) ElectricCyan else TextMuted.copy(alpha = 0.3f))
-                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                                .clip(RoundedCornerShape(1.dp))
+                                .background(if (isFilterSelected) ElectricCyan else SurfacePanel)
+                                .border(0.5.dp, if (isFilterSelected) ElectricCyan else BorderSubtle, RoundedCornerShape(1.dp))
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
                         ) {
                             Text(
                                 text = "$count",
                                 fontSize = 8.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isFilterSelected) CarbonDark else TextSecondary
+                                fontWeight = FontWeight.Black,
+                                color = if (isFilterSelected) CarbonDark else TextMuted
                             )
                         }
                     }

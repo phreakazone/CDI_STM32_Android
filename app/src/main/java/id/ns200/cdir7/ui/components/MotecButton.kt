@@ -35,12 +35,12 @@ fun MotecButton(
     icon: ImageVector? = null,
     color: Color = MotecOrange,
     enabled: Boolean = true,
-    height: Dp = 32.dp,
+    height: Dp = 30.dp,
     fontSize: TextUnit = 10.sp,
-    shape: Shape = RoundedCornerShape(3.dp),
+    shape: Shape = RoundedCornerShape(1.dp),
     badge: String? = null,
     testTag: String? = null,
-    contentPadding: PaddingValues = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+    contentPadding: PaddingValues = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
 ) {
     val finalMod = if (testTag != null) modifier.height(height).testTag(testTag) else modifier.height(height)
     OutlinedButton(
@@ -48,10 +48,10 @@ fun MotecButton(
         modifier = finalMod,
         enabled = enabled,
         shape = shape,
-        border = BorderStroke(1.dp, if (enabled) color else BorderSubtle),
+        border = BorderStroke(1.dp, if (enabled) color.copy(alpha = 0.85f) else BorderSubtle),
         colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = if (enabled) color.copy(alpha = 0.14f) else SurfacePanel.copy(alpha = 0.3f),
-            contentColor = if (enabled) color else TextMuted,
+            containerColor = if (enabled) color.copy(alpha = 0.16f) else SurfacePanel.copy(alpha = 0.35f),
+            contentColor = if (enabled) Color.White else TextMuted,
             disabledContentColor = TextMuted
         ),
         contentPadding = contentPadding
@@ -68,22 +68,23 @@ fun MotecButton(
         Text(
             text = text,
             fontSize = fontSize,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.Black,
             fontFamily = FontFamily.Monospace,
+            color = if (enabled) Color.White else TextMuted,
             maxLines = 1,
             softWrap = false
         )
         if (badge != null) {
             Spacer(modifier = Modifier.width(4.dp))
             androidx.compose.material3.Surface(
-                shape = RoundedCornerShape(2.dp),
+                shape = RoundedCornerShape(1.dp),
                 color = if (enabled) color.copy(alpha = 0.25f) else androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.3f),
-                border = BorderStroke(0.5.dp, if (enabled) color.copy(alpha = 0.5f) else BorderSubtle)
+                border = BorderStroke(0.5.dp, if (enabled) color.copy(alpha = 0.6f) else BorderSubtle)
             ) {
                 Text(
                     text = badge,
                     fontSize = (fontSize.value * 0.8f).sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.Black,
                     fontFamily = FontFamily.Monospace,
                     color = if (enabled) color else TextMuted,
                     modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)

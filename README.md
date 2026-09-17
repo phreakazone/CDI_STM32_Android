@@ -44,10 +44,15 @@ Mendukung Arsitektur Lintas Platform (*Dual-Platform*): [**WeAct STM32WB55**](ht
    - [5. Live Audio Engine Test Bench & MOGE Super Bass](#5-live-audio-engine-test-bench--moge-super-bass)
    - [6. Quick Setup & Wiring Workshop](#6-quick-setup--wiring-workshop)
    - [7. BLE Terminal & Hex Diagnostics](#7-ble-terminal--hex-diagnostics)
-7. [Protokol Komunikasi BLE Firmware R8 & Kontrak Android](#-protokol-komunikasi-ble-firmware-r8--kontrak-android)
-8. [Skema Wiring Pinout & Transisi Fase (Konektor 12-Pin J1)](#-skema-wiring-pinout--transisi-fase-konektor-12-pin-j1)
-9. [Instalasi & Kompilasi](#-instalasi--kompilasi)
-10. [Catatan Rilis (Changelog)](#-catatan-rilis-changelog)
+7. [Ekosistem Sumber Data Lengkap Aplikasi](#-ekosistem-sumber-data-lengkap-aplikasi)
+   - [A. Ringkasan Matriks Sumber Seluruh Parameter](#a-ringkasan-matriks-sumber-seluruh-parameter)
+   - [B. Rincian Mendalam Asal Parameter Telemetri](#b-rincian-mendalam-asal-parameter-telemetri)
+   - [C. Sinkronisasi Data Perintah & Respons (Command-Response Ecosystem)](#c-sinkronisasi-data-perintah--respons-command-response-ecosystem)
+   - [D. Isolasi Sumber Data: Mode Hardware Fisik vs Mode Simulasi Demo](#d-isolasi-sumber-data-mode-hardware-fisik-vs-mode-simulasi-demo)
+8. [Protokol Komunikasi BLE Firmware R8/R9 & Kontrak Android](#-protokol-komunikasi-ble-firmware-r8r9--kontrak-android)
+9. [Skema Wiring Pinout & Transisi Fase (Konektor 12-Pin J1)](#-skema-wiring-pinout--transisi-fase-konektor-12-pin-j1)
+10. [Instalasi & Kompilasi](#-instalasi--kompilasi)
+11. [Catatan Rilis (Changelog)](#-catatan-rilis-changelog)
 
 ---
 
@@ -331,7 +336,168 @@ Diagnostik teknis tingkat lanjut:
 
 ---
 
-## 📡 Protokol Komunikasi BLE Firmware R8 & Kontrak Android
+## 🌐 Ekosistem Sumber Data Lengkap Aplikasi
+
+Aplikasi Android **IGNITRA CDI R9** mengelola ekosistem data yang komprehensif, menghubungkan sensor fisik kendaraan, rangkaian sirkuit analog/digital internal, mikrokontroler (STM32WB55 / ESP32), protokol nirkabel Bluetooth Low Energy (BLE), hingga penyajian antarmuka instrumentasi real-time MoTeC. 
+
+Setiap nilai yang ditampilkan di layar memiliki rantai keterlacakan (*traceability chain*) yang jelas mulai dari titik fisik motor hingga bit representasinya di aplikasi.
+
+---
+
+### A. Ringkasan Matriks Sumber Seluruh Parameter
+
+| Parameter UI | Label Layar | Rentang / Format | Asal Sumber Fisik / Sirkuit | Pin MCU (STM32 / ESP32) | Jalur Frame BLE / GATT | Penanganan di Aplikasi (ViewModel) |
+|---|---|---|---|---|---|---|
+| **STATUS KONEKSI** | `STATUS` / `ONLINE` | DISCONNECTED, CONNECTING, CONNECTED, STANDBY | Android BLE Stack & GATT Callback | N/A (Antena RF BLE) | Android `BluetoothGattCallback` | `CdiViewModel.connectionStatus`, `isBluetoothEnabled`, `bleLink` flag |
+| **TEGANGAN AKI** | `BATT` / `VBAT` | 0.00 – 16.00 V (Resolusi 0.01V) | Terminal Kunci Kontak +12V (J1.5) via R-Divider (27k/10k) | PA5 (STM32) / GPIO35 (ESP32) ADC1 | Frame CORE (Byte 12–13, `uint16` centivolt) | `telemetry.batteryCv / 100f`, warning < 11.5V (aki lemah) |
+| **TEGANGAN HV CENTER** | `HV Center` | 0 – 400 V DC | Kapasitor Film Busi Tengah C_CENTER via R-Divider (4x270k / 8.2k) | PA6 (STM32) / GPIO32 (ESP32) ADC1 | Frame CORE (Byte 14–15, `uint16` volt) | `telemetry.hvCenter`, status pengisian inverter push-pull Bank 1 |
+| **TEGANGAN HV SIDE** | `HV Side` | 0 – 400 V DC | Kapasitor Film Busi Samping C_SIDE via R-Divider (4x270k / 8.2k) | PA7 (STM32) / GPIO33 (ESP32) ADC1 | Frame CORE (Byte 16–17, `uint16` volt) | `telemetry.hvSide`, status pengisian inverter push-pull Bank 2 |
+| **PUTARAN MESIN** | `RPM` | 0 – 30.000 RPM (Resolusi 1 RPM) | Pick-up Sensor Magnet Pulser Kruk As (J1.10) via LM339 | PA0 / TIM1 (STM32) / GPIO4 esp_timer (ESP32) | Frame CORE (Byte 6–7, `uint16` RPM) | `telemetry.rpm`, animasi jarum tachometer + Watchdog 2.000 ms |
+| **BUKAAN GAS** | `TPS` | 0 – 100.0 % (Resolusi 0.1%) | Sensor TPS Karburator NS200 (J1.2 & J1.4) via Filter RC | PA3 / PA5 (STM32) / GPIO36 / GPIO34 (ESP32) | Frame CORE (Byte 8–9, `uint16` permille 0–1000) | `telemetry.tps / 10f`, bar indikator persentase bukaan gas |
+| **DERAJAT PENGAPIAN** | `ADVANCE` | 0.0 – 45.0 °BTDC | Hasil lookup tabel peta ignition 32x16 berdasarkan RPM & TPS | Timer Internal MCU Gate Trigger Scheduler | Frame CORE (Byte 10–11, `int16` centi-degree) | `telemetry.advanceCdeg / 100f`, jarum sudut advance balap |
+| **SUHU MESIN** | `TEMP` | -40 – +150 °C (atau `N/A`) | Sensor NTC Silinder Mesin (J1.3) via R-Pullup 4.7k | PA4 (STM32) / GPIO39 (ESP32) ADC1 | Frame DIAGNOSTIC (Byte 6–7, `int16` centi-°C) | `telemetry.tempCdeg`, menampilkan `N/A` jika `INT16_MIN` |
+| **SLOT MAP AKTIF** | `SLOT` | Slot 0, 1, 2, 3 | Memori NVM / Flash MCU yang sedang aktif di-load | EEPROM Emulation / NVS Partition | Frame DIAGNOSTIC (Byte 8, `uint8` 0–3) | `telemetry.slot`, indikator profil berkendara aktif |
+| **STATUS REV LIMITER** | `LIMITER` | IDLE, SOFT, HARD | Deteksi frekuensi RPM terhadap ambang batas profil | Firmware Limiter Controller | Frame DIAGNOSTIC (Byte 9, `uint8` state) | `telemetry.limiter`, indikator visual lampu redline warning |
+| **SAFETY FLAGS** | `FLAGS` | Bitmask 8-bit (0x01–0x40) | Kondisi internal firmware (Armed, Pro, HV, Cal, Ble, Ready) | Register Status Firmware MCU | Frame DIAGNOSTIC (Byte 10, `uint8`) | `telemetry.armed`, `proEnabled`, `hvEnabled`, `calibrated`, `ready` |
+| **STATUS OUTPUT AKTIF** | `OUTPUTS` | Bitmask 8-bit (1, 2, 4, 8) | Status pin keluaran fisik (Gate Center, Side, Strobe, Fan) | PA1, PA2, PB9, PB5 (STM32) / GPIO25, 26, 27, 13 (ESP32) | Frame DIAGNOSTIC (Byte 11, `uint8`) | `telemetry.centerEnabled`, `sideEnabled`, `strobeEnabled`, `fanEnabled` |
+| **BIT KESALAHAN (FAULT)** | `FAULTS` | Bitmask 16-bit | Proteksi sirkuit: OVP, OCP, NTC Fail, Stall, Sync Error | Sensor proteksi hardware (RSENSE, OVP, Clamp) | Frame DIAGNOSTIC (Byte 12–13, `uint16`) | `telemetry.faults`, teks banner peringatan kerusakan sistem |
+| **SUDUT TRIGGER PULSER** | `TRIGGER` | 0.0 – 90.0 °BTDC | Posisi takik magnet stator kruk as terhadap TDC fisik | Kalibrasi Strobe Flash / Offset Manual | Frame DIAGNOSTIC (Byte 14–15, `uint16` centi-degree) | `telemetry.triggerCdeg / 100f`, nilai patokan dasar pergeseran pulser |
+| **KUALITAS SINYAL PULSER** | `QUALITY` | 0 – 100 % (atau hitungan) | Rasio pulsa pulser valid terhadap noise/glitch di komparator | Timer Capture Filter Integrity Checker | Frame DIAGNOSTIC (Byte 16, `uint8`) | `telemetry.pickupQuality`, indikator kesehatan sinyal magnet |
+| **DURASI FIRST START** | `1ST SEC` | 0 – 255 detik | Penghitung waktu stasioner saat pengujian penyalaan pertama | Timer OS / RTOS Tick MCU | Frame DIAGNOSTIC (Byte 17, `uint8` detik) | `telemetry.firstStartSeconds`, auto-lock `READY` setelah 3 detik stabil |
+| **FREKUENSI TELEMETRI** | `RATE HZ` | 0 – 25 Hz (Standar 20 Hz) | Frekuensi notifikasi paket GATT Bluetooth masuk | Modul Radio BLE Nirkabel | Dihitung lokal via sliding window 2.000 ms | `CdiViewModel.packetRateHz`, indikator kesehatan lalu lintas data |
+| **INTEGRITAS DATA CRC** | `CRC %` | 0 – 100 % (Target 100%) | Validasi polinomial CRC16-CCITT (`0x1021`) per paket 20B | Perhitungan matematika frame biner | Dihitung per paket masuk di `CdiProtocol.crc16` | `CdiViewModel.crcValidPercent`, deteksi gangguan interferensi spark |
+| **PULSA BELAJAR OEM** | `OEM PULSES` | 0 – 65.535 pulsa | Sinyal pemutus koil CDI pabrik (J1.12 & J1.6) via PC817 | PB3 & PB4 (STM32) / GPIO16 & GPIO17 (ESP32) | Respon ASCII `@<seq>,LEARN,...*CRC` | `CdiViewModel.oemAcceptedPulses`, persentase cakupan kurva |
+| **TARGET PRO TEGANGAN** | `TARGET HV` | 285 V (Normal) / 345 V (PRO) | Konfigurasi profil yang dimuat (`FEATURE,PRO`) | NVM Flash Setting | Response `GET,STATUS` / `telemetry.isProVoltage` | `CdiViewModel.targetHvVoltage`, target regulasi PWM charger trafo |
+
+---
+
+### B. Rincian Mendalam Asal Parameter Telemetri
+
+#### 1. Status Konektivitas & Radio BLE (`STATUS`)
+- **Sumber Fisik**: Subsistem Bluetooth Low Energy perangkat Android dan radio transceiver nirkabel mikrokontroler (STM32WB55 2.4GHz BLE Radio atau ESP32 Bluetooth v4.2 BR/EDR & BLE).
+- **Proses Akuisisi**:
+  1. Aplikasi memeriksa status Bluetooth sistem melalui `BluetoothAdapter.isEnabled` (jika nonaktif, memunculkan prompt izin pengaktifan).
+  2. Saat terhubung, `BluetoothGattCallback.onConnectionStateChange` memicu transisi state `DISCONNECTED` ➔ `CONNECTING` ➔ `CONNECTED`.
+  3. Aplikasi meminta penemuan servis GATT (`discoverServices()`) dan mengaktifkan deskriptor `ENABLE_NOTIFICATION_VALUE` pada karakteristik Telemetri `7a8f1001-...`.
+  4. Bila mesin motor dalam kondisi mati / standby (tidak ada semburan telemetri 20Hz), aplikasi memberikan status `STANDBY` stabil tanpa memicu pemutusan palsu (*false disconnect*).
+
+#### 2. Voltase Baterai Aki Motor (`BATT` / `VBAT`)
+- **Sumber Fisik**: Jalur tegangan aki 12V setelah kunci kontak ON, masuk melalui pin soket harness **J1.5** (kabel warna Cokelat).
+- **Rangkaian Pengkondisi Sinyal**:
+  - Melewati dioda pengaman kutub terbalik **DREV** (Schottky SB560) dan peredam transien **TVS_IN** (33V).
+  - Melewati pembagi tegangan resistor presisi: **R1 (27kΩ 1%)** pada sisi atas dan **R2 (10kΩ 1%)** pada sisi ground, menghasilkan rasio pembagian `10 / (27 + 10) = 0.27027`. Tegangan maksimum 16.0V aki akan diturunkan menjadi 4.32V (atau diskalakan sesuai rentang ADC 0–3.3V dengan kombinasi 22k/10k).
+  - Dilindungi oleh sepasang dioda klem **BAT54S** ke rel 3.3V dan GND untuk mencegah lonjakan tegangan merusak pin analog MCU.
+- **Pemrosesan Firmware**: ADC membaca nilai analog terfilter, mengalikannya dengan faktor kalibrasi pembagi tegangan, lalu mengonversinya menjadi satuan centivolt (contoh: 12.60V dikodekan sebagai `1260`).
+- **Jalur Data**: Dikirim setiap 100 ms pada paket biner **CORE** byte 12–13 (`uint16 LE`).
+- **Konsumsi UI**: Ditampilkan pada dashboard instrumen dalam format `12.6V` dengan kode warna hijau (normal ≥ 12.0V), kuning (11.5V – 11.9V), atau merah (< 11.5V aki tekor).
+
+#### 3. Tegangan Tinggi Kapasitor Busi Tengah (`HV Center`) & Busi Samping (`HV Side`)
+- **Sumber Fisik**:
+  - **HV Center**: Muatan listrik DC tegangan tinggi pada kapasitor film polypropylene **C_CENTER** (1.0 µF 630V MKP/MPP) yang mensuplai koil utama busi tengah (J1.12).
+  - **HV Side**: Muatan listrik DC tegangan tinggi pada kapasitor film polypropylene **C_SIDE** (1.0 µF 630V MKP/MPP) yang mensuplai kedua koil busi samping (J1.6).
+- **Rangkaian Pembangkit & Pengkondisi Sinyal**:
+  - Dihasilkan oleh inverter push-pull frekuensi tinggi (50–100 kHz) yang digerakkan oleh sepasang MOSFET **IRF3205** melalui IC gate driver **TC4427A** dan trafo step-up ferit.
+  - Tegangan AC sekunder disearahkan oleh jembatan dioda ultra-cepat **UF4007** (Trr < 75ns) dan dipisahkan menjadi dua bank pengisian independen oleh dioda isolator **DCH_C** dan **DCH_S**.
+  - **Sensor Pembaca ADC**: Masing-masing bank dihubungkan ke rangkaian pembagi tegangan berimpedansi tinggi yang terdiri dari 4 resistor seri **270kΩ 1%** (total 1.080 kΩ) pada sisi atas dan resistor shunt bawah **8.2kΩ 1%** ke ground. Rasio pembagian: `8.2 / (1080 + 8.2) = 0.007535` (tegangan 400V HV diturunkan dengan aman menjadi ~3.01V di pin ADC).
+- **Pin Input Mikrokontroler**:
+  - STM32WB55: **PA6** (HV Center ADC1) dan **PA7** (HV Side ADC1).
+  - ESP32: **GPIO32** (HV Center ADC1_CH4) dan **GPIO33** (HV Side ADC1_CH5).
+- **Jalur Data**: Dikirim pada paket biner **CORE** byte 14–15 (Center) dan byte 16–17 (Side) dalam format satuan Volt murni integer (`uint16 LE`).
+- **Fungsi Keselamatan**:
+  - Peringatan warna merah menyala jika HV melebihi ambang batas proteksi (≥ 360V).
+  - Interlock keselamatan: Penulisan map, kalibrasi setup, dan flashing OTA diblokir total jika salah satu bank HV masih terdeteksi di atas 30V.
+
+#### 4. Putaran Mesin Kruk As (`RPM`)
+- **Sumber Fisik**: Pulser magnetik (Variable Reluctance Sensor) pada bak magnet kruk as motor Pulsar 200NS, terhubung melalui soket harness **J1.10** (kabel Putih-Merah).
+- **Rangkaian Pengkondisi Sinyal**:
+  - Sinyal gelombang sinus bolak-balik (AC) dari pick-up magnet dilewatkan filter kapasitor 4.7nF dan resistor 100Ω untuk meredam noise frekuensi tinggi.
+  - Masuk ke komparator tegangan presisi **LM339N** / **LM393** dengan umpan balik histeresis (resistor 39kΩ) untuk mengubah sinyal sinus menjadi gelombang kotak digital 0–3.3V bertepi tajam (*clean sharp square wave*).
+- **Pemrosesan Firmware**:
+  - Dihubungkan ke pin Timer Input Capture: **PA0 / TIM1_CH1** (STM32) atau **GPIO4** dengan interrupt `esp_timer` presisi mikrodetik (ESP32).
+  - Firmware mengukur selang waktu antar pulsa (delta time $t$ dalam mikrodetik) dan menghitung putaran mesin per menit: $\text{RPM} = \frac{60.000.000}{t \times \text{PPR}}$.
+- **Jalur Data**: Dikirim pada paket biner **CORE** byte 6–7 (`uint16 LE`).
+- **Penyajian UI**: Menggerakkan jarum tachometer MoTeC analog-digital dengan interpolasi animasi halus, pembacaan angka digital besar, serta pengaman Watchdog 2.000 ms yang mereset nilai ke 0 saat mesin mati.
+
+#### 5. Bukaan Katup Gas (`TPS`)
+- **Sumber Fisik**: Potensiometer Throttle Position Sensor bawaan karburator NS200, terhubung pada soket harness **J1.2** (TPS_A, Hijau-Putih) dan **J1.4** (TPS_B, Abu-Abu).
+- **Rangkaian Pengkondisi Sinyal**:
+  - Diberi tegangan referensi stabil 5V / 3.3V, dengan keluaran tegangan linier 0.5V (gas tertutup) hingga 4.2V (gas terbuka penuh).
+  - Dilewatkan pembagi tegangan resistor dan kapasitor filter low-pass 10nF untuk meredam derau getaran mekanis kran gas karburator.
+- **Pemrosesan Firmware**:
+  - Dibaca melalui pin ADC: **PA3/PA5** (STM32) atau **GPIO36/GPIO34** (ESP32).
+  - Firmware memetakan nilai mentah ADC terhadap kalibrasi rentang `TPS_CLOSED` dan `TPS_OPEN` yang tersimpan di flash, menghasilkan nilai normalisasi 0–1000 permille (0.0% – 100.0%).
+- **Jalur Data**: Dikirim pada paket biner **CORE** byte 8–9 (`uint16 LE`).
+
+#### 6. Sudut Waktu Pengapian (`ADVANCE`)
+- **Sumber Logika**: Dihasilkan secara real-time oleh algoritma engine management firmware berdasarkan interpolasi bilinear dari tabel matriks pengapian 32x16 (RPM vs TPS) pada slot yang sedang aktif.
+- **Eksekusi Fisik**:
+  - Nilai sudut advance menentukan berapa derajat kruk as sebelum Titik Mati Atas (°BTDC) pulsa pemicu SCR harus ditembakkan.
+  - Firmware menerjemahkan derajat sudut menjadi penundaan waktu timer terhadap sinyal pulser magnet, lalu memicu pin gate SCR Center (**PA1 / GPIO25**) dan Gate SCR Side (**PA2 / GPIO26**).
+- **Jalur Data**: Dikirim pada paket biner **CORE** byte 10–11 sebagai `int16 LE` bertanda dalam satuan centi-degree (contoh: 28.50° BTDC dikirim sebagai `2850`).
+
+#### 7. Sensor Suhu Mesin Silinder (`TEMP`)
+- **Sumber Fisik**: Sensor Negative Temperature Coefficient (NTC) bawaan silinder head motor NS200, terhubung melalui soket harness **J1.3** (kabel Hitam-Putih).
+- **Rangkaian**: Terhubung ke resistor pull-up 4.7kΩ ke tegangan referensi.
+- **Status Integrasi**: Protokol telemetri menyediakan kanal suhu pada paket **DIAGNOSTIC** byte 6–7 (`int16 LE` centi-°C). Pada firmware unit produksi saat ini, nilai dikirim sebagai `0x8000` (`INT16_MIN` = -32.768) yang diterjemahkan aplikasi secara jujur sebagai `N/A` sampai tabel kalibrasi resistansi-suhu NTC diaktifkan di rilis firmware mendatang.
+
+#### 8. Flags Status Keselamatan & Interlock (`FLAGS`)
+- **Sumber Logika**: Byte register status internal firmware pada paket **DIAGNOSTIC** byte 10:
+  - `Bit 0 (0x01)` **ARMED**: Sirkuit output pengapian aktif dan siap memicu koil.
+  - `Bit 1 (0x02)` **PRO_ENABLED**: Profil tegangan PRO 345V aktif.
+  - `Bit 2 (0x04)` **HV_ENABLED**: Blok pengisian daya inverter HV aktif memompa tegangan.
+  - `Bit 3 (0x08)` **CALIBRATED**: Setup dasar TPS dan kalibrasi TDC telah tersimpan permanen di flash.
+  - `Bit 4 (0x10)` **BLE_LINK**: Status jabat tangan komunikasi nirkabel aktif.
+  - `Bit 5 (0x20)` **READY**: Sistem telah lolos uji hidup stasioner stabil ≥3 detik dan siap operasi penuh.
+  - `Bit 6 (0x40)` **FIRST_START**: Sistem berada dalam mode pembatasan keselamatan pengujian perdana (220V, center saja, advance ≤10°, rev limit 3.000 RPM).
+
+#### 9. Status Keluaran Driver Fisik (`OUTPUT FLAGS`)
+- **Sumber Fisik**: Byte register status keluaran pin mikrokontroler pada paket **DIAGNOSTIC** byte 11:
+  - `Bit 0 (1)` **CENTER_COIL**: Driver SCR koil tengah aktif (PA1 / GPIO25).
+  - `Bit 1 (2)` **SIDE_COIL**: Driver SCR kedua koil samping aktif (PA2 / GPIO26).
+  - `Bit 2 (4)` **STROBE**: Output pemicu lampu strobo timing light aktif (PB9 / GPIO27).
+  - `Bit 3 (8)` **FAN_RELAY**: Output kendali relay kipas pendingin aktif (PB5 / GPIO13).
+
+---
+
+### C. Sinkronisasi Data Perintah & Respons (Command-Response Ecosystem)
+
+Selain telemetri biner periodik 20 Hz, aplikasi bertukar data konfigurasi kritis dengan mikrokontroler menggunakan protokol teks berbingkai CRC16: `@<seq>,<body>*<CRC16-hex>\n`.
+
+1. **Jabat Tangan Kapabilitas (`GET,CAPS`)**:
+   - Sumber: Firmware MCU merespons string kapabilitas hardware yang didukung (contoh: `CAPS,R9.0,PROTO4,OEM_LEARN,MANUAL,OTA_STAGE,AUTO_FIRST_START,NO_JUMPERS`).
+   - Aplikasi menyesuaikan batas antarmuka (RPM max 30.000, 4 slot map, dimensi 32x16) mengikuti kapabilitas nyata firmware yang terhubung.
+2. **Sinkronisasi Wizard Setup (`GET,SETUP`)**:
+   - Firmware mengembalikan data konfigurasi: jenis trigger edge, nilai PPR, durasi pulsa SCR gate (60–120 µs), ambang ADC TPS tutup/buka, status kalibrasi strobo TDC, dan tahapan wizard setup (0..4).
+   - Aplikasi memetakan nilai tersebut ke antarmuka 6 tahap visual mandiri.
+3. **Data Pembelajaran Timing OEM (`GET,LEARN` / `LEARN,START`)**:
+   - Pulsa pemicu pengapian dari CDI bawaan pabrik disadap secara pasif melalui optocoupler PC817 ke pin **PB3/PB4** (STM32) atau **GPIO16/GPIO17** (ESP32).
+   - Firmware menghitung selang waktu kedatangan pulsa terhadap sinyal pick-up kruk as, memetakan derajat pengapian asli bawaan motor per rentang RPM, dan melaporkan jumlah pulsa valid (`accepted`), pulsa tertolak (`rejected`), persentase cakupan (`coverage%`), serta beda sudut koil samping (`sideOffsetCdeg`).
+4. **Alur Pengunggahan Firmware Nirkabel (`OTA_DATA` & `OTA_STATUS`)**:
+   - File binary firmware (`.bin`) dibaca dari penyimpanan lokal Android.
+   - Aplikasi menghitung CRC32 dari seluruh isi file.
+   - Sesi dibuka dengan perintah `@<seq>,OTA,BEGIN,<ver>,<size>,<crc32>*CRC`.
+   - Data dikirim dalam paket-paket biner terfragmentasi (maksimum 208 byte per payload) dengan nomor offset 32-bit dan CRC16 perlindungan per chunk.
+   - Status penulisan flash dipantau melalui notifikasi karakteristik `OTA_STATUS` (`0xcd18`).
+
+---
+
+### D. Isolasi Sumber Data: Mode Hardware Fisik vs Mode Simulasi Demo
+
+Untuk menjamin integritas data teknis dan menghindari kebingungan saat diagnosa lapangan, sistem memisahkan sumber data secara mutlak:
+
+1. **Mode Hardware Fisik (BLE Connected, `_isSimulationMode == false`)**:
+   - Seluruh variabel telemetri murni bersumber dari dekode paket biner mikrokontroler fisik.
+   - Thread simulasi internal dibekukan total (`resetDemoState()`).
+   - Perubahan slider RPM pada layar tidak akan memanipulasi putaran mesin fisik motor.
+   - Tombol pengujian pulsa buatan (+10) telah dihapus dari unit produksi demi kepatuhan 100% pada sinyal pulser fisik nyata.
+2. **Mode Simulasi Demo (Bebas Koneksi, `_isSimulationMode == true`)**:
+   - Digunakan untuk evaluasi fitur antarmuka, demonstrasi suara mesin akustik (Live Audio Engine Test Bench), dan pelatihan teknisi tanpa unit motor.
+   - Data telemetri digerakkan oleh generator matematis lokal berbasis slider gas interaktif dan tombol puntir gas instan (BLIP GAS).
+   - Indikator status secara transparan menampilkan label `SIMULASI MODE` agar teknisi selalu mengetahui bahwa angka yang tampil bukan berasal dari motor nyata.
+
+---
+
+## 📡 Protokol Komunikasi BLE Firmware R8/R9 & Kontrak Android
 
 Aplikasi berkomunikasi melalui BLE GATT Custom Service:
 
@@ -513,30 +679,42 @@ Menu **Pinout MCU** dalam aplikasi menyediakan visualisasi ganda (**Mode Tabel 2
 
 ## 📝 Catatan Rilis (Changelog)
 
-### Versi 9.2.0 (Visualisasi Presisi Soket J1, Watchdog UI 500ms, Command Guard Keselamatan, & Desain Instrumentasi MoTeC M1)
-- **Koreksi & Penyempurnaan Status Frekuensi BLE (Header & Dashboard)**:
-  - Memperbaiki kalkulasi frekuensi data telemetri di header: indikator Hz kini dinamis dan murni merefleksikan laju paket aktif saat telemetri streaming (`isTelemetryStreaming == true`). Saat mesin mati atau telemetri standby, header menampilkan status bersih `ONLINE • <DEVICE> • SIAP`, mengeliminasi kemunculan angka stale/palsu (seperti 2Hz akibat jeda frame).
-  - Menghilangkan label `"LIVE • 20Hz"` / `"STANDBY"` yang redundan dari bagian bawah speedometer RPM dashboard agar cluster instrumen lebih bersih, fokus, dan tidak bertabrakan dengan status bar BLE utama.
-- **Penyempurnaan Alur Perekaman Kurva OEM (OEM Learn Checkpoint & Sumber Data Pulsa)**:
-  - **Transparansi Asal Data Pulsa**: Menambahkan panduan teknis pada layar Setup yang merinci asal masukan pulsa mikrokontroler:
-    - *Pulsa OEM Center*: Sinyal pemutus koil tengah OEM (kabel J1.12) via isolator optocoupler PC817 channel 1 ke pin PB3 (STM32) / GPIO16 (ESP32).
-    - *Sampel OEM Side*: Sinyal pemutus koil samping OEM (kabel J1.6) via optocoupler PC817 channel 2 ke pin PB4 (STM32) / GPIO17 (ESP32).
-    - *Sensor Pulser Kruk As*: Pick-up pulser magnet (kabel J1.10) ke PA0 (STM32) / GPIO34 (ESP32) sebagai acuan derajat °BTDC.
-  - **Klarifikasi Mengapa Data Masih 0**: Counter pulsa bernilai 0 selama mesin belum dinyalakan menggunakan CDI OEM bawaan motor, atau kabel optocoupler PC817 belum terhubung ke koil.
-  - **Tombol Uji Simulasi Meja Kerja (Bench Test +10)**: Menghadirkan tombol uji suntik pulsa langsung pada tahap Setup Checkpoint untuk memverifikasi logika counter pulsa dan komunikasi UI secara instan di meja kerja tanpa perlu menghidupkan mesin motor.
-  - **Pengecualian Keselamatan Khusus OEM Learn**: Menyesuaikan command safety guard agar `startOemLearn()` dan `stopOemLearn()` dapat dijalankan saat mesin motor menyala dengan CDI OEM tanpa terblokir oleh proteksi RPM > 0.
+### Versi 9.2.0 (Ekosistem Data Komprehensif, Resolusi Presisi Soket J1, Interaktif Bluetooth Requirements Guard, & Estetika MoTeC Borderless)
+- **Dokumentasi Ekosistem Data Lengkap & Keterlacakan Sumber Data Fisik**:
+  - Penambahan bab komprehensif mengenai **Ekosistem Sumber Data Lengkap Aplikasi**:
+    - **STATUS / BLE Link**: Terkelola reaktif melalui `BluetoothAdapter` dan `BluetoothGattCallback`, mendukung status `STANDBY` autentik saat mesin mati tanpa memicu false disconnect.
+    - **BATT (Voltase Aki)**: Berasal dari jalur kunci kontak +12V (soket J1.5) via dioda schottky DREV dan pembagi tegangan presisi (27kΩ/10kΩ) ke pin analog MCU (PA5 STM32 / GPIO35 ESP32). Dikirim pada frame CORE byte 12–13 dalam satuan centivolt (centivolts/100).
+    - **HV Center & HV Side (Tegangan Tinggi Kapasitor)**: Bersumber langsung dari tegangan kapasitor film C_CENTER dan C_SIDE (1.0µF 630V MKP) dari keluaran trafo inverter push-pull MOSFET IRF3205. Dibaca via pembagi tegangan 4x270kΩ / 8.2kΩ ke pin ADC PA6/PA7 (STM32) atau GPIO32/GPIO33 (ESP32) dan dikirim pada frame CORE byte 14–17 dalam satuan Volt integer.
+    - **RPM & Sinyal Pulser**: Sinyal pick-up magnet stator kruk as (soket J1.10) difilter RC dan distabilkan oleh komparator presisi LM339/LM393 ke pin Timer Capture PA0 / GPIO4. Dihitung berdasarkan delta waktu mikrodetik dan dikirim pada frame CORE byte 6–7.
+    - **TPS (Bukaan Gas)**: Sensor TPS karburator NS200 (soket J1.2 dan J1.4) dibaca pin ADC PA3/PA5 (STM32) atau GPIO36/GPIO34 (ESP32), dinormalisasi menjadi 0–1000 permille (0.0%–100.0%) pada frame CORE byte 8–9.
+    - **Derajat Advance**: Dihasilkan real-time dari tabel interpolasi 32x16 timing matrix sesuai titik operasi RPM dan TPS, memicu gate SCR PA1/PA2 atau GPIO25/GPIO26, dikirim pada frame CORE byte 10–11 (°BTDC x 100).
+    - **TEMP & Kipas**: Jalur sensor NTC silinder (soket J1.3) dan relay kipas (J1.7 / PB5 / GPIO13), dikirim pada frame DIAGNOSTIC.
+- **Interaktif Bluetooth & Requirement Safety Prompt**:
+  - Memperbaiki penanganan tombol koneksi (`KONEK`, `KONEK MAC`, dan `PINDAI BLE`): jika Bluetooth atau izin lokasi/perangkat dimatikan di perangkat pengguna, aplikasi secara proaktif meminta pengaktifan sistem melalui intent/dialog resmi (`BluetoothAdapter.ACTION_REQUEST_ENABLE`), bukan membiarkan tombol diam atau tidak merespons.
+- **Perbaikan Layout Tombol & Tab Semi-Transparan Sudut Tegas**:
+  - Tombol dan tab navigasi diselaraskan dengan estetika konsol balap profesional: sudut tegas presisi (`RoundedCornerShape(2.dp)` atau `3.dp`), latar belakang semi-transparan bergradasi halus, garis tepi tipis kontras tinggi, dan kontras teks yang tajam dan mudah dibaca tanpa menyita banyak ruang vertikal maupun horizontal.
+- **Header Bar R9 Borderless**:
+  - Menghilangkan bingkai latar belakang (*frame background/border*) pada badge petir `⚡ R9` di samping nama aplikasi pada header bar, menghasilkan keselarasan visual yang elegan dan menyatu dengan tipografi nama aplikasi.
+- **Reposisi Label "ENGINE RPM" & Tacho Jarum Bebas Obstruksi**:
+  - Penempatan label "ENGINE RPM" tepat di atas angka digital RPM dengan jarak aman dari poros jarum, memastikan jarum tachometer MoTeC dinamis dapat bergerak 100% bebas hambatan visual.
+- **Stabilisasi Frekuensi BLE & Status STANDBY Autentik**:
+  - Perhitungan frekuensi telemetri dengan filter jendela 2.000 ms yang mengeliminasi angka 2Hz semu akibat jitter frame awal.
+  - Saat mesin mati dan telemetri biner standby, sistem mengidentifikasi status sebagai `STANDBY` (cyan elektrik) tanpa memicu putus-nyambung palsu.
 - **Visualisasi Presisi Muka Soket Harness J1 (12 PIN) Bebas Terpotong (Zero-Clipping)**:
   - Rekonstruksi visual soket pigtail CDI NS200 12-pin dengan layout proporsional fleksibel (`Modifier.weight(1f)`), menjamin seluruh 12 pin (Baris 1: Pin 1–6, Baris 2: Pin 7–12) tampil utuh, seimbang, dan tidak pernah terpotong di semua resolusi layar ponsel.
   - Setiap pin dilengkapi nomor pin, label fungsi singkat (`NC`, `TPS A`, `TEMP`, `TPS B`, `+12V`, `SIDE`, `FAN`, `OEM S`, `OEM C`, `PULS`, `GND`, `CTR`), kode warna kabel motor pulsar NS200, dan status operasional (`DIGUNAKAN`, `KOSONG`, `CONFIRM`).
   - **Integrasi Tombol Pintas Tutorial Langkah 1 s/d 12**: Menekan tombol navigasi pada kartu pin langsung membuka langkah panduan workshop yang sesuai (Pin 1 ke Uji Isolasi Multimeter 6.1, Pin 5 ke Proteksi 12V 1.2, Pin 10 ke Komparator Pulser 2.5, Pin 12 ke Kapasitor Center 5.1, dst.).
-  - Penyelarasan kartu detail pin dan item Daftar Belanja (BOM) dengan tipografi mikro presisi (*compact high-density layout*) untuk pemanfaatan ruang layar yang maksimal.
-- **Sistem Watchdog UI Telemetri (Visual Timeout 500 ms) & Tacho Pointer Dinamis**:
-  - Mengatasi kendala jarum/indikator RPM menggantung jika paket data Bluetooth terhenti mendadak saat mesin mati: timer watchdog otomatis me-reset RPM, output flags, limiter, dan kualitas pulser ke 0 jika tidak ada frame GATT baru selama 500 ms.
-  - Indikator status live `LIVE • 20Hz` (hijau) vs `STANDBY • WATCHDOG 0 RPM` (oranye) pada gauge tachometer.
-  - Jarum tachometer (*pointer needle*) interaktif dengan interpolasi animasi halus (`LinearOutSlowInEasing`) yang bergerak presisi dan kembali mulus ke nol saat stasioner.
+- **Sistem Watchdog UI Telemetri (Visual Timeout 2.000 ms) & Tacho Pointer Dinamis**:
+  - Mengatasi kendala jarum/indikator RPM menggantung jika paket data Bluetooth terhenti mendadak saat mesin mati: timer watchdog otomatis me-reset RPM, output flags, limiter, dan kualitas pulser ke 0 jika tidak ada frame GATT baru selama 2.000 ms.
 - **Command Guard Keselamatan (`setup_can_write()`) & Banner Peringatan**:
   - Implementasi perlindungan firmware keselamatan reaktif `setup_can_write()` di layer aplikasi Android.
   - Memblokir pengiriman perintah penulisan setup atau konfigurasi kritis saat mesin hidup (RPM > 0), tegangan kapasitor HV masih tinggi (≥ 30V), antrean BLE sedang sibuk memproses paket, atau sedang dalam mode pembelajaran OEM Learn.
+  - Banner peringatan merah (*Command Guard Warning Banner*) muncul secara otomatis di layar Setup menginformasikan alasan teknis pemblokiran sebelum pengguna melakukan kesalahan eksekusi.
+- **Pemisahan Ketat Isolasi Mode Demo vs Mode Hardware Nyata (Strict Mode Separation)**:
+  - Thread loop simulasi demo dilarang keras menyentuh atau memodifikasi telemetri nyata saat aplikasi tidak berada dalam mode simulasi (`_isSimulationMode == false`).
+  - Fungsi `resetDemoState()` membersihkan seluruh state simulasi (slider, blip revving, suara engine sintetis) begitu koneksi BLE fisik diinisiasi.
+- **Integritas Input Nyata & Penghapusan Tombol Uji Pulsa Buatan (+10)**:
+  - Menghapus tombol uji pulsa simulasi dari tahap Checkpoint Setup dan ViewModel untuk menjamin 100% kepatuhan pada data input pulser fisik nyata dari optocoupler PC817 (J1.12 dan J1.6) serta sinkronisasi autentik antara hardware, firmware, dan software Android unit produksi.
   - Banner peringatan merah (*Command Guard Warning Banner*) muncul secara otomatis di layar Setup menginformasikan alasan teknis pemblokiran sebelum pengguna melakukan kesalahan eksekusi.
 - **Pemisahan Ketat Isolasi Mode Demo vs Mode Hardware Nyata (Strict Mode Separation)**:
   - Thread loop simulasi demo dilarang keras menyentuh atau memodifikasi telemetri nyata saat aplikasi tidak berada dalam mode simulasi (`_isSimulationMode == false`).
