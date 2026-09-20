@@ -36,6 +36,8 @@ setelah routing dan DRC selesai:
 
 Antara power dan HV disediakan panduan slot isolasi. Antena ESP32 harus memiliki
 keep-out minimal 15 mm tanpa tembaga, transformer, heatsink, atau kabel HV.
+Slot isolasi dibuat tersegmentasi; celahnya hanya disediakan pada koridor feedback,
+trafo, dan driver gate/power yang memang harus melintasi batas zona.
 
 ## Footprint mekanik yang sudah dikunci
 
