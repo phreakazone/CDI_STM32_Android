@@ -26,7 +26,7 @@ Desain ini mengikuti source firmware ESP32 sebagai sumber pin utama:
 - `PLACEMENT.csv`: koordinat dan zona setiap footprint.
 - `generate_easyeda.mjs`: generator deterministik seluruh berkas di atas.
 
-Kedua PCB menggunakan outline prototipe awal **230 mm x 135 mm** dengan tiga zona.
+Kedua PCB menggunakan outline prototipe awal **230 mm x 165 mm** dengan tiga zona.
 Ukuran ini sengaja longgar untuk layout single-layer; versi 2-layer dapat dipadatkan
 setelah routing dan DRC selesai:
 
@@ -50,6 +50,14 @@ Semua ukuran lubang berikut memakai grid standar **2,54 mm**:
 Lubang T1 lain tetap berupa pad tanpa net agar footprint dapat menerima variasi kaki
 trafo EE35. Pad primer dan sekunder yang dipakai sudah memiliki nomor/net tetap dan
 tidak boleh dijumper sembarang.
+
+## Kelengkapan rangkaian sebelum routing
+
+Rev A juga memuat rangkaian yang dibutuhkan oleh alur aplikasi/firmware, bukan hanya
+blok pengapian dasar: driver LED strobo GPIO27, driver fan GPIO13, header UART dan
+bench-loop, clamp BAT54S pada seluruh ADC, bypass LM339/TC4427, pulldown PWM,
+TVS kedua MOSFET, hardware fault clamp ke GPIO14, filter feedback HV, serta resistor
+pulldown driver SCR. J1.8 dan J1.9 sengaja tetap NC/probe opsional sesuai harness.
 
 ## Belum boleh dikirim ke pabrik
 
