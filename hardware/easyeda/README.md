@@ -28,7 +28,7 @@ Desain ini mengikuti source firmware ESP32 sebagai sumber pin utama:
 
 Kedua PCB menggunakan outline prototipe awal **230 mm x 135 mm** dengan tiga zona.
 Ukuran ini sengaja longgar untuk layout single-layer; versi 2-layer dapat dipadatkan
-setelah footprint fisik dikunci:
+setelah routing dan DRC selesai:
 
 1. `0–100 mm`: logic, ESP32, sensor, OEM Learn, dan fan.
 2. `100–145 mm`: power 12 V, TC4427, MOSFET, dan shunt.
@@ -37,19 +37,26 @@ setelah footprint fisik dikunci:
 Antara power dan HV disediakan panduan slot isolasi. Antena ESP32 harus memiliki
 keep-out minimal 15 mm tanpa tembaga, transformer, heatsink, atau kabel HV.
 
+## Footprint mekanik yang sudah dikunci
+
+Semua ukuran lubang berikut memakai grid standar **2,54 mm**:
+
+| Komponen | Definisi footprint Rev A |
+|---|---|
+| T1 EE35 universal | dua baris masing-masing 11 posisi; baris depan posisi 1/6/11 = LV_A/CT/LV_B, baris belakang posisi 1/11 = HV_AC1/HV_AC2; jarak antarbaris 10 pitch atau 25,40 mm |
+| C_CENTER dan C_SIDE | area 9 x 4 lubang; dua kaki berjarak 8 pitch atau 20,32 mm dan berada pada garis tengah lebar footprint |
+| J1 | pin header THT 2 x 6, pitch pin dan pitch antarbaris 2,54 mm; disolder manual |
+
+Lubang T1 lain tetap berupa pad tanpa net agar footprint dapat menerima variasi kaki
+trafo EE35. Pad primer dan sekunder yang dipakai sudah memiliki nomor/net tetap dan
+tidak boleh dijumper sembarang.
+
 ## Belum boleh dikirim ke pabrik
 
-Template placement sengaja belum memiliki routing tembaga final. Tiga ukuran fisik
-berikut harus diukur dari komponen yang benar-benar akan dipakai:
-
-| Komponen | Ukuran yang dibutuhkan |
-|---|---|
-| T1 trafo ATX donor | panjang x lebar badan, jumlah kaki, jarak tiap kaki, serta identifikasi LV_A/CT/LV_B/HV_AC1/HV_AC2 |
-| C_CENTER dan C_SIDE | panjang x lebar x tinggi serta jarak dua kaki |
-| Soket/pigtail J1 | foto muka dan belakang, pitch pin, jarak antarbaris, serta orientasi pengunci |
-
-Tanpa ukuran ini, memfinalkan lubang bor atau routing akan menghasilkan PCB yang
-tidak cocok dengan komponen fisik.
+Footprint T1/C/J1 sudah mengikuti ukuran grid pengguna, tetapi template masih berupa
+placement/net dan belum memiliki routing tembaga final. Gerber baru boleh dibuat
+setelah routing kedua varian selesai serta lolos pemeriksaan DRC, clearance HV, dan
+creepage.
 
 ## Aturan routing final
 
@@ -83,6 +90,5 @@ tidak cocok dengan komponen fisik.
 node hardware/easyeda/generate_easyeda.mjs
 ```
 
-Setelah footprint fisik dikonfirmasi, tahap berikutnya adalah mengganti footprint
-universal T1/C/J1, menyelesaikan skematik komponen penuh, lalu merutekan 2-layer dan
-single-layer secara terpisah dan menjalankan DRC.
+Tahap berikutnya adalah menyelesaikan skematik komponen penuh, merutekan 2-layer dan
+single-layer secara terpisah, lalu menjalankan DRC sebelum ekspor Gerber.
