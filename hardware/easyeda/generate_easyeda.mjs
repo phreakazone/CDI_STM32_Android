@@ -195,7 +195,7 @@ function footprint(c) {
 
 function board(variant) {
   id=1000;
-  const ox=100, oy=100, w=mm(230), h=mm(165);
+  const ox=0, oy=0, w=mm(230), h=mm(165);
   const shape=[];
   shape.push(`TRACK~1~10~~${ox} ${oy} ${ox+w} ${oy} ${ox+w} ${oy+h} ${ox} ${oy+h} ${ox} ${oy}~${gid()}`);
   shape.push(`TEXT~L~${ox+10}~${oy+15}~1~0~none~3~~10~IGNITRA CDI R9 ESP32 ${variant} - PLACEMENT/NET TEMPLATE~~~${gid()}`);
@@ -203,7 +203,11 @@ function board(variant) {
   // Functional-zone boundaries and isolation-slot guides.
   shape.push(`TRACK~1~12~~${ox+mm(100)} ${oy} ${ox+mm(100)} ${oy+h}~${gid()}`);
   shape.push(`TRACK~1~12~~${ox+mm(145)} ${oy} ${ox+mm(145)} ${oy+h}~${gid()}`);
-  shape.push(`SOLIDREGION~10~~${ox+mm(143)} ${oy+mm(5)} ${ox+mm(145)} ${oy+mm(5)} ${ox+mm(145)} ${oy+mm(160)} ${ox+mm(143)} ${oy+mm(160)}~npth~${gid()}`);
+  // Segmented isolation slots: gaps are reserved only for explicitly routed
+  // feedback, transformer and gate/power crossings.
+  for (const [y1,y2] of [[5,20],[42,54],[90,108],[151,160]]) {
+    shape.push(`SOLIDREGION~10~~${ox+mm(143)} ${oy+mm(y1)} ${ox+mm(145)} ${oy+mm(y1)} ${ox+mm(145)} ${oy+mm(y2)} ${ox+mm(143)} ${oy+mm(y2)}~npth~${gid()}`);
+  }
   for(const c of components) shape.push(footprint(c));
   return {
     head:'3~1.11.3~Author`OpenAI Codex`Project`IGNITRA CDI R9 ESP32`',
