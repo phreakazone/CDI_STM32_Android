@@ -39,10 +39,15 @@ for (const file of files) {
   check(board.DRCRULE?.Default && Number.isFinite(board.DRCRULE.Default.clearance),`${file}: skema DRCRULE modern tidak ada`);
   check(Array.isArray(board.routerRule?.routerLayers),`${file}: routerRule tidak ada`);
   check(board.netColors && typeof board.netColors==='object',`${file}: netColors tidak ada`);
+  check(typeof board.head.routingStatus==='string',`${file}: status routing tidak ada`);
   check(close(board.BBox.width,unit(230)),`${file}: lebar outline bukan 230 mm`);
   check(close(board.BBox.height,unit(165)),`${file}: tinggi outline bukan 165 mm`);
   check(board.shape.some(s=>s.startsWith('TRACK~1~10~~')),`${file}: BoardOutline tidak ditemukan`);
   check(board.shape.filter(s=>s.startsWith('SOLIDREGION~10~~')).length===4,`${file}: jumlah slot NPTH harus 4`);
+  const copperTracks=board.shape.filter(s=>s.startsWith('TRACK~') && s.split('~')[3]);
+  const vias=board.shape.filter(s=>s.startsWith('VIA~'));
+  check(copperTracks.length>=300,`${file}: copper track belum lengkap (${copperTracks.length})`);
+  check(vias.length>=1,`${file}: via routing tidak ditemukan`);
 
   const all=pads(board);
   check(all.length>=381,`${file}: jumlah pad terlalu sedikit (${all.length})`);
@@ -71,8 +76,14 @@ for (const file of files) {
     check(left&&right&&close(right.x-left.x,unit(20.32)),`${file}: pitch kapasitor ${a} bukan 20.32 mm`);
   }
 
-  console.log(`${file}: OK — ${all.length} pads, ${new Set(all.map(p=>p.net).filter(Boolean)).size} nets, outline 230 x 165 mm`);
+  console.log(`${file}: OK — ${all.length} pads, ${new Set(all.map(p=>p.net).filter(Boolean)).size} nets, ${copperTracks.length} tracks, ${vias.length} vias`);
 }
+
+const routing=JSON.parse(fs.readFileSync(path.join(out,'ROUTING_REPORT.json'),'utf8'));
+check(routing.two_layer.failed.length===0,'ROUTING_REPORT: koneksi 2L masih gagal');
+check(routing.single_layer.failed.length===0,'ROUTING_REPORT: koneksi 1L masih gagal');
+check(routing.single_layer.jumpers>0,'ROUTING_REPORT: rencana jumper 1L tidak ada');
+console.log(`ROUTING_REPORT.json: OK — 2L failed=0; 1L failed=0; jumper segments=${routing.single_layer.jumpers}`);
 
 const diagram=JSON.parse(fs.readFileSync(path.join(out,'IGNITRA_CDI_ESP32_BLOCK_DIAGRAM.json'),'utf8'));
 check(diagram.docType==='5' && diagram.editorVersion==='6.5.51','Block diagram: wrapper project EasyEDA tidak valid');

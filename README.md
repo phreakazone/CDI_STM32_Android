@@ -24,7 +24,7 @@
 | Charger | telemetry | izin + interlock OTA | PA9/PB8 | GPIO18/GPIO19 |
 | OTA | BLE | state/interlock | bootloader opsional | A/B partition |
 
-## PCB ESP32 Rev B — sumber kanonik
+## PCB ESP32 Rev C — sumber kanonik
 
 Desain PCB ESP32 38-pin berada di [`hardware/easyeda/`](hardware/easyeda/README.md). File yang langsung dibuka melalui **EasyEDA Standard 6.5.51** adalah:
 
@@ -32,7 +32,7 @@ Desain PCB ESP32 38-pin berada di [`hardware/easyeda/`](hardware/easyeda/README.
 - [PCB satu layer](hardware/easyeda/generated/IGNITRA_CDI_ESP32_1L_EASYEDA.json);
 - [netlist kanonik](hardware/easyeda/generated/NETLIST.csv) dan [BOM kanonik](hardware/easyeda/generated/BOM.csv).
 
-Kedua sumber PCB memakai `head.docType = "3"` dan sudah memuat outline, footprint, pad, net, slot isolasi, dan aturan DRC dasar. Statusnya **belum dirutekan**: selesaikan seluruh ratline, cocokkan footprint dengan komponen fisik, lalu jalankan DRC dan pemeriksaan creepage HV sebelum membuat Gerber.
+Kedua sumber PCB memakai `head.docType = "3"` dan sudah memuat outline, footprint, pad, net, slot isolasi, track, via, serta aturan DRC. Routing Rev C menghasilkan **0 koneksi gagal**: varian 2L berisi 376 track dan 136 via; pada varian 1L, BottomLayer adalah tembaga sedangkan TopLayer merupakan rencana jumper kawat berisolasi. Tetap jalankan DRC EasyEDA, cocokkan footprint fisik, dan periksa creepage HV sebelum membuat Gerber.
 
 | Fungsi | STM32WB55 | ESP32 38-pin |
 |---|---:|---:|
@@ -84,7 +84,7 @@ Mendukung Arsitektur Lintas Platform (*Dual-Platform*): [**WeAct STM32WB55**](ht
 - **Koneksi Nirkabel BLE Ultra-Stabil**: Scanning otomatis, auto-reconnect, pengiriman perintah berbasis antrean (*queue-based write*), handshaking kapabilitas `GET,CAPS`, dan proteksi transisi mode bebas *ghost telemetry*.
 - **Telemetri Balap Real-Time (20 Hz)**: Memantau RPM (batas mengikuti profil dan CAPS firmware (format maksimum 30.000 RPM)), TPS 0–100%, *ignition advance* (° BTDC), HV Center/Side (285V Normal / 345V PRO), voltase aki, fault, output, dan *rev limiter*. Kanal suhu disediakan protokol tetapi bernilai `N/A` sampai kurva konversi NTC firmware dikalibrasi.
 - **Mode Pembelajaran Mandiri (OEM Learn Pasif)**: Membaca pulsa pengapian CDI bawaan pabrik secara pasif melalui input mikrokontroler saat mesin hidup, merekam kurva pengapian asli motor secara otomatis.
-- **Rangkaian PCB Rev B**: LM339N untuk pulser/proteksi, dua PC817 diskrit untuk OEM Learn, MP1584 untuk catu logika, BC337 + 1N4007 untuk kontrol relay kipas eksternal, serta charger push-pull yang dikendalikan firmware. Modul boost generik tidak kompatibel.
+- **Rangkaian PCB Rev C**: LM339N untuk pulser/proteksi, dua PC817 diskrit untuk OEM Learn, MP1584 untuk catu logika, BC337 + 1N4007 untuk kontrol relay kipas eksternal, serta charger push-pull yang dikendalikan firmware. Modul boost generik tidak kompatibel.
 - **Pengunggah Firmware BLE OTA**: Memperbarui image aplikasi target melalui Bluetooth LE (STM32 `APP.bin`; ESP32 image aplikasi ESP-IDF sesuai partition table), dilengkapi verifikasi CRC32 dan preflight keselamatan.
 - **Alur Setup Checkpoint & Verifikasi Flash Nyata**: 
   - Alur OEM: Rekam timing pasif ➔ Konfirmasi cabut output koil OEM (`OEM_UNPLUGGED`) ➔ FIRST START aman (220V, center saja, advance ≤10°, limiter 3.000 RPM).
@@ -111,18 +111,18 @@ Mendukung Arsitektur Lintas Platform (*Dual-Platform*): [**WeAct STM32WB55**](ht
 | **Keandalan Instrumen (UI)** | Rentan *ghost telemetry* | Jarum RPM bisa "menggantung" | **Watchdog UI 2000ms**: Reset otomatis indikator ke 0 secara aman jika paket data terhenti 2 detik. |
 | **Proteksi Penulisan (Flash)**| Mengandalkan sakelar/jumper fisik | Software interlock & konfirmasi layar | **Command Guard Keselamatan**: Blokir otomatis jika mesin hidup (RPM>0) atau tegangan HV>30V. |
 | **Alur Akuisisi Timing** | Wajib strobo manual / timing light | **OEM Learn Pasif**: Rekam kurva via MCU | **Dipertahankan**: Tambahan dukungan skema *Inverter* PC817 khusus untuk pengujian meja. |
-| **Pilihan Perakitan Hardware** | Solder puluhan komponen diskrit | Hybrid modular | **PCB Rev B ESP32 38-pin**: blok fungsi terintegrasi; modul eksternal hanya alternatif legacy. |
+| **Pilihan Perakitan Hardware** | Solder puluhan komponen diskrit | Hybrid modular | **PCB Rev C ESP32 38-pin**: blok fungsi terintegrasi; modul eksternal hanya alternatif legacy. |
 | **Aktivasi DIY & First Start** | Cabut-pasang jumper rumit | Wajib `OEM_UNPLUGGED` & verifikasi flash | **Sama dengan R8**: Deteksi *idle* stabil ≥3s untuk mengunci kalibrasi. |
 | **Level Tegangan HV** | Terkunci pada 240V–280V | **Dual Target Aktif**: 285 V & 345 V (PRO) | **Sama dengan R8**. |
 | **Update Firmware MCU** | Buka bodi & colok ST-Link / USB | **BLE OTA Flashing**: Unggah via Android | **BLE OTA Partisi A/B Nyata**: Konfigurasi memori aman pada Flash 4MB ESP32. |
 
 ---
 
-## 🛒 Katalog Modul dan BOM PCB Rev B
+## 🛒 Katalog Modul dan BOM PCB Rev C
 
-PCB Rev B menggunakan satu papan **230 × 165 mm** dengan ESP32 DevKitC 38-pin. Blok yang sudah ada di PCB tidak boleh didobel dengan modul eksternal:
+PCB Rev C menggunakan satu papan **230 × 165 mm** dengan ESP32 DevKitC 38-pin. Blok yang sudah ada di PCB tidak boleh didobel dengan modul eksternal:
 
-| Blok | Implementasi PCB Rev B | Catatan |
+| Blok | Implementasi PCB Rev C | Catatan |
 |---|---|---|
 | OEM Learn | U3/U4 PC817 diskrit + masing-masing 4 × 12 kΩ 0,5 W | Sadapan dari J1.12/J1.6; bukan dari J1.9/J1.8 |
 | Pulser | U2 LM339N + 39 kΩ seri + clamp BAT54S | Keluaran logic menuju GPIO4 |
@@ -131,7 +131,7 @@ PCB Rev B menggunakan satu papan **230 × 165 mm** dengan ESP32 DevKitC 38-pin. 
 | Charger HV | U5 TC4427A + QHV1/QHV2 IRF3205 + T1 EE35 | Bukan modul boost generik |
 | Discharge | SCR1/SCR2 BT151-800R + C_CENTER/C_SIDE 1 µF 630 V | Jalur HV harus memenuhi clearance/creepage |
 
-Modul PC817 4-channel dan modul relay 5 V yang pernah didokumentasikan adalah **alternatif perakitan eksternal legacy**, bukan bagian paralel dari PCB Rev B. Pilih salah satu implementasi; jangan memasang keduanya sekaligus.
+Modul PC817 4-channel dan modul relay 5 V yang pernah didokumentasikan adalah **alternatif perakitan eksternal legacy**, bukan bagian paralel dari PCB Rev C. Pilih salah satu implementasi; jangan memasang keduanya sekaligus.
 
 BOM lengkap per-reference ada di [`hardware/easyeda/generated/BOM.csv`](hardware/easyeda/generated/BOM.csv). Ringkasan nilai yang mudah tertukar:
 
@@ -467,7 +467,7 @@ Tahap setup tidak dikodekan di telemetri v3. Aplikasi mengambilnya dari `GET,SET
 
 Tabel ini memetakan fungsi kabel harness bawaan motor NS200 ke pin yang tepat untuk platform STM32 maupun ESP32, guna menghilangkan segala bentuk ambiguitas operasional.
 
-| J1 | Fungsi | Warna Kabel | Hubungan PCB Rev B | Deskripsi Kelistrikan & Routing |
+| J1 | Fungsi | Warna Kabel | Hubungan PCB Rev C | Deskripsi Kelistrikan & Routing |
 |:--:|:-------|:------------|:-------------------|:--------------------------------|
 | 1 | NC | Kosong / NC | Tanpa net | Cadangan; jangan disambung. |
 | 2 | TPS_A | Hijau-Putih | Selector JTPS | Salah satu TPS signal/reference; posisi selector menentukan PA3/PA5 atau GPIO36/GPIO34. |
@@ -784,7 +784,7 @@ Menu **Pinout MCU** dalam aplikasi menyediakan visualisasi ganda (**Mode Tabel 2
 - **Katalog & Panduan Modul Siap Pakai di Pasaran**:
   - Menyediakan panduan lengkap penggantian blok diskrit dengan modul siap pakai di pasaran (*drop-in modules*) untuk memangkas kerumitan perakitan solderan hingga 85%.
   - Integrasi visual dan tutorial **Modul Optocoupler PC817 4-Channel** dengan terminal sekrup baut, LED indikator pulsa, dan jumper pull-up onboard untuk alur OEM Learn.
-  - Panduan legacy memakai modul eksternal; PCB Rev B terbaru memakai MP1584, LM339N, serta BC337 + 1N4007 diskrit. Modul boost HV generik tetap tidak kompatibel karena tidak mengikuti kontrol PWM, feedback, serta target 285V/345V firmware.
+  - Panduan legacy memakai modul eksternal; PCB Rev C terbaru memakai MP1584, LM339N, serta BC337 + 1N4007 diskrit. Modul boost HV generik tetap tidak kompatibel karena tidak mengikuti kontrol PWM, feedback, serta target 285V/345V firmware.
   - Mempertahankan 100% kompatibilitas wiring soket harness bawaan NS200 12-pin (J1).
 - **Kontrak Firmware R8 & Handshake Kapabilitas**:
   - Menambahkan handshake `GET,CAPS` saat koneksi BLE terhubung untuk mendeteksi kapabilitas firmware R8 (`PROTO4`, `OEM_LEARN`, `MANUAL`, `OTA_STAGE`, `AUTO_FIRST_START`, `NO_JUMPERS`).

@@ -1,14 +1,13 @@
 # IGNITRA CDI R9 — PCB EasyEDA ESP32 38-pin
 
-Status: **Rev B, sumber PCB belum dirutekan**. Format file telah diselaraskan dengan
+Status: **Rev C, seluruh koneksi logis telah dirutekan**. Format file diselaraskan dengan
 ekspor EasyEDA Standard 6.5.51 yang valid: PCB memakai `head.docType = "3"` dan
 block diagram memakai wrapper project `docType = "5"` dengan sheet `docType = "1"`.
 Dua file `*_EASYEDA.json` adalah sumber PCB EasyEDA Standard yang dapat dibuka
-langsung. Keduanya sudah memuat
-outline, footprint, pad, net, zona fungsi, slot isolasi, dan aturan DRC dasar.
-Keduanya **belum** boleh langsung dijadikan Gerber karena routing tembaga,
-penyesuaian footprint terhadap komponen fisik, dan DRC tegangan tinggi masih harus
-diselesaikan di EasyEDA.
+langsung. Keduanya memuat outline, footprint, pad, net, zona fungsi, slot isolasi,
+track, via, dan aturan DRC dasar. Pemeriksaan generator menghasilkan **0 koneksi
+gagal** pada kedua varian. DRC EasyEDA dan pencocokan footprint terhadap komponen
+fisik tetap wajib dilakukan sebelum Gerber.
 
 > Peringatan: rangkaian CDI menghasilkan sekitar 345 V dan pulsa pengapian. Salah
 > clearance, creepage, footprint, polaritas, atau grounding dapat merusak ESP32,
@@ -23,8 +22,10 @@ diselesaikan di EasyEDA.
    - `generated/IGNITRA_CDI_ESP32_2L_EASYEDA.json` untuk PCB pabrik dua layer;
    - `generated/IGNITRA_CDI_ESP32_1L_EASYEDA.json` untuk PCB rumahan satu layer.
 4. Setelah PCB terbuka, simpan sebagai project baru agar sumber asli tetap utuh.
-5. Jalankan `Design > Check DRC`, selesaikan seluruh ratline, lalu periksa lagi
-   clearance/creepage HV secara manual sebelum ekspor Gerber.
+5. Jalankan `Design > Check DRC`. Target setelah pembaruan net/ratsnest adalah
+   `Incomplete Connection = 0`; jangan ekspor Gerber bila masih ada error.
+6. Pada varian 1L, **BottomLayer biru adalah tembaga** dan **TopLayer merah adalah
+   rencana jumper kawat berisolasi**, bukan lapisan tembaga yang ikut difabrikasi.
 
 File bernama `*_placement.json` adalah alias kompatibilitas dengan isi yang sama.
 `IGNITRA_CDI_ESP32_BLOCK_DIAGRAM.json` dan alias lama
@@ -91,7 +92,7 @@ PC817, lalu menuju GPIO17/GPIO16.
 
 Semua posisi memakai grid 2,54 mm. Cocokkan terhadap komponen nyata sebelum order.
 
-| Komponen | Definisi Rev B |
+| Komponen | Definisi Rev C |
 |---|---|
 | T1 EE35 universal | baris depan 11 posisi: LV_A di 1, CT/VIN_HV di 6, LV_B di 11; baris belakang 13 posisi: pad kosong di 1 dan 13, HV_AC1 di 2, HV_AC2 di 12; jarak pusat kedua output tepat 10 pitch = 25,40 mm; jarak antarbaris 25,40 mm |
 | C_CENTER / C_SIDE | area 9 x 4 lubang; jarak kaki 8 pitch = 20,32 mm; pad 4 mm, drill 0,8 mm |
@@ -114,10 +115,23 @@ Outline awal kedua varian adalah **230 x 165 mm**:
 `GND_STAR` hanya melalui NT2 dan NT1. Titik star berada dekat J1.11. Antena ESP32
 memerlukan keep-out minimum 15 mm tanpa tembaga, trafo, heatsink, atau kabel HV.
 
-## Aturan routing wajib
+## Implementasi routing Rev C
 
-- Net `HV_*`, `BRIDGE_PLUS`, `COIL_CENTER`, dan `COIL_SIDE`: clearance minimum
-  6 mm dari logic/ground; target creepage 8 mm atau lebih dan gunakan slot.
+| Varian | Track | Via / lubang perpindahan | Koneksi gagal |
+|---|---:|---:|---:|
+| 2L pabrik | 376 | 136 via | 0 |
+| 1L rumahan | 376 | 136 titik jumper | 0 |
+
+Router memakai disiplin layer ortogonal untuk mengurangi silang: satu layer
+diutamakan horizontal dan layer lain vertikal. Jalur sinyal memakai lebar 0,25 mm,
+rail logika 0,5 mm, jalur power 1,0 mm, dan jalur HV 1,2 mm. Lebar akhir jalur arus
+tinggi tetap harus disesuaikan dengan arus, ketebalan tembaga, dan kemampuan proses.
+
+## Aturan routing dan keselamatan wajib
+
+- Net `HV_*`, `BRIDGE_PLUS`, `COIL_CENTER`, dan `COIL_SIDE` ditempatkan di zona HV.
+  Setelah keluar dari pad komponen yang pitch-nya memang sempit, jaga jarak fisik
+  minimal 6 mm dari logic dan target creepage 8 mm atau lebih dengan slot.
 - Jalur primer trafo, VIN_HV, MOSFET, shunt, SCR, dan coil dibuat selebar mungkin.
   Untuk varian satu layer, perkuat jalur arus tinggi dengan kawat tembaga.
 - Pulser dan semua ADC tidak boleh berjalan paralel dengan drain MOSFET, AC trafo,
@@ -126,8 +140,9 @@ memerlukan keep-out minimum 15 mm tanpa tembaga, trafo, heatsink, atau kabel HV.
   pulldown 10 kΩ ditempatkan sedekat mungkin dengan MOSFET.
 - Empat resistor 270 kΩ pada setiap feedback HV dan empat resistor 470 kΩ pada
   setiap bleeder harus tetap seri secara fisik untuk membagi tegangan kerja.
-- Varian satu layer hanya memakai BottomLayer. Semua persilangan harus berupa
-  jumper kawat yang diberi reference dan tercantum di dokumentasi hasil akhir.
+- Pada varian satu layer, hanya BottomLayer yang dibuat sebagai tembaga. Segmen
+  TopLayer adalah jumper kawat berisolasi; jangan kirim TopLayer sebagai copper
+  Gerber.
 
 ## Pemeriksaan sebelum Gerber
 
@@ -146,7 +161,11 @@ memerlukan keep-out minimum 15 mm tanpa tembaga, trafo, heatsink, atau kabel HV.
   ditutup sebelum fabrikasi.
 - `generated/PLACEMENT.csv`: koordinat dan zona footprint.
 - `generated/PLACEMENT_PREVIEW.svg`: preview zona/placement, bukan Gerber.
+- `generated/ROUTING_PREVIEW_2L.svg`: preview routing dua-layer.
+- `generated/ROUTING_PREVIEW_1L.svg`: preview bottom-copper/jumper satu-layer.
+- `generated/ROUTING_REPORT.json`: jumlah track/via/jumper dan daftar koneksi gagal.
 - `generate_easyeda.mjs`: generator deterministik sumber PCB dan tabel.
+- `route_easyeda.mjs`: router deterministik dua-layer dan rencana jumper satu-layer.
 - `validate_easyeda.mjs`: pemeriksaan struktur, net penting, dan dimensi footprint.
 
 ## Regenerasi dan validasi
@@ -155,8 +174,11 @@ Tidak memerlukan build aplikasi maupun toolchain firmware:
 
 ```bash
 node hardware/easyeda/generate_easyeda.mjs
+node hardware/easyeda/route_easyeda.mjs
 node hardware/easyeda/validate_easyeda.mjs
 ```
 
-Validasi lokal hanya memeriksa konsistensi sumber. Pemeriksaan akhir tetap harus
-dijalankan di EasyEDA setelah routing dan menggunakan ukuran komponen fisik.
+Validasi lokal memeriksa format, footprint penting, jumlah track/via, dan bahwa
+laporan routing tidak memiliki koneksi gagal. Pemeriksaan akhir tetap harus
+dijalankan di EasyEDA menggunakan ukuran komponen fisik; hasil validator bukan
+pengganti DRC dan inspeksi Gerber.
