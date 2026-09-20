@@ -23,7 +23,7 @@ const espRight = [
 ];
 
 const components = [
-  {ref:'J1',value:'NS200 HARNESS HEADER 2x6 2.54mm',kind:'header2x6',x:4,y:145,pins:[
+  {ref:'J1',value:'NS200 HARNESS SAFE SOLDER 2x6',kind:'harness2x6_safe',x:120,y:148,pins:[
     ['1','NC'],['2','TPS_A'],['3','TEMP_SENSOR'],['4','TPS_B'],['5','IGN_12V'],['6','COIL_SIDE'],
     ['7','FAN_RELAY'],['8','OEM_SIDE_PROBE'],['9','OEM_CENTER_PROBE'],['10','PICKUP_RAW'],['11','GND_STAR'],['12','COIL_CENTER']
   ]},
@@ -36,10 +36,10 @@ const components = [
   {ref:'C_IN',value:'470uF 35V',kind:'axial',x:67,y:148,pins:[['-','GND_STAR'],['+','VIN_FILT']]},
   {ref:'FLOGIC',value:'1A',kind:'axial',x:67,y:155,pins:[['1','VIN_FILT'],['2','VIN_LOGIC']]},
   {ref:'UBUCK',value:'MP1584 MODULE',kind:'quad',x:82,y:152,pins:[['1','VIN_LOGIC'],['2','GND_LOGIC'],['3','5V_LOGIC'],['4','GND_LOGIC']]},
-  {ref:'FHV',value:'3A',kind:'axial',x:105,y:155,pins:[['1','VIN_FILT'],['2','VIN_HV_FUSED']]},
-  {ref:'SW1',value:'SERVICE HV',kind:'axial',x:120,y:155,pins:[['1','VIN_HV_FUSED'],['2','VIN_HV']]},
-  {ref:'NT1',value:'GROUND STAR LINK',kind:'axial',x:12,y:155,pins:[['1','GND_STAR'],['2','GND_POWER']]},
-  {ref:'NT2',value:'LOGIC STAR LINK',kind:'axial',x:20,y:145,pins:[['1','GND_STAR'],['2','GND_LOGIC']]},
+  {ref:'FHV',value:'3A',kind:'axial',x:103,y:138,pins:[['1','VIN_FILT'],['2','VIN_HV_FUSED']]},
+  {ref:'SW1',value:'SERVICE HV',kind:'axial',x:118,y:138,pins:[['1','VIN_HV_FUSED'],['2','VIN_HV']]},
+  {ref:'NT1',value:'GROUND STAR LINK',kind:'axial',x:91,y:155,pins:[['1','GND_STAR'],['2','GND_POWER']]},
+  {ref:'NT2',value:'LOGIC STAR LINK',kind:'axial',x:91,y:148,pins:[['1','GND_STAR'],['2','GND_LOGIC']]},
 
   {ref:'U2',value:'LM339N',kind:'dip',x:72,y:12,pitch:2.54,row:7.62,pins:[
     ['1','FAULT_N'],['2','PICKUP_OC'],['3','5V_LOGIC'],['4','PICKUP_ZERO'],['5','PICKUP_SENSE'],
@@ -157,15 +157,27 @@ const bom = components.map(c => ({ref:c.ref,qty:1,value:c.value,footprint:c.kind
 function footprint(c) {
   const x=mm(c.x), y=mm(c.y), shapes=[];
   const pads=[];
-  const addPad=(p,dx,dy,w=mm(2.6),h=mm(2.6),hole=mm(0.55))=>pads.push(`PAD~ELLIPSE~${x+dx}~${y+dy}~${w}~${h}~11~${p[1]}~${p[0]}~${hole}~~0~${gid()}`);
+  const addPad=(p,dx,dy,w=mm(2.6),h=mm(2.6),hole=mm(0.55))=>{
+    const px=x+dx,py=y+dy;
+    pads.push(`PAD~ELLIPSE~${px}~${py}~${w}~${h}~11~${p[1]}~${p[0]}~${hole}~~0~${gid()}~0~~Y~0~0~0.3~${px},${py}`);
+  };
   if(c.kind==='single') c.pins.forEach((p,i)=>addPad(p,0,mm(i*2.54)));
   else if(c.kind==='header1x2'||c.kind==='header1x4') {
     c.pins.forEach((p,i)=>addPad(p,mm(i*2.54),0,mm(2),mm(2),mm(1)));
-    shapes.push(`TRACK~0.5~3~~${x-mm(1.27)} ${y-mm(1.27)} ${x+mm((c.pins.length-1)*2.54+1.27)} ${y-mm(1.27)} ${x+mm((c.pins.length-1)*2.54+1.27)} ${y+mm(1.27)} ${x-mm(1.27)} ${y+mm(1.27)} ${x-mm(1.27)} ${y-mm(1.27)}~${gid()}`);
+    shapes.push(`TRACK~0.5~3~~${x-mm(1.27)} ${y-mm(1.27)} ${x+mm((c.pins.length-1)*2.54+1.27)} ${y-mm(1.27)} ${x+mm((c.pins.length-1)*2.54+1.27)} ${y+mm(1.27)} ${x-mm(1.27)} ${y+mm(1.27)} ${x-mm(1.27)} ${y-mm(1.27)}~${gid()}~0`);
   }
   else if(c.kind==='header2x6') {
     c.pins.forEach((p,i)=>addPad(p,mm((i%6)*2.54),mm(i<6?0:2.54),mm(2),mm(2),mm(1)));
-    shapes.push(`TRACK~0.5~3~~${x-mm(1.27)} ${y-mm(1.27)} ${x+mm(13.97)} ${y-mm(1.27)} ${x+mm(13.97)} ${y+mm(3.81)} ${x-mm(1.27)} ${y+mm(3.81)} ${x-mm(1.27)} ${y-mm(1.27)}~${gid()}`);
+    shapes.push(`TRACK~0.5~3~~${x-mm(1.27)} ${y-mm(1.27)} ${x+mm(13.97)} ${y-mm(1.27)} ${x+mm(13.97)} ${y+mm(3.81)} ${x-mm(1.27)} ${y+mm(3.81)} ${x-mm(1.27)} ${y-mm(1.27)}~${gid()}~0`);
+  }
+  else if(c.kind==='harness2x6_safe') {
+    // Logical 2x6 numbering, but NOT a standard 2.54 mm plug-in header.
+    // Pins 6/12 carry CDI pulse voltage and are isolated at the far column.
+    c.pins.forEach((p,i)=>{
+      const column=i%6,row=i<6?0:1;
+      addPad(p,mm(column===5?25.4:column*2.54),mm(row*10.16),mm(3.2),mm(3.2),mm(1.1));
+    });
+    shapes.push(`TRACK~0.5~3~~${x-mm(1.6)} ${y-mm(1.6)} ${x+mm(27)} ${y-mm(1.6)} ${x+mm(27)} ${y+mm(11.76)} ${x-mm(1.6)} ${y+mm(11.76)} ${x-mm(1.6)} ${y-mm(1.6)}~${gid()}~0`);
   }
   else if(c.kind==='dual'||c.kind==='dip') {
     const half=Math.ceil(c.pins.length/2), row=mm(c.row||7.62), pitch=mm(c.pitch||2.54);
@@ -173,57 +185,103 @@ function footprint(c) {
   } else if(c.kind==='quad') { const pos=[[0,0],[0,mm(7.62)],[mm(7.62),mm(7.62)],[mm(7.62),0]]; c.pins.forEach((p,i)=>addPad(p,...pos[i])); }
   else if(c.kind==='triple') c.pins.forEach((p,i)=>addPad(p,mm(i*2.54),0));
   else if(c.kind==='transformer_ee35') {
-    // Universal EE35 grid: 11 positions per row at 2.54 mm. Front row uses
-    // positions 1/6/11 for LV_A/CT/LV_B; rear row uses 1/11 for HV output.
+    // Universal EE35 grid. The front row has 11 usable positions with
+    // LV_A/CT/LV_B at positions 1/6/11. The rear row has one empty pad at
+    // each side and the two HV outputs exactly 10 pitches (25.40 mm) apart.
     const frontNets={0:c.pins[0],5:c.pins[1],10:c.pins[2]};
-    const rearNets={0:c.pins[3],10:c.pins[4]};
-    for(let i=0;i<11;i++) addPad(frontNets[i]||[`F${i+1}`,''],mm(i*2.54),0,mm(2.8),mm(2.8),mm(1));
-    for(let i=0;i<11;i++) addPad(rearNets[i]||[`B${i+1}`,''],mm(i*2.54),mm(25.4),mm(2.8),mm(2.8),mm(1));
-    shapes.push(`TRACK~0.8~3~~${x-mm(1.27)} ${y-mm(2.54)} ${x+mm(26.67)} ${y-mm(2.54)} ${x+mm(26.67)} ${y+mm(27.94)} ${x-mm(1.27)} ${y+mm(27.94)} ${x-mm(1.27)} ${y-mm(2.54)}~${gid()}`);
+    const rearNets={1:c.pins[3],11:c.pins[4]};
+    for(let i=0;i<11;i++) addPad(frontNets[i]||[`F${i+1}`,''],mm((i+1)*2.54),0,mm(2.8),mm(2.8),mm(1));
+    for(let i=0;i<13;i++) addPad(rearNets[i]||[`B${i+1}`,''],mm(i*2.54),mm(25.4),mm(2.8),mm(2.8),mm(1));
+    shapes.push(`TRACK~0.8~3~~${x-mm(1.27)} ${y-mm(2.54)} ${x+mm(31.75)} ${y-mm(2.54)} ${x+mm(31.75)} ${y+mm(27.94)} ${x-mm(1.27)} ${y+mm(27.94)} ${x-mm(1.27)} ${y-mm(2.54)}~${gid()}~0`);
   }
   else if(c.kind==='hv_cap_9x4') {
     // Nine holes inclusive gives eight 2.54 mm intervals = 20.32 mm lead pitch.
     addPad(c.pins[0],0,mm(5.08),mm(4),mm(4),mm(.8));
     addPad(c.pins[1],mm(20.32),mm(5.08),mm(4),mm(4),mm(.8));
-    shapes.push(`TRACK~0.8~3~~${x-mm(1.27)} ${y} ${x+mm(21.59)} ${y} ${x+mm(21.59)} ${y+mm(10.16)} ${x-mm(1.27)} ${y+mm(10.16)} ${x-mm(1.27)} ${y}~${gid()}`);
+    shapes.push(`TRACK~0.8~3~~${x-mm(1.27)} ${y} ${x+mm(21.59)} ${y} ${x+mm(21.59)} ${y+mm(10.16)} ${x-mm(1.27)} ${y+mm(10.16)} ${x-mm(1.27)} ${y}~${gid()}~0`);
   }
   else { addPad(c.pins[0],0,0); addPad(c.pins[1],mm(10),0); }
-  shapes.push(`TEXT~P~${x}~${y-mm(2)}~0.7~0~~3~~4.5~${c.ref} ${c.value}~~~${gid()}`);
+  shapes.push(`TEXT~P~${x}~${y-mm(2)}~0.7~0~0~3~~4.5~${c.ref} ${c.value}~~${gid()}~~0`);
   shapes.push(...pads);
-  return `LIB~${x}~${y}~package\`${c.kind}\`value\`${c.value}~~~${gid()}~1#@$${shapes.join('#@$')}`;
+  return `LIB~${x}~${y}~package\`${c.kind}\`value\`${c.value}\`Contributor\`IGNITRA\`~~~${gid()}~1~~~0~#@$${shapes.join('#@$')}`;
 }
+
+const pcbLayers = variant => [
+  `1~TopLayer~#FF0000~true~${variant==='2L'}~true~`,
+  '2~BottomLayer~#0000FF~true~true~true~',
+  '3~TopSilkLayer~#FFCC00~true~false~true~',
+  '4~BottomSilkLayer~#66CC33~true~false~true~',
+  '5~TopPasteMaskLayer~#808080~true~false~true~',
+  '6~BottomPasteMaskLayer~#800000~true~false~true~',
+  '7~TopSolderMaskLayer~#800080~true~false~true~0.3',
+  '8~BottomSolderMaskLayer~#AA00FF~true~false~true~0.3',
+  '9~Ratlines~#6464FF~true~false~true~',
+  '10~BoardOutLine~#FF00FF~true~false~true~',
+  '11~Multi-Layer~#C0C0C0~true~false~true~',
+  '12~Document~#FFFFFF~true~false~true~',
+  '13~TopAssembly~#33CC99~false~false~false~',
+  '14~BottomAssembly~#5555FF~false~false~false~',
+  '15~Mechanical~#F022F0~false~false~false~',
+  '19~3DModel~#66CCFF~false~false~false~',
+  '21~Inner1~#999966~false~false~false~~','22~Inner2~#008000~false~false~false~~',
+  '23~Inner3~#00FF00~false~false~false~~','24~Inner4~#BC8E00~false~false~false~~',
+  '25~Inner5~#70DBFA~false~false~false~~','26~Inner6~#00CC66~false~false~false~~',
+  '27~Inner7~#9966FF~false~false~false~~','28~Inner8~#800080~false~false~false~~',
+  '29~Inner9~#008080~false~false~false~~','30~Inner10~#15935F~false~false~false~~',
+  '31~Inner11~#000080~false~false~false~~','32~Inner12~#00B400~false~false~false~~',
+  '33~Inner13~#2E4756~false~false~false~~','34~Inner14~#99842F~false~false~false~~',
+  '35~Inner15~#FFFFAA~false~false~false~~','36~Inner16~#99842F~false~false~false~~',
+  '37~Inner17~#2E4756~false~false~false~~','38~Inner18~#3535FF~false~false~false~~',
+  '39~Inner19~#8000BC~false~false~false~~','40~Inner20~#43AE5F~false~false~false~~',
+  '41~Inner21~#C3ECCE~false~false~false~~','42~Inner22~#728978~false~false~false~~',
+  '43~Inner23~#39503F~false~false~false~~','44~Inner24~#0C715D~false~false~false~~',
+  '45~Inner25~#5A8A80~false~false~false~~','46~Inner26~#2B937E~false~false~false~~',
+  '47~Inner27~#23999D~false~false~false~~','48~Inner28~#45B4E3~false~false~false~~',
+  '49~Inner29~#215DA1~false~false~false~~','50~Inner30~#4564D7~false~false~false~~',
+  '51~Inner31~#6969E9~false~false~false~~','52~Inner32~#9069E9~false~false~false~~',
+  '99~ComponentShapeLayer~#00CCCC~false~false~false~',
+  '100~LeadShapeLayer~#CC9999~false~false~false~',
+  '101~ComponentPolarityLayer~#66FFCC~false~false~false~',
+  'Hole~Hole~#222222~false~false~true~',
+  'DRCError~DRCError~#FAD609~false~false~true~'
+];
+
+const pcbObjects = [
+  'All~true~false','Component~true~true','Prefix~true~true','Name~true~false',
+  'Track~true~true','Pad~true~true','Via~true~true','Hole~true~true',
+  'Copper_Area~true~true','Circle~true~true','Arc~true~true',
+  'Solid_Region~true~true','Text~true~true','Image~true~true',
+  'Rect~true~true','Dimension~true~true','Protractor~true~true'
+];
 
 function board(variant) {
   id=1000;
   const ox=0, oy=0, w=mm(230), h=mm(165);
   const shape=[];
-  shape.push(`TRACK~1~10~~${ox} ${oy} ${ox+w} ${oy} ${ox+w} ${oy+h} ${ox} ${oy+h} ${ox} ${oy}~${gid()}`);
-  shape.push(`TEXT~L~${ox+10}~${oy+15}~1~0~none~3~~10~IGNITRA CDI R9 ESP32 ${variant} - PLACEMENT/NET TEMPLATE~~~${gid()}`);
-  shape.push(`TEXT~L~${ox+10}~${oy+28}~0.8~0~none~3~~8~HV 345V: clearance copper >=6mm; slots >=2mm; ANTENNA KEEP-OUT 15mm~~~${gid()}`);
+  shape.push(`TRACK~1~10~~${ox} ${oy} ${ox+w} ${oy} ${ox+w} ${oy+h} ${ox} ${oy+h} ${ox} ${oy}~${gid()}~0`);
+  shape.push(`TEXT~L~${ox+10}~${oy+15}~1~0~0~3~~10~IGNITRA CDI R9 ESP32 ${variant} - UNROUTED PCB SOURCE~~${gid()}~~0`);
+  shape.push(`TEXT~L~${ox+10}~${oy+28}~0.8~0~0~3~~8~HV 345V: clearance copper >=6mm; slots >=2mm; ANTENNA KEEP-OUT 15mm~~${gid()}~~0`);
   // Functional-zone boundaries and isolation-slot guides.
-  shape.push(`TRACK~1~12~~${ox+mm(100)} ${oy} ${ox+mm(100)} ${oy+h}~${gid()}`);
-  shape.push(`TRACK~1~12~~${ox+mm(145)} ${oy} ${ox+mm(145)} ${oy+h}~${gid()}`);
+  shape.push(`TRACK~1~12~~${ox+mm(100)} ${oy} ${ox+mm(100)} ${oy+h}~${gid()}~0`);
+  shape.push(`TRACK~1~12~~${ox+mm(145)} ${oy} ${ox+mm(145)} ${oy+h}~${gid()}~0`);
   // Segmented isolation slots: gaps are reserved only for explicitly routed
   // feedback, transformer and gate/power crossings.
-  for (const [y1,y2] of [[5,20],[42,54],[90,108],[151,160]]) {
-    shape.push(`SOLIDREGION~10~~${ox+mm(143)} ${oy+mm(y1)} ${ox+mm(145)} ${oy+mm(y1)} ${ox+mm(145)} ${oy+mm(y2)} ${ox+mm(143)} ${oy+mm(y2)}~npth~${gid()}`);
+  for (const [y1,y2] of [[5,20],[42,54],[90,108]]) {
+    shape.push(`SOLIDREGION~10~~M ${ox+mm(143)} ${oy+mm(y1)} L ${ox+mm(145)} ${oy+mm(y1)} L ${ox+mm(145)} ${oy+mm(y2)} L ${ox+mm(143)} ${oy+mm(y2)} Z~npth~${gid()}~0`);
   }
+  // Isolation slot inside J1: pins 1-5/7-11 stay low-voltage, while
+  // pulse-output pads 6 and 12 sit on the HV side of this slot.
+  shape.push(`SOLIDREGION~10~~M ${ox+mm(135)} ${oy+mm(145)} L ${ox+mm(140)} ${oy+mm(145)} L ${ox+mm(140)} ${oy+mm(164)} L ${ox+mm(135)} ${oy+mm(164)} Z~npth~${gid()}~0`);
   for(const c of components) shape.push(footprint(c));
   return {
-    head:'3~1.11.3~Author`OpenAI Codex`Project`IGNITRA CDI R9 ESP32`',
-    canvas:`CA~2400~1600~#000000~yes~#FFFFFF~10~1200~800~line~2~mm~2~45~visible~0.5`,
+    head:{docType:'3',editorVersion:'6.5.51',newgId:true,c_para:{},hasIdFlag:true,x:'0',y:'0',importFlag:0,transformList:''},
+    canvas:`CA~2400~1600~#000000~yes~#FFFFFF~3.937008~1200~800~line~1.968504~mm~7.3504~45~visible~0.393701~0~0~0~none`,
     shape,
-    systemColor:'#000000~#FFFFFF~#FFFFFF~#000000~#FFFFFF',
-    layers:[
-      `1~TopLayer~#FF0000~true~${variant==='2L'}~true`,`2~BottomLayer~#0000FF~true~true~true`,
-      '3~TopSilkLayer~#FFFF00~true~false~true','4~BottomSilkLayer~#808000~true~false~true',
-      '5~TopPasterLayer~#808080~false~false~false','6~BottomPasterLayer~#800000~false~false~false',
-      '7~TopSolderLayer~#800080~false~false~false','8~BottomSolderLayer~#AA00FF~false~false~false',
-      '9~Ratlines~#6464FF~true~false~true','10~BoardOutline~#FF00FF~true~false~true',
-      '11~Multi-Layer~#C0C0C0~true~false~true','12~Document~#FFFFFF~true~false~true'
-    ],
+    layers:pcbLayers(variant),objects:pcbObjects,
     BBox:{x:ox,y:oy,width:w,height:h}, preference:{hideFootprints:'',hideNets:''},
-    DRCRULE:{trackWidth:variant==='2L'?1.2:2.4,track2Track:1.2,pad2Pad:1.2,track2Pad:1.2,hole2Hole:1.5,holeSize:2,isRealtime:true}
+    DRCRULE:{Default:{trackWidth:variant==='2L'?1.2:2.4,clearance:1.2,viaHoleDiameter:2.4,viaHoleD:0.8},isRealtime:true,isDrcOnRoutingOrPlaceVia:true,checkObjectToCopperarea:true,showDRCRangeLine:true},
+    routerRule:{unit:'mm',trackWidth:variant==='2L'?1.2:2.4,trackClearance:1.2,viaHoleD:0.8,viaDiameter:2.4,routerLayers:variant==='2L'?[1,2]:[2],smdClearance:1.2,specialNets:[],nets:[...new Set(components.flatMap(c=>c.pins.map(p=>p[1])).filter(Boolean))],padsCount:components.reduce((n,c)=>n+c.pins.length,0),skipNets:[],realtime:true},
+    netColors:{}
   };
 }
 
@@ -235,21 +293,33 @@ function schematic() {
     ['UF4007 BRIDGE',900,180],['HV CENTER BANK',1040,130],['HV SIDE BANK',1040,260],
     ['SCR DRIVERS',850,360]
   ];
-  for(const [name,x,y] of blocks){ shape.push(`R~${x}~${y}~10~10~140~65~#FFFFFF~2~0~none~${gid()}`); shape.push(`T~L~${x+8}~${y+28}~0~#000080~Arial~9pt~~~~comment~${name}~1~start~${gid()}`); }
+  for(const [name,x,y] of blocks){ shape.push(`R~${x}~${y}~10~10~140~65~#FFFFFF~2~0~none~${gid()}~0`); shape.push(`T~L~${x+8}~${y+28}~0~#000080~Arial~9pt~~~~comment~${name}~1~start~${gid()}~0`); }
   const wires=[[260,212,260,212,260,212],[260,212,400,212],[570,212,610,212],[750,212,760,212],[900,212,900,212],[1040,212,1040,162],[970,212,1040,292],[500,245,500,310],[850,392,990,392],[990,392,990,162],[990,392,990,292]];
-  for(const p of wires) shape.push(`W~${p.join(' ')}~#008800~2~0~none~${gid()}`);
+  for(const p of wires) shape.push(`W~${p.join(' ')}~#008800~2~0~none~${gid()}~0`);
   const notes=[
     ['IGN_12V / GND_STAR',270,205],['GPIO18/19',620,205],['HV_AC',900,205],
     ['GPIO25/26',860,385],['ADC1 ONLY: GPIO36/39/34/35/32/33',430,390],
     ['This architecture sheet accompanies netlist.csv; do not fabricate until routing and DRC are confirmed.',120,500]
   ];
-  for(const [t,x,y] of notes) shape.push(`T~L~${x}~${y}~0~#0000FF~Arial~8pt~~~~comment~${t}~1~start~${gid()}`);
-  return {head:'1~1.11.3~~',canvas:'CA~1200~700~#FFFFFF~yes~#CCCCCC~10~1200~700~line~10~pixel~5',shape,BBox:{x:100,y:100,width:1100,height:500},colors:{}};
+  for(const [t,x,y] of notes) shape.push(`T~L~${x}~${y}~0~#0000FF~Arial~8pt~~~~comment~${t}~1~start~${gid()}~0`);
+  const dataStr={
+    head:{docType:'1',editorVersion:'6.5.51',newgId:true,c_para:{'Prefix Start':'1'},c_spiceCmd:'null',hasIdFlag:true,uuid:'ignitra-cdi-r9-block-diagram',x:0,y:0,portOfADImportHack:'',importFlag:0,transformList:''},
+    canvas:'CA~1200~700~#FFFFFF~yes~#CCCCCC~5~1200~700~line~5~pixel~5~0~0',
+    shape,BBox:{x:100,y:100,width:1100,height:500},colors:{}
+  };
+  return {editorVersion:'6.5.51',docType:'5',title:'IGNITRA CDI R9 Block Diagram',description:'Block diagram only; PCB netlist is authoritative.',colors:{},schematics:[{docType:'1',title:'Architecture',description:'Non-fabrication block diagram',dataStr}]};
 }
 
-fs.writeFileSync(path.join(out,'IGNITRA_CDI_ESP32_architecture.json'),JSON.stringify(schematic(),null,2));
-fs.writeFileSync(path.join(out,'IGNITRA_CDI_ESP32_2L_placement.json'),JSON.stringify(board('2L'),null,2));
-fs.writeFileSync(path.join(out,'IGNITRA_CDI_ESP32_1L_placement.json'),JSON.stringify(board('1L'),null,2));
+const architecture=schematic();
+fs.writeFileSync(path.join(out,'IGNITRA_CDI_ESP32_BLOCK_DIAGRAM.json'),JSON.stringify(architecture,null,2));
+fs.writeFileSync(path.join(out,'IGNITRA_CDI_ESP32_architecture.json'),JSON.stringify(architecture,null,2));
+const board2L=board('2L');
+const board1L=board('1L');
+fs.writeFileSync(path.join(out,'IGNITRA_CDI_ESP32_2L_EASYEDA.json'),JSON.stringify(board2L,null,2));
+fs.writeFileSync(path.join(out,'IGNITRA_CDI_ESP32_1L_EASYEDA.json'),JSON.stringify(board1L,null,2));
+// Backward-compatible aliases retained for links created before Rev B.
+fs.writeFileSync(path.join(out,'IGNITRA_CDI_ESP32_2L_placement.json'),JSON.stringify(board2L,null,2));
+fs.writeFileSync(path.join(out,'IGNITRA_CDI_ESP32_1L_placement.json'),JSON.stringify(board1L,null,2));
 
 const csv = rows => rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\n')+'\n';
 fs.writeFileSync(path.join(out,'BOM.csv'),csv([
@@ -267,11 +337,11 @@ fs.writeFileSync(path.join(out,'PLACEMENT.csv'),csv([
 
 const zoneColor = x => x < 100 ? '#16273a' : x < 145 ? '#3a2d16' : '#3a161c';
 const svgParts = components.map(c => {
-  const width = c.kind === 'single' ? 10 : c.kind === 'transformer_ee35' ? 28 :
-    c.kind === 'hv_cap_9x4' ? 23 : c.kind === 'header2x6' ? 14 :
+  const width = c.kind === 'single' ? 10 : c.kind === 'transformer_ee35' ? 33 :
+    c.kind === 'hv_cap_9x4' ? 23 : c.kind === 'harness2x6_safe' ? 28 : c.kind === 'header2x6' ? 14 :
     c.kind === 'dip' || c.kind === 'dual' ? 12 : 11;
   const height = c.kind === 'single' ? 50 : c.kind === 'transformer_ee35' ? 28 :
-    c.kind === 'hv_cap_9x4' ? 11 : c.kind === 'header2x6' ? 5 :
+    c.kind === 'hv_cap_9x4' ? 11 : c.kind === 'harness2x6_safe' ? 12 : c.kind === 'header2x6' ? 5 :
     c.kind === 'dip' || c.kind === 'dual' ? Math.max(8, c.pins.length * 1.4) : 6;
   return `<g><rect x="${c.x}" y="${c.y}" width="${width}" height="${height}" rx="0.8" fill="${zoneColor(c.x)}" stroke="#d8e6ef" stroke-width="0.35"/><text x="${c.x+0.8}" y="${c.y+2.7}" font-size="2.3" fill="#ffffff">${c.ref}</text></g>`;
 }).join('');

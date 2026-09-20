@@ -24,6 +24,29 @@
 | Charger | telemetry | izin + interlock OTA | PA9/PB8 | GPIO18/GPIO19 |
 | OTA | BLE | state/interlock | bootloader opsional | A/B partition |
 
+## PCB ESP32 Rev B — sumber kanonik
+
+Desain PCB ESP32 38-pin berada di [`hardware/easyeda/`](hardware/easyeda/README.md). File yang langsung dibuka melalui **EasyEDA Standard 6.5.51** adalah:
+
+- [PCB dua layer](hardware/easyeda/generated/IGNITRA_CDI_ESP32_2L_EASYEDA.json);
+- [PCB satu layer](hardware/easyeda/generated/IGNITRA_CDI_ESP32_1L_EASYEDA.json);
+- [netlist kanonik](hardware/easyeda/generated/NETLIST.csv) dan [BOM kanonik](hardware/easyeda/generated/BOM.csv).
+
+Kedua sumber PCB memakai `head.docType = "3"` dan sudah memuat outline, footprint, pad, net, slot isolasi, dan aturan DRC dasar. Statusnya **belum dirutekan**: selesaikan seluruh ratline, cocokkan footprint dengan komponen fisik, lalu jalankan DRC dan pemeriksaan creepage HV sebelum membuat Gerber.
+
+| Fungsi | STM32WB55 | ESP32 38-pin |
+|---|---:|---:|
+| TPS signal / reference | PA3 / PA5 | GPIO36 / GPIO34 |
+| Suhu / VBAT | PA4 / PB0 | GPIO39 / GPIO33 |
+| HV Center / Side | PA6 / PA7 | GPIO35 / GPIO32 |
+| Gate Center / Side | PA1 / PA2 | GPIO25 / GPIO26 |
+| Pulser | PA0 | GPIO4 |
+| OEM Learn Center / Side | PB3 / PB4 | GPIO16 / GPIO17 |
+| Charger A / B | PA9 / PB8 | GPIO18 / GPIO19 |
+| Fault / Fan / Strobe | PA10 / PB5 / PB9 | GPIO14 / GPIO13 / GPIO27 |
+
+> GPIO25/GPIO26 hanya menggerakkan rangkaian driver SCR bertegangan rendah. Pin J1.12/J1.6 adalah keluaran pulsa CDI dari kapasitor/SCR dan tidak boleh disambungkan langsung ke GPIO.
+
 Aplikasi Android kendali terpadu untuk unit pengapian **CDI Programmable NS200-CDI** (Bajaj Pulsar 200 DTS-i & Modifikasi Dual/Triple Spark dengan Engine R9 v5.0). Menggabungkan kokpit telemetri balap gaya MoTeC, pemetaan kurva pengapian resolusi tinggi 32x16 matrix 4-slot dinamis, Live Dyno Advance Trim, kalibrasi strobo pulser TDC, mode pembelajaran kurva asli (**OEM Learn Mode**), sistem pengunggah firmware nirkabel (**BLE OTA Firmware Uploader** dengan partisi A/B), alur aktivasi mandiri aman (**Safe DIY Mode**), katalog modul jadi pasaran (*Commercial Off-the-Shelf Drop-in Modules*), bengkel panduan kabel interaktif, diagnostik paket data biner BLE, serta simulator akustik mesin knalpot multi-silinder (*Live Audio Engine Test Bench*).
 
 Mendukung Arsitektur Lintas Platform (*Dual-Platform*): [**WeAct STM32WB55**](https://github.com/phreakazone/Firmware_CDI_NS200) dan [**ESP32 WROOM**](https://github.com/phreakazone/Firmware_CDI_NS200_ESP32).
@@ -61,7 +84,7 @@ Mendukung Arsitektur Lintas Platform (*Dual-Platform*): [**WeAct STM32WB55**](ht
 - **Koneksi Nirkabel BLE Ultra-Stabil**: Scanning otomatis, auto-reconnect, pengiriman perintah berbasis antrean (*queue-based write*), handshaking kapabilitas `GET,CAPS`, dan proteksi transisi mode bebas *ghost telemetry*.
 - **Telemetri Balap Real-Time (20 Hz)**: Memantau RPM (batas mengikuti profil dan CAPS firmware (format maksimum 30.000 RPM)), TPS 0–100%, *ignition advance* (° BTDC), HV Center/Side (285V Normal / 345V PRO), voltase aki, fault, output, dan *rev limiter*. Kanal suhu disediakan protokol tetapi bernilai `N/A` sampai kurva konversi NTC firmware dikalibrasi.
 - **Mode Pembelajaran Mandiri (OEM Learn Pasif)**: Membaca pulsa pengapian CDI bawaan pabrik secara pasif melalui input mikrokontroler saat mesin hidup, merekam kurva pengapian asli motor secara otomatis.
-- **Rangkaian Pengaman & Opsi Modul Pasaran**: Panduan visual interaktif rangkaian isolasi optik 4-channel PC817, modul buck DC-DC MP1584, modul relay kipas, serta modul komparator pulser LM393. Blok charger HV tetap memakai rangkaian push-pull yang dikendalikan firmware; modul boost generik tidak kompatibel.
+- **Rangkaian PCB Rev B**: LM339N untuk pulser/proteksi, dua PC817 diskrit untuk OEM Learn, MP1584 untuk catu logika, BC337 + 1N4007 untuk kontrol relay kipas eksternal, serta charger push-pull yang dikendalikan firmware. Modul boost generik tidak kompatibel.
 - **Pengunggah Firmware BLE OTA**: Memperbarui image aplikasi target melalui Bluetooth LE (STM32 `APP.bin`; ESP32 image aplikasi ESP-IDF sesuai partition table), dilengkapi verifikasi CRC32 dan preflight keselamatan.
 - **Alur Setup Checkpoint & Verifikasi Flash Nyata**: 
   - Alur OEM: Rekam timing pasif ➔ Konfirmasi cabut output koil OEM (`OEM_UNPLUGGED`) ➔ FIRST START aman (220V, center saja, advance ≤10°, limiter 3.000 RPM).
@@ -88,173 +111,38 @@ Mendukung Arsitektur Lintas Platform (*Dual-Platform*): [**WeAct STM32WB55**](ht
 | **Keandalan Instrumen (UI)** | Rentan *ghost telemetry* | Jarum RPM bisa "menggantung" | **Watchdog UI 2000ms**: Reset otomatis indikator ke 0 secara aman jika paket data terhenti 2 detik. |
 | **Proteksi Penulisan (Flash)**| Mengandalkan sakelar/jumper fisik | Software interlock & konfirmasi layar | **Command Guard Keselamatan**: Blokir otomatis jika mesin hidup (RPM>0) atau tegangan HV>30V. |
 | **Alur Akuisisi Timing** | Wajib strobo manual / timing light | **OEM Learn Pasif**: Rekam kurva via MCU | **Dipertahankan**: Tambahan dukungan skema *Inverter* PC817 khusus untuk pengujian meja. |
-| **Pilihan Perakitan Hardware** | Solder puluhan komponen diskrit | **Hybrid Modular**: PC817, Buck MP1584 | **Sama dengan R8**: Skema hybrid modular dipertahankan. |
+| **Pilihan Perakitan Hardware** | Solder puluhan komponen diskrit | Hybrid modular | **PCB Rev B ESP32 38-pin**: blok fungsi terintegrasi; modul eksternal hanya alternatif legacy. |
 | **Aktivasi DIY & First Start** | Cabut-pasang jumper rumit | Wajib `OEM_UNPLUGGED` & verifikasi flash | **Sama dengan R8**: Deteksi *idle* stabil ≥3s untuk mengunci kalibrasi. |
 | **Level Tegangan HV** | Terkunci pada 240V–280V | **Dual Target Aktif**: 285 V & 345 V (PRO) | **Sama dengan R8**. |
 | **Update Firmware MCU** | Buka bodi & colok ST-Link / USB | **BLE OTA Flashing**: Unggah via Android | **BLE OTA Partisi A/B Nyata**: Konfigurasi memori aman pada Flash 4MB ESP32. |
 
 ---
 
-## 🛒 Katalog & Panduan Modul Siap Pakai di Pasaran (Drop-In Modular Upgrade)
+## 🛒 Katalog Modul dan BOM PCB Rev B
 
-Untuk mengurangi kerumitan wiring kabel dan solder-menyolder komponen diskrit, sistem **NS200 CDI R8** mendukung perakitan berbasis **Modul Jadi Siap Pakai di Pasaran** (*Commercial Off-The-Shelf Modules*).
+PCB Rev B menggunakan satu papan **230 × 165 mm** dengan ESP32 DevKitC 38-pin. Blok yang sudah ada di PCB tidak boleh didobel dengan modul eksternal:
 
-> **PENTING**: Seluruh wiring kabel harness bawaan motor NS200 (konektor 12-pin J1) **tetap dipertahankan 100%**. Penggunaan modul bersifat opsional untuk menggantikan masing-masing blok fungsi internal di dalam boks CDI.
+| Blok | Implementasi PCB Rev B | Catatan |
+|---|---|---|
+| OEM Learn | U3/U4 PC817 diskrit + masing-masing 4 × 12 kΩ 0,5 W | Sadapan dari J1.12/J1.6; bukan dari J1.9/J1.8 |
+| Pulser | U2 LM339N + 39 kΩ seri + clamp BAT54S | Keluaran logic menuju GPIO4 |
+| Kipas | QFAN BC337-40 + DFAN 1N4007 | Mengendalikan koil relay eksternal melalui J1.7 |
+| Catu logic | UBUCK MP1584 | Turunkan IGN_12V menjadi 5 V sebelum ESP32 |
+| Charger HV | U5 TC4427A + QHV1/QHV2 IRF3205 + T1 EE35 | Bukan modul boost generik |
+| Discharge | SCR1/SCR2 BT151-800R + C_CENTER/C_SIDE 1 µF 630 V | Jalur HV harus memenuhi clearance/creepage |
 
-### Ringkasan Blok Fungsi & Modul Pengganti
+Modul PC817 4-channel dan modul relay 5 V yang pernah didokumentasikan adalah **alternatif perakitan eksternal legacy**, bukan bagian paralel dari PCB Rev B. Pilih salah satu implementasi; jangan memasang keduanya sekaligus.
 
-> **FILOSOFI MODULAR R8**: Modul pasaran dipakai hanya pada blok yang cocok secara listrik (isolator OEM Learn, relay kipas, dan buck 5V). Charger HV, feedback HV, dan pemicu SCR tetap mengikuti rangkaian diskrit yang dikendalikan firmware.
+BOM lengkap per-reference ada di [`hardware/easyeda/generated/BOM.csv`](hardware/easyeda/generated/BOM.csv). Ringkasan nilai yang mudah tertukar:
 
-| Blok Fungsi CDI | Status Rekomendasi | Modul Pasaran Siap Pakai | Estimasi Harga | Alasan Teknis & Keuntungan Utama |
-|---|---|---|---|---|
-| **1. OEM Learn Signal Isolator** | ⭐ **SANGAT DIREKOMENDASIKAN #1** | **Modul Optocoupler PC817 4-Channel Isolation Board** | Rp 12.000 – Rp 18.000 | Terminal sekrup (baut obeng), 4x LED indikator kedip pulsa, jumper pull-up onboard, isolasi optik 5000V. Cukup 1 modul untuk dua kanal sekaligus: sadapan Center (J1.12) dan Side (J1.6). |
-| **2. Driver Relay Kipas** (J1.7 / Radiator Fan) | ⭐ **SANGAT DIREKOMENDASIKAN #2** | **Modul Relay 1-Channel 5V dengan Optocoupler** | Rp 8.000 – Rp 14.000 | Menggantikan transistor BC547 diskrit. Pin MCU langsung masuk ke pin `IN` modul. Sudah ada optoisolator, dioda flyback proteksi lonjakan motor kipas, dan terminal sekrup. |
-| **3. Catu Daya Logic 5V** (+12V Kontak ke +5V MCU) | Alternatif Opsional | **Modul Mini DC-DC Buck MP1584EN / LM2596** | Rp 8.000 – Rp 15.000 | Menggantikan regulator linear panas. Menghasilkan 5.0V DC dingin & stabil untuk MCU. |
-
----
-
-### Detail Pemasangan Modul Optocoupler PC817 4-Channel (OEM Training / Learn)
-Modul ini digunakan HANYA pada Fase 1 (OEM_LEARN) untuk membaca sinyal timing koil pengapian CDI OEM secara pasif dan aman tanpa risiko merusak mikrokontroler.
-
-Terdapat dua skema pengkabelan tergantung pada lokasi pengujian Anda:
-
-**A. SKEMA MOTOR SUNGGUHAN (Standar Active-High)**
-Digunakan saat CDI langsung dipasang ke kelistrikan motor. Buat 2 kabel cabang/paralel (*pigtail probe*) dari soket motor:
-- **Kabel Sadap Utama** ➔ Diambil dari paralel **J1.12** (Koil Center). Masuk ke IN1+ modul PC817 via R 47kΩ 2W.
-- **Kabel Sadap Samping** ➔ Diambil dari paralel **J1.6** (Koil Side). Masuk ke IN2+ modul PC817 via R 47kΩ 2W.
-- **VCC Modul** ➔ Ke 3V3 MCU | **GND Modul** ➔ Ke GND MCU.
-- **OUT1 & OUT2** ➔ Ke pin input pembaca MCU (PB3/PB4 atau GPIO16/GPIO17).
-*(Pasang jumper JP1 & JP2 modul pada posisi VCC).*
-
-**B. SKEMA UJI MEJA / BENCH TEST (Pembalikan Sinyal / Active-Low Inverter)**
-Jika Anda ingin menguji dan menaikkan angka sampel aplikasi Android di atas meja menggunakan alat Generator Sinyal, sinyal harus dibalik agar timing pulser dan koil sinkron:
-- **IN1 & U1 (VCC)** ➔ Keduanya dihubungkan langsung ke **3.3V** MCU.
-- **G (Input/GND)** ➔ Dihubungkan ke kabel sinyal **f-Generator**.
-- **G (Output/Emiter)** ➔ Dihubungkan ke pin input pembaca MCU (GPIO16/17).
-*Cara Kerja: Saat f-Generator turun ke 0V, listrik 3.3V menembus modul PC817, mengirim pulsa sinkron ke MCU sehingga aplikasi Android mencatat penambahan pulsa.*
-
-```text
-┌───────────────────────────────────────────────────────────────┐
-│       MODUL OPTOCOUPLER PC817 4-CHANNEL ISOLATION BOARD       │
-├───────────────────────────────┬───────────────────────────────┤
-│   [TERMINAL INPUT KOIL OEM]   │     [TERMINAL OUTPUT MCU]     │
-│                               │                               │
-│ IN1+ ──[ R 47kΩ 2W ]── J1.12  │ OUT1 ──────> PIN INPUT CTR    │
-│      (Kabel Sadapan J1.12)    │      (STM32 PB3 / ESP GPIO16) │
-│ IN1- ───────────────── J1.11  │ OUT2 ──────> PIN INPUT SIDE   │
-│      (GND Motor Massa)        │      (STM32 PB4 / ESP GPIO17) │
-│                               │ OUT3 ──────  (Cadangan)       │
-│ IN2+ ──[ R 47kΩ 2W ]── J1.6   │ OUT4 ──────  (Cadangan)       │
-│      (Kabel Sadapan J1.6)     │                               │
-│ IN2- ───────────────── J1.11  │ VCC  ──────> 3V3 (MCU)        │
-│      (GND Motor Massa)        │ GND  ──────> GND (MCU)        │
-├───────────────────────────────┴───────────────────────────────┤
-│ [LED1] [LED2] [LED3] [LED4]  • Indikator Kedip Pulsa          │
-│ [JP1]  [JP2]  [JP3]  [JP4]   • Jumper Output Level (Set VCC)  │
-└───────────────────────────────────────────────────────────────┘
-```
-
-**Langkah & Tutorial Singkat**:
-1. Siapkan 2 buah Resistor **47 kΩ 2 Watt** (wajib daya besar 2 Watt). Pasang secara seri pada kabel sebelum masuk ke terminal `IN1+` dan `IN2+` untuk menahan spike tegangan dari pulsa koil pengapian.
-2. Sambungkan terminal `IN1-` dan `IN2-` ke Ground massa motor (`J1.11 GND`).
-3. Beri daya modul sisi output dengan menyambungkan `VCC` ke Pin **3V3** MCU dan `GND` ke Pin **GND** MCU.
-4. Pasang jumper JP1 & JP2 modul pada posisi **VCC** (pull-up internal aktif ke 3.3V).
-5. Sambungkan terminal `OUT1` dan `OUT2` ke pin Input MCU yang sesuai (Lihat Bab Skema Wiring Pinout).
-6. Saat mesin dihidupkan dengan CDI OEM, LED1 dan LED2 pada modul akan berkedip mengikuti percikan busi, dan counter pulsa di aplikasi Android akan bergerak naik!
-
----
-
-## 🛒 Daftar Belanja Komponen Lengkap (BOM) & Panduan Bebas Salah Beli
-
-> 💡 **PRINSIP PENTING (BEBAS KOMPONEN DOBEL)**:
-> CDI R8 menggabungkan **Modul Jadi Siap Pakai di Pasaran** untuk blok yang rumit, dan **Komponen Diskrit Khusus** untuk blok pengapian tegangan tinggi (HV & SCR).
-> 
-> Komponen yang **SUDAH ADA di dalam modul jadi TIDAK PERLU dibeli terpisah**. Jangan membeli transistor, dioda, atau kapasitor untuk rangkaian yang sudah tertanam rapi di modul!
-
----
-
-### 📦 BAGIAN A: Modul Jadi Siap Pakai di Pasaran (Drop-In Modules)
-*Beli modul-modul ini utuh. Seluruh komponen internalnya (IC, transistor driver, dioda pengaman, LED, resistor pendukung, dan terminal baut) **SUDAH LENGKAP** di atas modul papan pabrikan, sehingga Anda **TIDAK PERLU** membelinya lagi secara terpisah.*
-
-| Ref BOM | Jumlah | Modul Jadi Siap Pakai | Fungsi di Rangkaian CDI | Komponen yang SUDAH TERTANAM di Modul *(JANGAN Beli Terpisah!)* |
-| :--- | :---: | :--- | :--- | :--- |
-| **MOD_MCU** | **1 pcs** | **ESP32-WROOM-32D / 32E DevKitC (38-Pin)** *(atau WeAct STM32WB55CGU6)* | Otak kendali timing pengapian, kalkulasi kurva map, pembaca pulser, dan konektivitas BLE Android. | • Mikrokontroler Dual-Core + BLE onboard<br>• Regulator LDO 3.3V onboard<br>• Osilator Kristal onboard<br>• Tombol EN & BOOT onboard<br>• Port USB Type-C / Micro + IC Serial CH340/CP2102<br>• Kapasitor decoupling & filter daya |
-| **MOD_BUCK** | **1 pcs** | **Modul Mini DC-DC Buck MP1584EN** *(atau Modul LM2596 Step Down)* | Menurunkan tegangan aki 12V motor menjadi **5.00V DC stabil & dingin** untuk menyuplai pin 5V board MCU. | • IC Switching Buck Converter<br>• Induktor Choke Ferrite onboard<br>• Kapasitor filter elko / keramik in-out<br>• Trimpot potensiometer pengatur voltase<br>• Dioda freewheeling |
-| **MOD_RELAY** | **1 pcs** | **Modul Relay 1-Channel 5V dengan Optocoupler** | Mengendalikan kipas radiator motor (J1.7). Firmware saat ini: OFF = LOW; ON dan AUTO = HIGH failsafe karena konversi NTC belum tersedia. | • Relay 5V 10A<br>• **Transistor Driver Relay (BC547 / SS8050)**<br>• **Dioda flyback koil relay (1N4007)**<br>• Optocoupler pengaman isolasi sinyal MCU<br>• LED indikator Relay ON/OFF<br>• Terminal sekrup baut untuk kabel motor kipas |
-| **MOD_LEARN** | **1 pcs** | **Modul Optocoupler PC817 4-Channel Isolation Board** | Menyadap pulsa timing CDI bawaan pabrik (OEM Learn) secara pasif tanpa mengganggu CDI asli (J1.12 Center & J1.6 Side). | • **4 buah IC Optocoupler PC817**<br>• 4 buah LED indikator kedip pulsa<br>• Resistor bias & pull-up onboard<br>• Jumper selektor level tegangan output<br>• Terminal sekrup baut (screw terminal) kabel sadapan |
-
----
-
-### ⚡ BAGIAN B: Komponen Diskrit yang WAJIB Dibeli Terpisah
-*Mengapa komponen ini tidak memakai modul jadi? Karena modul boost / inverter DC-DC 400V generik di pasaran arusnya terlalu kecil (hanya 2–20mA, tidak kuat melayani 3 busi di 10.000 RPM yang butuh 80–120mA), dan modul dimmer AC di pasaran tidak responsif terhadap pulsa mikrodetik CDI. Oleh karena itu, blok pengapian dan sensor di bawah ini **TIDAK ADA di modul mana pun** dan wajib dirakit diskrit di papan PCB:*
-
-#### 1. Pelepasan Pengapian Koil Busi (Discharge SCR)
-| Ref BOM | Jumlah | Komponen Utama | Rating Listrik | Persamaan / Substitusi Identik | Fungsi Khusus |
-| :--- | :---: | :--- | :--- | :--- | :--- |
-| **SCR1, SCR2** | **2 pcs** | **BT151-600R** (TO-220) | 600V, 12A RMS, IGT ~15mA | • **BT151-800R** (800V 12A)<br>• **BT152-800R** (16A 800V)<br>• **TYN612 / TYN812** | Saklar pelepasan tegangan tinggi ke koil busi. (1 pcs untuk Busi Tengah, 1 pcs untuk Busi Samping). |
-| **C_CENTER, C_SIDE** | **2 pcs** | **1.0 uF 630V MKP / MPP** | Kapasitor Film Polypropylene Pulse Grade | • **1.5 uF 630V MKP** (*api lebih padat*)<br>• **1.0 uF 1000V DC MKP10**<br>• **CBB21 / CBB22 105J 630V** | Penampung energi percikan api busi. (1 pcs untuk Busi Tengah, 1 pcs untuk Busi Samping). |
-| **RBLEED_C, RBLEED_S** | **8 pcs** | **470k Ohm 0.5W** | Metal Film / Carbon 0.5W | • 4 pcs **1 Mega Ohm 1W** seri (2 seri per bank)<br>• 8 pcs **510k Ohm 0.5W** | Disolder 4 seri per bank (total 1.88 MΩ) untuk mengosongkan sisa muatan kapasitor saat kontak mati demi keselamatan teknisi. |
-| **QNC, QNS** | **2 pcs** | **BC547B** (TO-92 NPN) | 45V 100mA NPN | BC548B / 2N3904 / 2SC1815 | Driver pemicu gate SCR pengapian (1 pcs Center, 1 pcs Side). *Bukan untuk relay kipas!* |
-| **QPC, QPS** | **2 pcs** | **BC557B** (TO-92 PNP) | 45V 100mA PNP | BC558B / 2N3906 / 2SA1015 | Penguat arus pemicu gate SCR pengapian (1 pcs Center, 1 pcs Side). |
-
-#### 2. Pembangkit Tegangan Tinggi HV Inverter (Pengecas Kapasitor 285V / 345V)
-| Ref BOM | Jumlah | Komponen Utama | Spesifikasi Listrik | Persamaan / Alternatif Donor | Fungsi Khusus |
-| :--- | :---: | :--- | :--- | :--- | :--- |
-| **QHV1, QHV2** | **2 pcs** | **IRF3205** (TO-220) | MOSFET N-Ch, 55V 110A, RDS(on) 8 mΩ | • **IRFB3077** (75V 120A 3.3 mΩ)<br>• **IRFB3206** (60V 120A)<br>• **IRF1404** (40V 162A) | Pasangan transistor switching push-pull primer trafo (bisa didonor dari sekunder PSU PC bekas). |
-| **U4** | **1 pcs** | **TC4427A / TC4427CPA** (DIP-8) | Dual High-Speed MOSFET Driver Non-Inverting 1.5A | • **MIC4427**<br>• **UCC27524 / UCC27424** (TI Dual 4A-5A)<br>• **MCP1407** | Menggerakkan gerbang MOSFET QHV1 & QHV2 secara cepat dan presisi. |
-| **T1 (Trafo)** | **1 pcs** | **Trafo ATX PC (EI-33 / EE-35)** | Lilitan sekunder 5V CT dijadikan input primer push-pull | Trafo bekas catu daya komputer ATX | Menaikkan 12V aki menjadi 285V / 345V AC frekuensi tinggi (~50–100 kHz). |
-| **DREC1 – DREC4** | **4 pcs** | **UF4007** (DO-41) | 1A 1000V Ultrafast Rectifier (Trr < 75ns) | • **HER108** (1A 1000V 75ns)<br>• **SF18** (1A 1000V)<br>• **MUR1100** | Dioda penyearah jembatan (bridge rectifier) sekunder trafo. *(Dilarang pakai 1N4007 biasa karena akan mendidih di frekuensi tinggi).* |
-| **DCH_C, DCH_S** | **2 pcs** | **UF4007** (DO-41) | 1A 1000V Ultrafast Rectifier | HER108 / SF18 / MUR1100 | Dioda pemisah isolasi pengisian Bank Center dan Bank Side agar letupan busi tengah tidak menguras kapasitor busi samping. |
-| **TVS_Q1, TVS_Q2** | **2 pcs** | **1.5KE33A** (Through-hole) | TVS Diode 1500W 33V Unidirectional | • **P6KE33A** (600W 33V)<br>• **1.5KE36A / P6KE36A** (36V) | Meredam lonjakan tegangan induktansi bocor di kaki Drain MOSFET. *(Jangan gunakan 27V karena tegangan kerja normal push-pull mencapai ~30V).* |
-| **RSENSE** | **1 pcs** | **0.05 Ohm 5W Non-Induktif** | Shunt Resistor pembaca arus trafo | • 2 pcs **0.1 Ohm 5W** paralel<br>• 5 pcs **0.22 Ohm 2W** paralel | Sensor deteksi arus berlebih untuk proteksi instan trafo (PWM Current Limiter). |
-
-#### 3. Rangkaian Masukan Sinyal Pulser, Proteksi & Sensor Analog (Input ADC)
-| Ref BOM | Jumlah | Komponen Utama | Rating / Tipe | Persamaan / Alternatif | Fungsi Khusus |
-| :--- | :---: | :--- | :--- | :--- | :--- |
-| **U2** | **1 pcs** | **LM339N** (DIP-14) | Quad Comparator | • **LM239 / LM139**<br>• **KA339 / HA17339** | Mengubah sinyal sinus AC pulser magnet pickup kruk as (J1.10) menjadi pulsa digital kotak untuk pin input MCU. |
-| **DBAT** | **8 pcs** *(atau 16 pcs)* | **BAT54S** (SOT-23 SMD) | Dual Schottky Diode Clamp 30V 200mA | • Jika pakai through-hole: **16 pcs 1N5819 / BAT43 / 1N5711** | Membatasi tegangan seluruh pin ADC MCU agar tidak pernah melebihi 3.3V atau drop di bawah GND saat ada lonjakan kabel bodi motor. |
-| **DCL_A, DCL_B** | **2 pcs** | **1N4148** (DO-35) | Dioda Fast Switching 100V 200mA | 1N4448 / 1N914 | Pengaman klem logika proteksi arus trafo ke IC driver. |
-| **DREV** | **1 pcs** | **SB560** (DO-201AD) | 5A 60V Schottky Diode | SR560 / SS56 / SB5100 | Pengaman kutub aki terbalik di jalur input daya 12V (J1.5). |
-| **TVS_IN** | **1 pcs** | **SMBJ33A / P6KE33A** | TVS Diode 33V Unidirectional | 1.5KE33A / 1.5KE36A | Menyerap lonjakan voltase transien dari spul / regulator kiprok motor. |
-| **R_LEARN_EXT** | **2 pcs** | **47k Ohm 2 Watt** *(atau 8 pcs 12k 0.25W seri)* | Resistor Daya Khusus | Disolder seri pada kabel sadapan luar | Dipasang pada kabel sadapan koil motor (J1.12 & J1.6) **SEBELUM** masuk ke terminal input modul optocoupler untuk menahan tegangan kejut 300V. |
-
-#### 4. Resistor Pembagi Tegangan & Bias (Metal Film 1% 0.25W)
-| Nilai Resistor | Jumlah Butuh | Penempatan / Rangkaian |
-| :--- | :---: | :--- |
-| **270k Ohm 1%** | **8 pcs** | Feedback pembacaan tegangan tinggi HV (4 seri untuk Center, 4 seri untuk Side ke ADC MCU). Nilai ini harus dipertahankan agar rasio ADC sesuai firmware; nilai lain memerlukan kalibrasi firmware baru. |
-| **10 Ohm** | **2 pcs** | Snubber gerbang driver. |
-| **100 Ohm** | **4 pcs** | Proteksi gerbang MOSFET dan filter sinyal pulser. |
-| **330 Ohm** | **4 pcs** | Pembatas arus transistor pemicu gate SCR. |
-| **1k Ohm** | **4 pcs** | Pulldown gate-katoda SCR1 & SCR2 (mencegah pemicuan liar dari noise). |
-| **2.2k Ohm** | **2 pcs** | Jalur kolektor NPN ke basis PNP pemicu SCR. |
-| **4.7k Ohm** | **4 pcs** | Resistor basis NPN & pullup pulser. |
-| **8.2k Ohm** | **2 pcs** | Resistor bawah pembagi feedback HV Center dan Side. Sensor suhu memakai jaringan 4.7k/15k/27k terpisah. |
-| **10k Ohm** | **6 pcs** | Pullup basis PNP & pulldown referensi ADC. |
-| **15k Ohm** | **2 pcs** | Pembagi tegangan sensor bukaan gas TPS. |
-| **22k Ohm** | **2 pcs** | Pembagi tegangan pembaca voltase aki (VBAT). |
-| **27k Ohm** | **2 pcs** | Pembagi tegangan pembaca voltase aki (VBAT). |
-| **39k Ohm** | **2 pcs** | Histeresis komparator pulser LM339. |
-| **100k Ohm** | **2 pcs** | Pembagi ambang batas proteksi komparator. |
-| **120k Ohm** | **2 pcs** | Feedback komparator proteksi tegangan lebih (OVP). |
-
-#### 5. Kapasitor Filter & Bypass Diskrit
-| Nilai Kapasitor | Jumlah Butuh | Penempatan / Rangkaian |
-| :--- | :---: | :--- |
-| **4.7nF (472)** | **2 pcs** | Filter derau frekuensi tinggi pada sinyal pulser pickup. |
-| **10nF (103)** | **2 pcs** | Filter masukan ADC sensor analog. |
-| **100nF / 0.1 uF (104)** | **8 pcs** | Kapasitor bypass VCC IC LM339, TC4427, dan rel tegangan IC. |
-| **470 uF 35V / 50V Low-ESR** | **1 pcs** | Elko peredam ripple arus besar pada jalur input daya 12V aki (bisa didonor dari PSU PC). |
-
-#### 6. Soket, Sikring & Aksesoris Perakitan
-| Komponen Aksesoris | Jumlah Butuh | Keterangan & Catatan |
-| :--- | :---: | :--- |
-| **Soket Pigtail J1** | **1 pcs** | Soket 12-pin sambungan CDI khusus NS200 (gunakan kabel sambungan pigtail, jangan memotong kabel asli bodi motor). |
-| **Kabel Busi & HV AWG 18-20** | **1 set (~2 meter)** | Kabel tembaga serabut tebal berisolasi tahan tegangan 600V untuk jalur koil busi J1.12, J1.6, dan output sekunder trafo. |
-| **Rumah Sikring + Sekring Blade** | **3 set** | 1x **5A** (Sikring Utama FMAIN), 1x **1A** (Sikring Logic MCU FLOGIC), dan 1x **3A** (Sikring Inverter FHV). |
-| **Induktor Choke Input (L_IN)** | **1 pcs** | Toroid ferit 47 uH dengan rating arus minimal 5A (bisa diambil langsung dari donor PSU PC). |
-| **Pin Header Male 2.54mm** | **1 strip (40 pin)** | Untuk selektor fisik TPS `J_TPS`, titik ukur, dan kabel interkoneksi. Bukan pemilih mode firmware. |
-| **Jumper Shunt 2.54mm** | **2 pcs** | Hanya untuk selektor pasangan kabel TPS `J_TPS`; mode/HV/PRO dikendalikan firmware dan aplikasi. |
-| **Papan PCB Lubang Matrix** | **2 keping** | 1 keping ukuran **7 x 9 cm** (Papan Logic MCU & Sensor) dan 1 keping ukuran **5 x 7 cm** (Papan Khusus Power Inverter HV terpisah dengan celah isolasi 6mm). |
+- U5 = TC4427A; SCR1/SCR2 = BT151-800R; DTVS1/DTVS2 = 1.5KE33A.
+- BAT54S = 7 buah.
+- OEM Learn = 8 × 12 kΩ 0,5 W, dibagi empat seri per kanal.
+- VBAT = 100 kΩ / 22 kΩ + resistor proteksi 1 kΩ ke GPIO33.
+- Pulser = 39 kΩ 0,5 W seri, 10 kΩ bias, 10 MΩ histeresis, 4,7 kΩ pull-up, dan 1 kΩ proteksi ke GPIO4.
+- C_CENTER/C_SIDE memakai footprint 9 × 4 lubang dengan jarak kaki 20,32 mm.
+- T1 memakai grid universal EE35; detail posisi pin ada di README hardware.
+- J1 adalah nomor logis 2 × 6 untuk solder manual dengan pin HV 6/12 dipisahkan; bukan header plug-in rapat 2 × 6.
 
 ---
 
@@ -363,9 +251,9 @@ Setiap nilai yang ditampilkan di layar memiliki rantai keterlacakan (*traceabili
 | Parameter UI | Label Layar | Rentang / Format | Asal Sumber Fisik / Sirkuit | Pin MCU (STM32 / ESP32) | Jalur Frame BLE / GATT | Penanganan di Aplikasi (ViewModel) |
 |---|---|---|---|---|---|---|
 | **STATUS KONEKSI** | `STATUS` / `ONLINE` | DISCONNECTED, CONNECTING, CONNECTED, STANDBY | Android BLE Stack & GATT Callback | N/A (Antena RF BLE) | Android `BluetoothGattCallback` | `CdiViewModel.connectionStatus`, `isBluetoothEnabled`, `bleLink` flag |
-| **TEGANGAN AKI** | `BATT` / `VBAT` | 0.00 – 16.00 V (Resolusi 0.01V) | Terminal Kunci Kontak +12V (J1.5) via R-Divider (27k/10k) | PA5 (STM32) / GPIO35 (ESP32) ADC1 | Frame CORE (Byte 12–13, `uint16` centivolt) | `telemetry.batteryCv / 100f`, warning < 11.5V (aki lemah) |
-| **TEGANGAN HV CENTER** | `HV Center` | 0 – 400 V DC | Kapasitor Film Busi Tengah C_CENTER via R-Divider (4x270k / 8.2k) | PA6 (STM32) / GPIO32 (ESP32) ADC1 | Frame CORE (Byte 14–15, `uint16` volt) | `telemetry.hvCenter`, status pengisian inverter push-pull Bank 1 |
-| **TEGANGAN HV SIDE** | `HV Side` | 0 – 400 V DC | Kapasitor Film Busi Samping C_SIDE via R-Divider (4x270k / 8.2k) | PA7 (STM32) / GPIO33 (ESP32) ADC1 | Frame CORE (Byte 16–17, `uint16` volt) | `telemetry.hvSide`, status pengisian inverter push-pull Bank 2 |
+| **TEGANGAN AKI** | `BATT` / `VBAT` | 0.00 – 16.00 V (Resolusi 0.01V) | Terminal Kunci Kontak +12V (J1.5) via R-Divider (100k/22k) + proteksi 1k | PB0 (STM32) / GPIO33 (ESP32) ADC1 | Frame CORE (Byte 12–13, `uint16` centivolt) | `telemetry.batteryCv / 100f`, warning < 11.5V (aki lemah) |
+| **TEGANGAN HV CENTER** | `HV Center` | 0 – 400 V DC | Kapasitor Film Busi Tengah C_CENTER via R-Divider (4x270k / 8.2k) | PA6 (STM32) / GPIO35 (ESP32) ADC1 | Frame CORE (Byte 14–15, `uint16` volt) | `telemetry.hvCenter`, status pengisian inverter push-pull Bank 1 |
+| **TEGANGAN HV SIDE** | `HV Side` | 0 – 400 V DC | Kapasitor Film Busi Samping C_SIDE via R-Divider (4x270k / 8.2k) | PA7 (STM32) / GPIO32 (ESP32) ADC1 | Frame CORE (Byte 16–17, `uint16` volt) | `telemetry.hvSide`, status pengisian inverter push-pull Bank 2 |
 | **PUTARAN MESIN** | `RPM` | 0 – 30.000 RPM (Resolusi 1 RPM) | Pick-up Sensor Magnet Pulser Kruk As (J1.10) via LM339 | PA0 / TIM1 (STM32) / GPIO4 esp_timer (ESP32) | Frame CORE (Byte 6–7, `uint16` RPM) | `telemetry.rpm`, animasi jarum tachometer + Watchdog 2.000 ms |
 | **BUKAAN GAS** | `TPS` | 0 – 100.0 % (Resolusi 0.1%) | Sensor TPS Karburator NS200 (J1.2 & J1.4) via Filter RC | PA3 / PA5 (STM32) / GPIO36 / GPIO34 (ESP32) | Frame CORE (Byte 8–9, `uint16` permille 0–1000) | `telemetry.tps / 10f`, bar indikator persentase bukaan gas |
 | **DERAJAT PENGAPIAN** | `ADVANCE` | 0.0 – 45.0 °BTDC | Hasil lookup tabel peta ignition 32x16 berdasarkan RPM & TPS | Timer Internal MCU Gate Trigger Scheduler | Frame CORE (Byte 10–11, `int16` centi-degree) | `telemetry.advanceCdeg / 100f`, jarum sudut advance balap |
@@ -399,8 +287,8 @@ Setiap nilai yang ditampilkan di layar memiliki rantai keterlacakan (*traceabili
 - **Sumber Fisik**: Jalur tegangan aki 12V setelah kunci kontak ON, masuk melalui pin soket harness **J1.5** (kabel warna Cokelat).
 - **Rangkaian Pengkondisi Sinyal**:
   - Melewati dioda pengaman kutub terbalik **DREV** (Schottky SB560) dan peredam transien **TVS_IN** (33V).
-  - Melewati pembagi tegangan resistor presisi: **R1 (27kΩ 1%)** pada sisi atas dan **R2 (10kΩ 1%)** pada sisi ground, menghasilkan rasio pembagian `10 / (27 + 10) = 0.27027`. Tegangan maksimum 16.0V aki akan diturunkan menjadi 4.32V (atau diskalakan sesuai rentang ADC 0–3.3V dengan kombinasi 22k/10k).
-  - Dilindungi oleh sepasang dioda klem **BAT54S** ke rel 3.3V dan GND untuk mencegah lonjakan tegangan merusak pin analog MCU.
+  - Melewati pembagi tegangan presisi **RVB1 100kΩ / RVB2 22kΩ**, lalu resistor seri **RVB3 1kΩ** menuju ADC. Pada 16 V, tegangan divider sekitar 2,89 V.
+  - Dilindungi oleh **DBAT_BAT BAT54S** ke rel 3,3 V dan GND. Pin pembaca adalah **PB0** pada STM32 atau **GPIO33** pada ESP32.
 - **Pemrosesan Firmware**: ADC membaca nilai analog terfilter, mengalikannya dengan faktor kalibrasi pembagi tegangan, lalu mengonversinya menjadi satuan centivolt (contoh: 12.60V dikodekan sebagai `1260`).
 - **Jalur Data**: Dikirim setiap 100 ms pada paket biner **CORE** byte 12–13 (`uint16 LE`).
 - **Konsumsi UI**: Ditampilkan pada dashboard instrumen dalam format `12.6V` dengan kode warna hijau (normal ≥ 12.0V), kuning (11.5V – 11.9V), atau merah (< 11.5V aki tekor).
@@ -415,7 +303,7 @@ Setiap nilai yang ditampilkan di layar memiliki rantai keterlacakan (*traceabili
   - **Sensor Pembaca ADC**: Masing-masing bank dihubungkan ke rangkaian pembagi tegangan berimpedansi tinggi yang terdiri dari 4 resistor seri **270kΩ 1%** (total 1.080 kΩ) pada sisi atas dan resistor shunt bawah **8.2kΩ 1%** ke ground. Rasio pembagian: `8.2 / (1080 + 8.2) = 0.007535` (tegangan 400V HV diturunkan dengan aman menjadi ~3.01V di pin ADC).
 - **Pin Input Mikrokontroler**:
   - STM32WB55: **PA6** (HV Center ADC1) dan **PA7** (HV Side ADC1).
-  - ESP32: **GPIO32** (HV Center ADC1_CH4) dan **GPIO33** (HV Side ADC1_CH5).
+  - ESP32: **GPIO35** (HV Center ADC1) dan **GPIO32** (HV Side ADC1).
 - **Jalur Data**: Dikirim pada paket biner **CORE** byte 14–15 (Center) dan byte 16–17 (Side) dalam format satuan Volt murni integer (`uint16 LE`).
 - **Fungsi Keselamatan**:
   - Peringatan warna merah menyala jika HV melebihi ambang batas proteksi (≥ 360V).
@@ -424,8 +312,8 @@ Setiap nilai yang ditampilkan di layar memiliki rantai keterlacakan (*traceabili
 #### 4. Putaran Mesin Kruk As (`RPM`)
 - **Sumber Fisik**: Pulser magnetik (Variable Reluctance Sensor) pada bak magnet kruk as motor Pulsar 200NS, terhubung melalui soket harness **J1.10** (kabel Putih-Merah).
 - **Rangkaian Pengkondisi Sinyal**:
-  - Sinyal gelombang sinus bolak-balik (AC) dari pick-up magnet dilewatkan filter kapasitor 4.7nF dan resistor 100Ω untuk meredam noise frekuensi tinggi.
-  - Masuk ke komparator tegangan presisi **LM339N** / **LM393** dengan umpan balik histeresis (resistor 39kΩ) untuk mengubah sinyal sinus menjadi gelombang kotak digital 0–3.3V bertepi tajam (*clean sharp square wave*).
+  - Sinyal AC dari pick-up J1.10 masuk melalui **RPICK1 39kΩ 0,5 W**, lalu diklem oleh **DBAT_PICK BAT54S** pada node `PICKUP_SENSE`.
+  - **RPICK2 10kΩ** memberi bias ke `VMID`; **U2 LM339N** membentuk sinyal digital dengan **RPICK3 10MΩ** sebagai histeresis, **RPICK4 4,7kΩ** sebagai pull-up, dan **RPICK5 1kΩ** sebagai proteksi menuju PA0/GPIO4.
 - **Pemrosesan Firmware**:
   - Dihubungkan ke pin Timer Input Capture: **PA0 / TIM1_CH1** (STM32) atau **GPIO4** dengan interrupt `esp_timer` presisi mikrodetik (ESP32).
   - Firmware mengukur selang waktu antar pulsa (delta time $t$ dalam mikrodetik) dan menghitung putaran mesin per menit: $\text{RPM} = \frac{60.000.000}{t \times \text{PPR}}$.
@@ -579,20 +467,22 @@ Tahap setup tidak dikodekan di telemetri v3. Aplikasi mengambilnya dari `GET,SET
 
 Tabel ini memetakan fungsi kabel harness bawaan motor NS200 ke pin yang tepat untuk platform STM32 maupun ESP32, guna menghilangkan segala bentuk ambiguitas operasional.
 
-| J1 | Fungsi | Warna Kabel | Pin STM32 | Pin ESP32 | Deskripsi Kelistrikan & Routing |
-|:--:|:-------|:------------|:----------|:----------|:--------------------------------|
-| 1  | NC | Kosong / NC | - | - | Tidak terhubung. Isolasi rapi. |
-| 2  | TPS_A | Hijau-Putih | PA3 / PA5 | **GPIO36** | Input sensor bukaan gas pasangan A. |
-| 3  | TEMP | Hitam-Putih | PA4 | **GPIO39** | Input sensor suhu mesin NTC (Pull-up 4.7k ke 5V). |
-| 4  | TPS_B | Abu-Abu | PA3 / PA5 | **GPIO34** | Input sensor bukaan gas pasangan B / Referensi. |
-| 5  | +12 V kontak | Cokelat | - | - | Input daya utama kunci kontak ON. Melewati penurun tegangan ke 5V. |
-| 6  | COIL_SIDE | Hitam-Merah | **PA2** | **GPIO26** | **OUTPUT (DIY):** Menembak koil samping via SCR driver menuju J1.6. |
-| 7  | FAN_RELAY | Biru-Kuning | PB5 | **GPIO13** | Output relay active-high; ON/AUTO = HIGH pada firmware saat ini. |
-| 8  | OEM_SIDE | Kosong / NC | **PB4** | **GPIO17** | **INPUT (Learn):** Menyadap pulsa koil samping pabrik via Optocoupler dari kabel **J1.6**. |
-| 9  | OEM_CTR | Kosong / NC | **PB3** | **GPIO16** | **INPUT (Learn):** Menyadap pulsa koil utama pabrik via Optocoupler dari kabel **J1.12**. |
-| 10 | PULSER | Putih-Merah | **PA0** | **GPIO4** | Input sensor magnet. Tersambung permanen ke MCU via modul komparator LM393. |
-| 11 | GND | Hitam-Kuning | GND | GND | Ground utama massa motor. |
-| 12 | COIL_CENTER | Oranye | **PA1** | **GPIO25** | **OUTPUT (DIY):** Menembak koil tengah via SCR driver menuju J1.12. |
+| J1 | Fungsi | Warna Kabel | Hubungan PCB Rev B | Deskripsi Kelistrikan & Routing |
+|:--:|:-------|:------------|:-------------------|:--------------------------------|
+| 1 | NC | Kosong / NC | Tanpa net | Cadangan; jangan disambung. |
+| 2 | TPS_A | Hijau-Putih | Selector JTPS | Salah satu TPS signal/reference; posisi selector menentukan PA3/PA5 atau GPIO36/GPIO34. |
+| 3 | TEMP_SENSOR | Hitam-Putih | Divider + clamp ke PA4/GPIO39 | Input NTC; bukan input 5 V langsung. |
+| 4 | TPS_B | Abu-Abu | Selector JTPS | Pasangan TPS_A; jangan menetapkan signal/reference sebelum posisi JTPS dipilih. |
+| 5 | IGN_12V | Cokelat | Fuse input | +12 V setelah kunci kontak; diturunkan ke 5 V sebelum MCU. |
+| 6 | COIL_SIDE | Hitam-Merah | C_SIDE/SCR2 + tap OEM Learn | Pulsa CDI HV ke koil Side; **bukan GPIO26/PA2 langsung**. |
+| 7 | FAN_RELAY | Biru-Kuning | Kolektor BC337 + flyback | Low-side sink untuk koil relay eksternal; GPIO13/PB5 HIGH menyalakan transistor. |
+| 8 | OEM_SIDE_PROBE | Kosong / NC | NC/probe opsional | Bukan jalur langsung ke GPIO17/PB4. |
+| 9 | OEM_CENTER_PROBE | Kosong / NC | NC/probe opsional | Bukan jalur langsung ke GPIO16/PB3. |
+| 10 | PICKUP_RAW | Putih-Merah | 39k + clamp + LM339N | Input pulser mentah; keluaran komparator menuju PA0/GPIO4. |
+| 11 | GND_STAR | Hitam-Kuning | Titik star ground | Pertemuan ground harness yang dikontrol. |
+| 12 | COIL_CENTER | Oranye | C_CENTER/SCR1 + tap OEM Learn | Pulsa CDI HV ke koil Center; **bukan GPIO25/PA1 langsung**. |
+
+J1 memakai penomoran logis 2 × 6, tetapi bukan header plug-in rapat. Pin HV 6 dan 12 dipindahkan ke kolom berjarak; pemasangan dilakukan dengan solder kabel manual dan strain relief. Detail jarak pad/slot ada di [README hardware](hardware/easyeda/README.md). OEM Learn disadap dari J1.6/J1.12 melalui empat resistor 12 kΩ 0,5 W seri per kanal dan PC817 menuju PB4/PB3 atau GPIO17/GPIO16.
 
 ### ⚠️ CATATAN KHUSUS PENGUJIAN MEJA (BENCH TEST & SIMULATOR)
 Jika Anda menguji aplikasi Android dan MCU (khususnya ESP32) di atas meja kerja menggunakan daya USB dan alat Simulator Sinyal (seperti GM328A), Anda WAJIB mematuhi 3 aturan ini agar indikator di aplikasi merespons:
@@ -606,15 +496,15 @@ Untuk menghindari benturan arus driver koil dan memastikan keselamatan mikrokont
 **FASE 1: Penyadapan Pasif (Mode OEM_LEARN)**
 Pada fase ini, **CDI bawaan pabrik (OEM) WAJIB tetap menancap di soket motor** dan mengendalikan mesin. Mikrokontroler bertindak murni sebagai PENDENGAR (Input).
 1. **Jalur Input (Wajib Pasang):** Kabel Pulser (J1.10) terhubung permanen ke pin pembaca pulser (PA0 / GPIO4).
-   - Kabel Sadap koil tengah diambil dengan cara menyambung paralel kabel dari **J1.12** ➔ Optocoupler PC817 ➔ Pin Pembaca (PB3 / GPIO16).
-   - Kabel Sadap koil samping diambil dengan menyambung paralel dari **J1.6** ➔ Optocoupler PC817 ➔ Pin Pembaca (PB4 / GPIO17).
-2. **Jalur Output (Wajib Terputus):** Pin penembak koil MCU (PA1/PA2 atau GPIO25/GPIO26) **TIDAK BOLEH** tersambung ke koil. Pin ini dibiarkan menggantung bebas.
+   - Sadapan koil tengah: **J1.12** ➔ 4 × 12 kΩ 0,5 W seri ➔ PC817 ➔ PB3/GPIO16.
+   - Sadapan koil samping: **J1.6** ➔ 4 × 12 kΩ 0,5 W seri ➔ PC817 ➔ PB4/GPIO17.
+2. **Output wajib nonaktif:** PA1/PA2 atau GPIO25/GPIO26 hanya menuju driver SCR. Firmware tidak boleh memicu SCR selama CDI OEM masih terhubung.
 
 **FASE 2: Pengambilalihan Penuh (Mode DIY / FIRST_START)**
 Pada fase ini, **CDI bawaan pabrik (OEM) WAJIB dicabut secara fisik dari soket motor**. Mikrokontroler kini bertindak sebagai PENEMBAK (Output) yang mengontrol pengapian secara penuh.
 1. **Konfirmasi Cabut CDI Pabrik:** Buka aplikasi Android, ubah mode ke DIY, dan centang konfirmasi bahwa soket OEM telah dilepas (`OEM_UNPLUGGED`).
-2. **Jalur Input (Wajib Lepas):** Pin pembaca koil penyadap (PB3/PB4 atau GPIO16/GPIO17) dilepas/diabaikan dari rangkaian karena CDI OEM sudah dicabut.
-3. **Jalur Output (Wajib Pasang):** Pin penembak koil MCU (PA1/PA2 atau GPIO25/GPIO26) dihubungkan permanen ke sirkuit SCR menuju soket jalur **J1.12** dan **J1.6** untuk memicu busi secara mandiri.
+2. **Jalur OEM Learn:** Pada PCB tetap terisolasi oleh PC817 dan diabaikan firmware di luar mode Learn; tidak pernah disambung langsung ke GPIO.
+3. **Jalur Output:** PA1/PA2 atau GPIO25/GPIO26 menggerakkan driver SCR bertegangan rendah. SCR1/SCR2 kemudian melepas C_CENTER/C_SIDE ke **J1.12/J1.6**.
 
 ---
 
@@ -868,7 +758,7 @@ Menu **Pinout MCU** dalam aplikasi menyediakan visualisasi ganda (**Mode Tabel 2
 - **Konsistensi Visualisasi Wiring & Diagram Simulator Lintas Platform**:
   - Visualizer skema wiring per langkah (`StepWiringVisualCanvas`) dan simulator pcb kumulatif (`FullCumulativeCircuitSimulator`) kini berganti secara instan dan konsisten mengikuti platform yang dipilih:
     - **STM32**: Menggunakan `RealisticWeActBoard` dengan pinout STM32WB55 (PA0 pulser, PA1/PA2 gate, PA3 TPS, PA4 suhu, PB0 VBAT, dll.) dan komparator pulser LM339.
-    - **ESP32**: Menggunakan `RealisticEsp32Board` dengan pinout ESP32 (GPIO4 pulser via PC817 opto, GPIO25 center gate, GPIO26 side gate, GPIO36/VP TPS ADC1_CH0, GPIO39/VN Temp ADC1_CH3, GPIO33 VBAT ADC1_CH5, dll.).
+    - **ESP32**: Menggunakan `RealisticEsp32Board` dengan pinout ESP32 (GPIO4 pulser via LM339N, GPIO25 center gate, GPIO26 side gate, GPIO36/VP TPS ADC1_CH0, GPIO39/VN Temp ADC1_CH3, GPIO33 VBAT ADC1_CH5, dll.).
 - **Label Platform Ringkas & Jelas**:
   - Seluruh antarmuka beralih ke penamaan ringkas "STM32" atau "ESP32" tanpa teks panjang yang memecah baris.
 
@@ -894,7 +784,7 @@ Menu **Pinout MCU** dalam aplikasi menyediakan visualisasi ganda (**Mode Tabel 2
 - **Katalog & Panduan Modul Siap Pakai di Pasaran**:
   - Menyediakan panduan lengkap penggantian blok diskrit dengan modul siap pakai di pasaran (*drop-in modules*) untuk memangkas kerumitan perakitan solderan hingga 85%.
   - Integrasi visual dan tutorial **Modul Optocoupler PC817 4-Channel** dengan terminal sekrup baut, LED indikator pulsa, dan jumper pull-up onboard untuk alur OEM Learn.
-  - Panduan modul pelengkap: **Modul Buck MP1584EN / LM2596** (+12V ke +5V), **Modul Komparator LM393** dengan output 3.3V terproteksi (Pulser J1.10), dan **Modul Relay Opto 1-Channel** (Kipas J1.7). Modul boost HV generik dinyatakan tidak kompatibel karena tidak mengikuti kontrol PWM, feedback, serta target 285V/345V firmware.
+  - Panduan legacy memakai modul eksternal; PCB Rev B terbaru memakai MP1584, LM339N, serta BC337 + 1N4007 diskrit. Modul boost HV generik tetap tidak kompatibel karena tidak mengikuti kontrol PWM, feedback, serta target 285V/345V firmware.
   - Mempertahankan 100% kompatibilitas wiring soket harness bawaan NS200 12-pin (J1).
 - **Kontrak Firmware R8 & Handshake Kapabilitas**:
   - Menambahkan handshake `GET,CAPS` saat koneksi BLE terhubung untuk mendeteksi kapabilitas firmware R8 (`PROTO4`, `OEM_LEARN`, `MANUAL`, `OTA_STAGE`, `AUTO_FIRST_START`, `NO_JUMPERS`).
