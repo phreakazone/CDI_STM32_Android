@@ -124,12 +124,19 @@ const passives = [
 ];
 
 let px=40, py=68;
+const powerPlacement = {
+  RPWMA:[101,58], RPWMB:[101,75], RGA:[123,58], RGB:[123,82],
+  RGPD1:[129,68], RGPD2:[129,92], RPWMPDA:[101,64], RPWMPDB:[101,81],
+  CTC1:[112,82], CTC2:[112,89], RI1:[86,12], RI2:[86,19], RIS:[102,98],
+  RVOV1:[86,28], RVOV2:[86,35], CVOV:[86,42], RFAULT:[86,49],
+  DCLA:[101,47], DCLB:[101,52], RHVP1:[126,104], RHVP2:[126,111]
+};
 for (const [ref,val,a,b] of passives) {
   const power = /^(RPWM|RGA|RGB|RGPD|CTC|RI\d|RIS|RVOV|CVOV|RFAULT|DCL|RHVP)/.test(ref);
   const gate = /^(RGC|RGS)/.test(ref);
   if (power) {
-    const n=components.filter(c=>c._group==='powerPassive').length;
-    components.push({ref,value:val,kind:'axial',x:103+(n%4)*10,y:8+Math.floor(n/4)*7,pins:[['1',a],['2',b]],_group:'powerPassive'});
+    const [x,y]=powerPlacement[ref];
+    components.push({ref,value:val,kind:'axial',x,y,pins:[['1',a],['2',b]],_group:'powerPassive'});
   } else if (gate) {
     const n=components.filter(c=>c._group==='gatePassive').length;
     components.push({ref,value:val,kind:'axial',x:145+(n%5)*13,y:112+Math.floor(n/5)*7,pins:[['1',a],['2',b]],_group:'gatePassive'});
@@ -157,7 +164,10 @@ const bom = components.map(c => ({ref:c.ref,qty:1,value:c.value,footprint:c.kind
 function footprint(c) {
   const x=mm(c.x), y=mm(c.y), shapes=[];
   const pads=[];
-  const addPad=(p,dx,dy,w=mm(2.6),h=mm(2.6),hole=mm(0.55))=>{
+  // A 2.00 mm pad on a 2.54 mm header leaves 0.54 mm copper-to-copper
+  // space.  The previous 2.60 mm default physically overlapped adjacent
+  // ESP32 header pads and produced a real DRC clearance error.
+  const addPad=(p,dx,dy,w=mm(2),h=mm(2),hole=mm(0.9))=>{
     const px=x+dx,py=y+dy;
     pads.push(`PAD~ELLIPSE~${px}~${py}~${w}~${h}~11~${p[1]}~${p[0]}~${hole}~~0~${gid()}~0~~Y~0~0~0.3~${px},${py}`);
   };
@@ -201,7 +211,9 @@ function footprint(c) {
     shapes.push(`TRACK~0.8~3~~${x-mm(1.27)} ${y} ${x+mm(21.59)} ${y} ${x+mm(21.59)} ${y+mm(10.16)} ${x-mm(1.27)} ${y+mm(10.16)} ${x-mm(1.27)} ${y}~${gid()}~0`);
   }
   else { addPad(c.pins[0],0,0); addPad(c.pins[1],mm(10),0); }
-  shapes.push(`TEXT~P~${x}~${y-mm(2)}~0.7~0~0~3~~4.5~${c.ref} ${c.value}~~${gid()}~~0`);
+  // Silkscreen carries only the reference.  Values remain in BOM.csv; putting
+  // full values on this dense mixed-voltage board made the PCB unreadable.
+  shapes.push(`TEXT~P~${x}~${y-mm(1.8)}~0.2~0~0~3~~1.2~${c.ref}~~${gid()}~~0`);
   shapes.push(...pads);
   return `LIB~${x}~${y}~package\`${c.kind}\`value\`${c.value}\`Contributor\`IGNITRA\`~~~${gid()}~1~~~0~#@$${shapes.join('#@$')}`;
 }
@@ -259,8 +271,9 @@ function board(variant) {
   const ox=0, oy=0, w=mm(230), h=mm(165);
   const shape=[];
   shape.push(`TRACK~1~10~~${ox} ${oy} ${ox+w} ${oy} ${ox+w} ${oy+h} ${ox} ${oy+h} ${ox} ${oy}~${gid()}~0`);
-  shape.push(`TEXT~L~${ox+10}~${oy+15}~1~0~0~3~~10~IGNITRA CDI R9 ESP32 ${variant} - UNROUTED PCB SOURCE~~${gid()}~~0`);
-  shape.push(`TEXT~L~${ox+10}~${oy+28}~0.8~0~0~3~~8~HV 345V: clearance copper >=6mm; slots >=2mm; ANTENNA KEEP-OUT 15mm~~${gid()}~~0`);
+  // Keep board-level notes on Document, not on crowded copper/silkscreen.
+  shape.push(`TEXT~L~${ox+mm(3)}~${oy+mm(4)}~0.2~0~0~12~~2.5~IGNITRA CDI R9 ESP32 ${variant}~~${gid()}~~0`);
+  shape.push(`TEXT~L~${ox+mm(3)}~${oy+mm(7)}~0.15~0~0~12~~1.5~HV AREA: KEEP >=6mm FROM LOGIC; ANTENNA KEEP-OUT 15mm~~${gid()}~~0`);
   // Functional-zone boundaries and isolation-slot guides.
   shape.push(`TRACK~1~12~~${ox+mm(100)} ${oy} ${ox+mm(100)} ${oy+h}~${gid()}~0`);
   shape.push(`TRACK~1~12~~${ox+mm(145)} ${oy} ${ox+mm(145)} ${oy+h}~${gid()}~0`);
@@ -279,8 +292,8 @@ function board(variant) {
     shape,
     layers:pcbLayers(variant),objects:pcbObjects,
     BBox:{x:ox,y:oy,width:w,height:h}, preference:{hideFootprints:'',hideNets:''},
-    DRCRULE:{Default:{trackWidth:variant==='2L'?1.2:2.4,clearance:1.2,viaHoleDiameter:2.4,viaHoleD:0.8},isRealtime:true,isDrcOnRoutingOrPlaceVia:true,checkObjectToCopperarea:true,showDRCRangeLine:true},
-    routerRule:{unit:'mm',trackWidth:variant==='2L'?1.2:2.4,trackClearance:1.2,viaHoleD:0.8,viaDiameter:2.4,routerLayers:variant==='2L'?[1,2]:[2],smdClearance:1.2,specialNets:[],nets:[...new Set(components.flatMap(c=>c.pins.map(p=>p[1])).filter(Boolean))],padsCount:components.reduce((n,c)=>n+c.pins.length,0),skipNets:[],realtime:true},
+    DRCRULE:{Default:{trackWidth:0.25,clearance:0.2,viaHoleDiameter:1.0,viaHoleD:0.5},isRealtime:true,isDrcOnRoutingOrPlaceVia:true,checkObjectToCopperarea:true,showDRCRangeLine:true},
+    routerRule:{unit:'mm',trackWidth:0.25,trackClearance:0.2,viaHoleD:0.5,viaDiameter:1.0,routerLayers:variant==='2L'?[1,2]:[2],smdClearance:0.2,specialNets:[{name:'HV',nets:['HV_CENTER','HV_SIDE','HV_AC1','HV_AC2','BRIDGE_PLUS','COIL_CENTER','COIL_SIDE'],clearance:6,trackWidth:1.2}],nets:[...new Set(components.flatMap(c=>c.pins.map(p=>p[1])).filter(Boolean))],padsCount:components.reduce((n,c)=>n+c.pins.length,0),skipNets:[],realtime:true},
     netColors:{}
   };
 }
