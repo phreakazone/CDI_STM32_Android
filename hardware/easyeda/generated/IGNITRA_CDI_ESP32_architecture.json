@@ -38,7 +38,7 @@
     "T~L~900~205~0~#0000FF~Arial~8pt~~~~comment~HV_AC~1~start~gge1033",
     "T~L~860~385~0~#0000FF~Arial~8pt~~~~comment~GPIO25/26~1~start~gge1034",
     "T~L~430~390~0~#0000FF~Arial~8pt~~~~comment~ADC1 ONLY: GPIO36/39/34/35/32/33~1~start~gge1035",
-    "T~L~120~500~0~#0000FF~Arial~8pt~~~~comment~This architecture sheet accompanies netlist.csv; do not fabricate until footprints and routing are confirmed.~1~start~gge1036"
+    "T~L~120~500~0~#0000FF~Arial~8pt~~~~comment~This architecture sheet accompanies netlist.csv; do not fabricate until routing and DRC are confirmed.~1~start~gge1036"
   ],
   "BBox": {
     "x": 100,
