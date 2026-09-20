@@ -23,7 +23,7 @@ const espRight = [
 ];
 
 const components = [
-  {ref:'J1',value:'NS200 HARNESS 2x6',kind:'dual',x:4,y:98,pitch:5.08,row:7.62,pins:[
+  {ref:'J1',value:'NS200 HARNESS HEADER 2x6 2.54mm',kind:'header2x6',x:4,y:98,pins:[
     ['1','NC'],['2','TPS_A'],['3','TEMP_SENSOR'],['4','TPS_B'],['5','IGN_12V'],['6','COIL_SIDE'],
     ['7','FAN_RELAY'],['8','OEM_SIDE_PROBE'],['9','OEM_CENTER_PROBE'],['10','PICKUP_RAW'],['11','GND_STAR'],['12','COIL_CENTER']
   ]},
@@ -59,7 +59,7 @@ const components = [
   {ref:'QHV1',value:'IRF3205',kind:'triple',x:132,y:64,pins:[['G','GATE_Q1'],['D','LV_A'],['S','ISENSE']]},
   {ref:'QHV2',value:'IRF3205',kind:'triple',x:132,y:81,pins:[['G','GATE_Q2'],['D','LV_B'],['S','ISENSE']]},
   {ref:'RSENSE',value:'0.05R 5W',kind:'axial',x:120,y:94,pins:[['1','ISENSE'],['2','GND_POWER']]},
-  {ref:'T1',value:'ATX EI33 UNIVERSAL PAD',kind:'transformer',x:150,y:58,pins:[
+  {ref:'T1',value:'EE35 UNIVERSAL GRID 2.54mm',kind:'transformer_ee35',x:150,y:58,pins:[
     ['1','LV_A'],['2','VIN_HV'],['3','LV_B'],['4','HV_AC1'],['5','HV_AC2']
   ]},
   {ref:'DREC1',value:'UF4007',kind:'axial',x:178,y:52,pins:[['A','HV_AC1'],['K','BRIDGE_PLUS']]},
@@ -68,8 +68,8 @@ const components = [
   {ref:'DREC4',value:'UF4007',kind:'axial',x:178,y:73,pins:[['A','GND_POWER'],['K','HV_AC2']]},
   {ref:'DCH_C',value:'UF4007',kind:'axial',x:192,y:52,pins:[['A','BRIDGE_PLUS'],['K','HV_CENTER']]},
   {ref:'DCH_S',value:'UF4007',kind:'axial',x:192,y:73,pins:[['A','BRIDGE_PLUS'],['K','HV_SIDE']]},
-  {ref:'C_CENTER',value:'1uF 630V MKP',kind:'hv_cap',x:196,y:36,pins:[['1','HV_CENTER'],['2','COIL_CENTER']]},
-  {ref:'C_SIDE',value:'1uF 630V MKP',kind:'hv_cap',x:196,y:82,pins:[['1','HV_SIDE'],['2','COIL_SIDE']]},
+  {ref:'C_CENTER',value:'1uF 630V MKP 9x4 HOLE',kind:'hv_cap_9x4',x:196,y:36,pins:[['1','HV_CENTER'],['2','COIL_CENTER']]},
+  {ref:'C_SIDE',value:'1uF 630V MKP 9x4 HOLE',kind:'hv_cap_9x4',x:196,y:82,pins:[['1','HV_SIDE'],['2','COIL_SIDE']]},
   {ref:'SCR1',value:'BT151-800R',kind:'triple',x:182,y:103,pins:[['K','GND_POWER'],['A','HV_CENTER'],['G','SCR_GATE_C']]},
   {ref:'SCR2',value:'BT151-800R',kind:'triple',x:203,y:103,pins:[['K','GND_POWER'],['A','HV_SIDE'],['G','SCR_GATE_S']]},
   {ref:'QNC',value:'BC547B',kind:'triple',x:145,y:103,pins:[['C','QPC_BASE_R'],['B','GATE_C_BASE'],['E','GND_LOGIC']]},
@@ -132,13 +132,30 @@ function footprint(c) {
   const pads=[];
   const addPad=(p,dx,dy,w=mm(2.6),h=mm(2.6),hole=mm(0.55))=>pads.push(`PAD~ELLIPSE~${x+dx}~${y+dy}~${w}~${h}~11~${p[1]}~${p[0]}~${hole}~~0~${gid()}`);
   if(c.kind==='single') c.pins.forEach((p,i)=>addPad(p,0,mm(i*2.54)));
+  else if(c.kind==='header2x6') {
+    c.pins.forEach((p,i)=>addPad(p,mm((i%6)*2.54),mm(i<6?0:2.54),mm(2),mm(2),mm(1)));
+    shapes.push(`TRACK~0.5~3~~${x-mm(1.27)} ${y-mm(1.27)} ${x+mm(13.97)} ${y-mm(1.27)} ${x+mm(13.97)} ${y+mm(3.81)} ${x-mm(1.27)} ${y+mm(3.81)} ${x-mm(1.27)} ${y-mm(1.27)}~${gid()}`);
+  }
   else if(c.kind==='dual'||c.kind==='dip') {
     const half=Math.ceil(c.pins.length/2), row=mm(c.row||7.62), pitch=mm(c.pitch||2.54);
     c.pins.forEach((p,i)=> i<half?addPad(p,0,pitch*i):addPad(p,row,pitch*(c.pins.length-1-i)));
   } else if(c.kind==='quad') { const pos=[[0,0],[0,mm(7.62)],[mm(7.62),mm(7.62)],[mm(7.62),0]]; c.pins.forEach((p,i)=>addPad(p,...pos[i])); }
   else if(c.kind==='triple') c.pins.forEach((p,i)=>addPad(p,mm(i*2.54),0));
-  else if(c.kind==='transformer') { const pos=[[0,0],[mm(10),0],[mm(20),0],[0,mm(30)],[mm(20),mm(30)]]; c.pins.forEach((p,i)=>addPad(p,...pos[i],mm(4),mm(4),mm(0.8))); }
-  else if(c.kind==='hv_cap') { addPad(c.pins[0],0,0,mm(4),mm(4),mm(.8)); addPad(c.pins[1],mm(22.5),0,mm(4),mm(4),mm(.8)); }
+  else if(c.kind==='transformer_ee35') {
+    // Universal EE35 grid: 11 positions per row at 2.54 mm. Front row uses
+    // positions 1/6/11 for LV_A/CT/LV_B; rear row uses 1/11 for HV output.
+    const frontNets={0:c.pins[0],5:c.pins[1],10:c.pins[2]};
+    const rearNets={0:c.pins[3],10:c.pins[4]};
+    for(let i=0;i<11;i++) addPad(frontNets[i]||[`F${i+1}`,''],mm(i*2.54),0,mm(2.8),mm(2.8),mm(1));
+    for(let i=0;i<11;i++) addPad(rearNets[i]||[`B${i+1}`,''],mm(i*2.54),mm(25.4),mm(2.8),mm(2.8),mm(1));
+    shapes.push(`TRACK~0.8~3~~${x-mm(1.27)} ${y-mm(2.54)} ${x+mm(26.67)} ${y-mm(2.54)} ${x+mm(26.67)} ${y+mm(27.94)} ${x-mm(1.27)} ${y+mm(27.94)} ${x-mm(1.27)} ${y-mm(2.54)}~${gid()}`);
+  }
+  else if(c.kind==='hv_cap_9x4') {
+    // Nine holes inclusive gives eight 2.54 mm intervals = 20.32 mm lead pitch.
+    addPad(c.pins[0],0,mm(5.08),mm(4),mm(4),mm(.8));
+    addPad(c.pins[1],mm(20.32),mm(5.08),mm(4),mm(4),mm(.8));
+    shapes.push(`TRACK~0.8~3~~${x-mm(1.27)} ${y} ${x+mm(21.59)} ${y} ${x+mm(21.59)} ${y+mm(10.16)} ${x-mm(1.27)} ${y+mm(10.16)} ${x-mm(1.27)} ${y}~${gid()}`);
+  }
   else { addPad(c.pins[0],0,0); addPad(c.pins[1],mm(10),0); }
   shapes.push(`TEXT~P~${x}~${y-mm(2)}~0.7~0~~3~~4.5~${c.ref} ${c.value}~~~${gid()}`);
   shapes.push(...pads);
@@ -189,7 +206,7 @@ function schematic() {
   const notes=[
     ['IGN_12V / GND_STAR',270,205],['GPIO18/19',620,205],['HV_AC',900,205],
     ['GPIO25/26',860,385],['ADC1 ONLY: GPIO36/39/34/35/32/33',430,390],
-    ['This architecture sheet accompanies netlist.csv; do not fabricate until footprints and routing are confirmed.',120,500]
+    ['This architecture sheet accompanies netlist.csv; do not fabricate until routing and DRC are confirmed.',120,500]
   ];
   for(const [t,x,y] of notes) shape.push(`T~L~${x}~${y}~0~#0000FF~Arial~8pt~~~~comment~${t}~1~start~${gid()}`);
   return {head:'1~1.11.3~~',canvas:'CA~1200~700~#FFFFFF~yes~#CCCCCC~10~1200~700~line~10~pixel~5',shape,BBox:{x:100,y:100,width:1100,height:500},colors:{}};
@@ -202,7 +219,7 @@ fs.writeFileSync(path.join(out,'IGNITRA_CDI_ESP32_1L_placement.json'),JSON.strin
 const csv = rows => rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\n')+'\n';
 fs.writeFileSync(path.join(out,'BOM.csv'),csv([
   ['Reference','Qty','Value / Part','Footprint class','Status'],
-  ...bom.map(x=>[x.ref,x.qty,x.value,x.footprint,'VERIFY PHYSICAL FOOTPRINT'])
+  ...bom.map(x=>[x.ref,x.qty,x.value,x.footprint,['J1','T1','C_CENTER','C_SIDE'].includes(x.ref)?'LOCKED TO USER 2.54mm GRID':'VERIFY PHYSICAL FOOTPRINT'])
 ]));
 fs.writeFileSync(path.join(out,'NETLIST.csv'),csv([
   ['Reference','Pin','Net'],
@@ -215,9 +232,11 @@ fs.writeFileSync(path.join(out,'PLACEMENT.csv'),csv([
 
 const zoneColor = x => x < 100 ? '#16273a' : x < 145 ? '#3a2d16' : '#3a161c';
 const svgParts = components.map(c => {
-  const width = c.kind === 'single' ? 10 : c.kind === 'transformer' ? 28 :
-    c.kind === 'hv_cap' ? 26 : c.kind === 'dip' || c.kind === 'dual' ? 12 : 11;
-  const height = c.kind === 'single' ? 50 : c.kind === 'transformer' ? 36 :
+  const width = c.kind === 'single' ? 10 : c.kind === 'transformer_ee35' ? 28 :
+    c.kind === 'hv_cap_9x4' ? 23 : c.kind === 'header2x6' ? 14 :
+    c.kind === 'dip' || c.kind === 'dual' ? 12 : 11;
+  const height = c.kind === 'single' ? 50 : c.kind === 'transformer_ee35' ? 28 :
+    c.kind === 'hv_cap_9x4' ? 11 : c.kind === 'header2x6' ? 5 :
     c.kind === 'dip' || c.kind === 'dual' ? Math.max(8, c.pins.length * 1.4) : 6;
   return `<g><rect x="${c.x}" y="${c.y}" width="${width}" height="${height}" rx="0.8" fill="${zoneColor(c.x)}" stroke="#d8e6ef" stroke-width="0.35"/><text x="${c.x+0.8}" y="${c.y+2.7}" font-size="2.3" fill="#ffffff">${c.ref}</text></g>`;
 }).join('');
