@@ -2544,6 +2544,12 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             _sessionPhase.value = SessionPhase.DISCONNECTED
             return
         }
+        val legacyMinimum = syncPongSeen && syncCapsSeen && syncStatusSeen && syncSetupSeen &&
+            _firmwareCapabilities.value.protocolVersion < 5
+        if (legacyMinimum && (!syncVersionSeen || !syncIdentitySeen)) {
+            _sessionPhase.value = SessionPhase.READY_READ_ONLY
+            return
+        }
         if (!(syncPongSeen && syncVersionSeen && syncIdentitySeen &&
                 syncCapsSeen && syncStatusSeen && syncSetupSeen)) {
             _sessionPhase.value = SessionPhase.SYNCING
