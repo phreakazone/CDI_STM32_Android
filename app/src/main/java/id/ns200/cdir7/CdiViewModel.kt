@@ -751,6 +751,39 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     )
     val customAdvancePoints: StateFlow<List<CustomAdvancePoint>> = _customAdvancePoints.asStateFlow()
 
+    private val _customMapLoadAxis = MutableStateFlow(listOf(0, 25, 50, 75, 100))
+    val customMapLoadAxis: StateFlow<List<Int>> = _customMapLoadAxis.asStateFlow()
+
+    private val _selectedCustomLoadIndex = MutableStateFlow(0)
+    val selectedCustomLoadIndex: StateFlow<Int> = _selectedCustomLoadIndex.asStateFlow()
+
+    private val customMapRows = mutableMapOf<Int, List<CustomAdvancePoint>>()
+
+    private fun rebuildLoadAxis(maxPoints: Int) {
+        val count = maxPoints.coerceIn(2, 16)
+        val axis = List(count) { index ->
+            ((100L * index) / (count - 1).coerceAtLeast(1)).toInt()
+        }
+        val base = _customAdvancePoints.value
+        val oldRows = customMapRows.toMap()
+        customMapRows.clear()
+        axis.indices.forEach { index ->
+            customMapRows[index] = oldRows[index] ?: base.map { it.copy() }
+        }
+        _customMapLoadAxis.value = axis
+        _selectedCustomLoadIndex.value = _selectedCustomLoadIndex.value.coerceIn(axis.indices)
+        _customAdvancePoints.value =
+            customMapRows[_selectedCustomLoadIndex.value]?.map { it.copy() } ?: base
+    }
+
+    fun selectCustomMapLoad(index: Int) {
+        val safe = index.coerceIn(_customMapLoadAxis.value.indices)
+        customMapRows[_selectedCustomLoadIndex.value] = _customAdvancePoints.value.map { it.copy() }
+        _selectedCustomLoadIndex.value = safe
+        _customAdvancePoints.value =
+            customMapRows[safe]?.map { it.copy() } ?: _customAdvancePoints.value.map { it.copy() }
+    }
+
     private val _softRevLimiterRpm = MutableStateFlow(9500)
     val softRevLimiterRpm: StateFlow<Int> = _softRevLimiterRpm.asStateFlow()
 
@@ -819,9 +852,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     private var simRpm = 1420f
     private var simTps = 0f
     private var simPhase = 0f
-    private val mapReadback = mutableMapOf<Int, Float>()
-    private var mapReadbackExpected = 0
-    private var mapReadbackTpsRow = 0
+    private val mapReadback = mutableMapOf<Pair<Int, Int>, Float>()
+    private var mapReadbackRpmCount = 0
+    private var mapReadbackTpsCount = 0
 
     init {
         // Initialize with default raw packet
@@ -1150,6 +1183,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             val bounded = rounded.coerceIn(caps.advanceMinDeg, caps.advanceMaxDeg)
             current[index] = current[index].copy(advanceDeg = bounded)
             _customAdvancePoints.value = current
+            customMapRows[_selectedCustomLoadIndex.value] = current.map { it.copy() }
             appendLog("Map Custom: ${current[index].rpm} RPM diubah ke ${bounded}° BTDC")
         }
     }
@@ -1158,10 +1192,16 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         val presetIndex = listOf("ECO", "STREET", "RAIN", "PRO").indexOf(presetKey)
         if (presetIndex >= 0) {
             val source = mapPresets[presetIndex].curvePoints.sortedBy { it.first }
-            val axis = if (presetKey == "PRO")
-                listOf(500, 750, 1000, 1500, 2000, 2500, 3000, 4000,
-                    5000, 6000, 7000, 8000, 9000, 10000, 11000, 11500)
-            else listOf(500, 1000, 1500, 2500, 4000, 6000, 8000, 10000)
+            val caps = _firmwareCapabilities.value
+            val pointCount = if (presetKey == "PRO") {
+                minOf(16, caps.maxRpmPoints)
+            } else {
+                minOf(8, caps.maxRpmPoints)
+            }.coerceAtLeast(2)
+            val axis = List(pointCount) { index ->
+                caps.rpmMin + ((caps.rpmMax - caps.rpmMin).toLong() * index /
+                    (pointCount - 1).coerceAtLeast(1)).toInt()
+            }
             fun sample(rpm: Int): Float {
                 if (rpm <= source.first().first) return source.first().second
                 if (rpm >= source.last().first) return source.last().second
@@ -1169,13 +1209,24 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 val a = source[right - 1]; val b = source[right]
                 return a.second + (b.second - a.second) * (rpm - a.first) / (b.first - a.first).toFloat()
             }
-            _customAdvancePoints.value = axis.map { CustomAdvancePoint(it, sample(it)) }
+            val row = axis.map {
+                CustomAdvancePoint(it, sample(it).coerceIn(caps.advanceMinDeg, caps.advanceMaxDeg))
+            }
+            _customAdvancePoints.value = row
+            customMapRows.clear()
+            _customMapLoadAxis.value.indices.forEach { loadIndex ->
+                customMapRows[loadIndex] = row.map { it.copy() }
+            }
+            _selectedCustomLoadIndex.value = 0
             _selectedMapSlot.value = presetIndex
             appendLog("Preset $presetKey dimuat pada grid firmware ${axis.size} titik")
         }
     }
 
     fun saveCustomMapToMcu(): String? {
+        if (!checkSetupWriteSafety("Simpan map ignition")) {
+            return setupWriteBlockReason.value ?: "Izin tulis map diblokir."
+        }
         val t = _telemetry.value
         if (t.rpm > 0) return "Simpan map ditolak: mesin harus mati (RPM 0)."
         if ((t.hvEnabled || t.hvCenter >= 30 || t.hvSide >= 30) && _isConnected.value)
@@ -1187,7 +1238,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         val input = _customAdvancePoints.value.sortedBy { it.rpm }
         val rpmAxis = input.take(caps.maxRpmPoints).map { it.rpm.coerceIn(caps.rpmMin, caps.rpmMax) }
         if (rpmAxis.size < 2) return "Map minimal memerlukan dua titik RPM."
-        val loadAxis = listOf(0, 25, 50, 75, 100).take(caps.maxLoadPoints)
+        val loadAxis = _customMapLoadAxis.value.take(caps.maxLoadPoints)
+        customMapRows[_selectedCustomLoadIndex.value] = input.map { it.copy() }
 
         fun sample(target: Int): Float {
             if (target <= input.first().rpm) return input.first().advanceDeg
@@ -1204,8 +1256,19 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             rpmAxis.forEachIndexed { index, rpm -> bleClient.send("MAP,RPM,$index,$rpm") }
             loadAxis.forEachIndexed { index, load -> bleClient.send("MAP,LOAD,$index,$load") }
             loadAxis.indices.forEach { loadIndex ->
+                val row = customMapRows[loadIndex]?.sortedBy { it.rpm } ?: input
+                fun sampleRow(target: Int): Float {
+                    if (target <= row.first().rpm) return row.first().advanceDeg
+                    if (target >= row.last().rpm) return row.last().advanceDeg
+                    val right = row.indexOfFirst { it.rpm >= target }
+                    val p0 = row[right - 1]
+                    val p1 = row[right]
+                    return p0.advanceDeg + (p1.advanceDeg - p0.advanceDeg) *
+                        (target - p0.rpm).toFloat() / (p1.rpm - p0.rpm).toFloat()
+                }
                 rpmAxis.forEachIndexed { rpmIndex, rpm ->
-                    val value = (sample(rpm).coerceIn(caps.advanceMinDeg, caps.advanceMaxDeg) * 10f).roundToInt()
+                    val value = (sampleRow(rpm)
+                        .coerceIn(caps.advanceMinDeg, caps.advanceMaxDeg) * 10f).roundToInt()
                     bleClient.send("MAP,CELL,$rpmIndex,$loadIndex,$value")
                 }
             }
@@ -2466,6 +2529,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 val parsed = FirmwareCapabilities.parse(f)
                 _firmwareCapabilities.value = parsed
                 _mcuCapabilities.value = parsed.features
+                rebuildLoadAxis(parsed.maxLoadPoints)
                 _selectedMapSlot.value = _selectedMapSlot.value.coerceIn(0, parsed.mapSlots - 1)
                 _softRevLimiterRpm.value = _softRevLimiterRpm.value.coerceIn(parsed.rpmMin, parsed.rpmMax)
                 appendLog("MCU CAPS v${parsed.protocolVersion}: ${parsed.rpmMin}-${parsed.rpmMax} RPM, " +
@@ -2551,23 +2615,35 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 }
             }
             "CELL" -> if (f.size >= 4) {
-                val ti = f[1].toIntOrNull(); val ri = f[2].toIntOrNull(); val cdeg = f[3].toIntOrNull()
-                if (ti == mapReadbackTpsRow && ri != null && cdeg != null) {
-                    mapReadback[ri] = cdeg / 100f
-                    if (mapReadback.size == mapReadbackExpected) {
+                val ti = f[1].toIntOrNull()
+                val ri = f[2].toIntOrNull()
+                val cdeg = f[3].toIntOrNull()
+                if (ti != null && ri != null && cdeg != null &&
+                    ti in 0 until mapReadbackTpsCount && ri in 0 until mapReadbackRpmCount
+                ) {
+                    mapReadback[ti to ri] = cdeg / 100f
+                    if (mapReadback.size == mapReadbackRpmCount * mapReadbackTpsCount) {
                         val caps = _firmwareCapabilities.value
-                        val axis = if (_customAdvancePoints.value.size == mapReadbackExpected) {
-                            _customAdvancePoints.value.map { it.rpm }
+                        val currentAxis = _customAdvancePoints.value.map { it.rpm }
+                        val axis = if (currentAxis.size == mapReadbackRpmCount) {
+                            currentAxis
                         } else {
-                            List(mapReadbackExpected) { index ->
+                            List(mapReadbackRpmCount) { index ->
                                 caps.rpmMin + ((caps.rpmMax - caps.rpmMin).toLong() * index /
-                                    (mapReadbackExpected - 1).coerceAtLeast(1)).toInt()
+                                    (mapReadbackRpmCount - 1).coerceAtLeast(1)).toInt()
                             }
                         }
-                        _customAdvancePoints.value = axis.mapIndexed { i, rpm ->
-                            CustomAdvancePoint(rpm, mapReadback[i] ?: 0f)
+                        rebuildLoadAxis(mapReadbackTpsCount)
+                        customMapRows.clear()
+                        repeat(mapReadbackTpsCount) { loadIndex ->
+                            customMapRows[loadIndex] = axis.mapIndexed { rpmIndex, rpm ->
+                                CustomAdvancePoint(rpm, mapReadback[loadIndex to rpmIndex] ?: 0f)
+                            }
                         }
-                        appendLog("Map readback lengkap: ${axis.size} titik")
+                        _selectedCustomLoadIndex.value = 0
+                        _customAdvancePoints.value =
+                            customMapRows[0]?.map { it.copy() } ?: emptyList()
+                        appendLog("Map readback lengkap: ${mapReadbackRpmCount}x${mapReadbackTpsCount}")
                     }
                 }
             }
@@ -2801,8 +2877,14 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     private fun requestMapReadback(rpmCount: Int, tpsCount: Int) {
         if (!bleClient.gattReady) return
-        mapReadback.clear(); mapReadbackExpected = rpmCount; mapReadbackTpsRow = tpsCount - 1
-        repeat(rpmCount) { bleClient.send("GET,CELL,$mapReadbackTpsRow,$it") }
+        mapReadback.clear()
+        mapReadbackRpmCount = rpmCount
+        mapReadbackTpsCount = tpsCount
+        repeat(tpsCount) { loadIndex ->
+            repeat(rpmCount) { rpmIndex ->
+                bleClient.send("GET,CELL,$loadIndex,$rpmIndex")
+            }
+        }
     }
 
     private fun startOemLearnPolling() {
