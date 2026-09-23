@@ -114,19 +114,19 @@ data class ModuleStatus(
 
 data class FirmwareVersionInfo(
     val schema: Int = 1,
-    val release: String = "R9",
-    val semver: String = "9.2.0",
-    val buildId: String = "20260923",
-    val platform: String = "ESP32",
-    val protocolVersion: Int = 5,
-    val telemetryVersion: Int = 3
+    val release: String = "UNKNOWN",
+    val semver: String = "0.0.0",
+    val buildId: String = "0",
+    val platform: String = "UNKNOWN",
+    val protocolVersion: Int = 0,
+    val telemetryVersion: Int = 0
 ) {
     val displayLabel: String get() = "IgniTra $release v$semver ($platform) • Build $buildId"
 }
 
 data class FirmwareIdentityInfo(
     val schema: Int = 1,
-    val serial: String = "IGT-ESP32-A109F2B83C01",
+    val serial: String = "UNAVAILABLE",
     val serialScheme: String = "SERIAL_V1",
     val bindingPolicy: String = "LOCAL_APP",
     val firmwareEnforced: Boolean = false
@@ -162,8 +162,8 @@ data class FirmwareTempStatus(
     val fanMode: String = "AUTO",
     val onX10: Int = 920,
     val offX10: Int = 860,
-    val currentTempX10: Int = 850,
-    val valid: Boolean = true,
+    val currentTempX10: Int = -32768,
+    val valid: Boolean = false,
     val fanOutput: Boolean = false
 ) {
     val currentTempC: Float? get() = if (valid && currentTempX10 != -32768) currentTempX10 / 10f else null
@@ -243,14 +243,13 @@ object CdiProtocol {
     const val OTA_STATUS = "7a8f1005-6c9d-4e40-a45f-0b4b4e533230"
     const val OTA_CHUNK_MAX_SIZE = 208
     const val OTA_STATUS_SIZE = 16
-    const val OTA_IMAGE_VERSION = 90000L
     const val OTA_MIN_IMAGE_SIZE = 256
     const val OTA_MAX_IMAGE_SIZE = 0x00100000
 
     const val TELEMETRY_SIZE = 20
     const val VERSION_3 = 3 // R7 / v3
     const val VERSION_4 = 4 // R8 / v4
-    const val VERSION = 4
+    const val VERSION = VERSION_3
 
     const val KIND_CORE = 0
     const val KIND_DIAGNOSTIC = 1
