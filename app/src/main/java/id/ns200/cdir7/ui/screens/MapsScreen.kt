@@ -55,6 +55,8 @@ fun MapsScreen(viewModel: CdiViewModel) {
     val capabilities by viewModel.firmwareCapabilities.collectAsState()
     val loadAxis by viewModel.customMapLoadAxis.collectAsState()
     val selectedLoadIndex by viewModel.selectedCustomLoadIndex.collectAsState()
+    val activeMapRpmCount by viewModel.activeMapRpmCount.collectAsState()
+    val activeMapTpsCount by viewModel.activeMapTpsCount.collectAsState()
     val limiterMaxRpm = capabilities.rpmMax
     val graphRpmSpan = (capabilities.rpmMax - capabilities.rpmMin).coerceAtLeast(1)
     val advanceSpan = (capabilities.advanceMaxDeg - capabilities.advanceMinDeg).coerceAtLeast(1f)
@@ -489,6 +491,23 @@ fun MapsScreen(viewModel: CdiViewModel) {
                     }
                 }
             }
+
+            MotecButton(
+                text = if (activeMapRpmCount >= 2 && activeMapTpsCount >= 2) {
+                    "BACA MAP CDI • $activeMapRpmCount×$activeMapTpsCount"
+                } else {
+                    "BACA META MAP TERLEBIH DAHULU"
+                },
+                onClick = {
+                    viewModel.refreshMapFromFirmware()?.let {
+                        Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+                    }
+                },
+                enabled = pendingCommands == 0 && activeMapRpmCount >= 2 && activeMapTpsCount >= 2,
+                color = ElectricCyan,
+                icon = Icons.Default.Download,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             // Pilih baris TPS yang sedang diedit; setiap baris disimpan terpisah.
             Card(
