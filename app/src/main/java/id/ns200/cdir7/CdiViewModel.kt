@@ -751,6 +751,11 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     private val _selectedMapSlot = MutableStateFlow(1)
     val selectedMapSlot: StateFlow<Int> = _selectedMapSlot.asStateFlow()
 
+    private val _activeMapRpmCount = MutableStateFlow(0)
+    val activeMapRpmCount: StateFlow<Int> = _activeMapRpmCount.asStateFlow()
+    private val _activeMapTpsCount = MutableStateFlow(0)
+    val activeMapTpsCount: StateFlow<Int> = _activeMapTpsCount.asStateFlow()
+
     // Kurva awal mengikuti baris TPS 0% map STREET default firmware.
     private val _customAdvancePoints = MutableStateFlow(
         listOf(
@@ -2633,9 +2638,10 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 val rpmCount = f[8].toIntOrNull() ?: 0
                 val tpsCount = f[9].toIntOrNull() ?: 0
                 val caps = _firmwareCapabilities.value
-                if (rpmCount in 2..caps.maxRpmPoints && tpsCount in 2..caps.maxLoadPoints) {
-                    requestMapReadback(rpmCount, tpsCount)
-                }
+                _activeMapRpmCount.value =
+                    if (rpmCount in 2..caps.maxRpmPoints) rpmCount else 0
+                _activeMapTpsCount.value =
+                    if (tpsCount in 2..caps.maxLoadPoints) tpsCount else 0
             }
             "MODE" -> CdiProtocol.firmwareMode(value)?.let { status ->
                 _firmwareMode.value = status.mode
@@ -2905,6 +2911,17 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 Toast.makeText(context, "MCU menolak: ${f.drop(1).joinToString(",")}", Toast.LENGTH_LONG).show()
             }
         }
+    }
+
+    fun refreshMapFromFirmware(): String? {
+        if (!bleClient.gattReady) return "CDI belum terhubung."
+        val rpmCount = _activeMapRpmCount.value
+        val tpsCount = _activeMapTpsCount.value
+        if (rpmCount < 2 || tpsCount < 2) return "META map belum valid."
+        if (bleClient.isBusy.value) return "Antrean BLE masih sibuk."
+        requestMapReadback(rpmCount, tpsCount)
+        appendLog("Readback map dimulai: $rpmCount×$tpsCount cell")
+        return null
     }
 
     private fun requestMapReadback(rpmCount: Int, tpsCount: Int) {
