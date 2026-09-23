@@ -6,6 +6,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -35,7 +36,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.ns200.cdir7.CdiViewModel
 import id.ns200.cdir7.FirmwareRunMode
+import id.ns200.cdir7.HardwareModule
 import id.ns200.cdir7.McuPlatform
+import id.ns200.cdir7.ScreenTab
+import id.ns200.cdir7.SessionPhase
 import id.ns200.cdir7.ui.components.MotecButton
 import id.ns200.cdir7.ui.theme.*
 import kotlin.math.*
@@ -58,7 +62,15 @@ fun DashboardScreen(viewModel: CdiViewModel) {
     val selectedPlatform by viewModel.selectedPlatform.collectAsState()
     val isTelemetryStreaming by viewModel.isTelemetryStreaming.collectAsState()
     val isSimulationMode by viewModel.isSimulationMode.collectAsState()
+    val moduleStatus by viewModel.moduleStatus.collectAsState()
+    val sessionPhase by viewModel.sessionPhase.collectAsState()
+    val bindingRecord by viewModel.bindingRecord.collectAsState()
+    val firmwareIdentity by viewModel.firmwareIdentity.collectAsState()
     val scrollState = rememberScrollState()
+
+    val isSideInstalled = moduleStatus.isInstalled(HardwareModule.DUAL_COIL)
+    val isSideActive = moduleStatus.isActive(HardwareModule.DUAL_COIL) || telemetry.sideEnabled
+    val isDualCoil = isSideInstalled || isSideActive
 
     val currentRpm = telemetry.rpm
     val isAtLimiter = telemetry.limiter > 0 || currentRpm >= revLimit
@@ -90,356 +102,492 @@ fun DashboardScreen(viewModel: CdiViewModel) {
         label = "pulse_glow"
     )
 
-    Column(
+    var isCapacitorExpanded by remember { mutableStateOf(false) }
+    var isSimulatorExpanded by remember { mutableStateOf(false) }
+    var isTechDataExpanded by remember { mutableStateOf(false) }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(CarbonDark)
-            .verticalScroll(scrollState)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .background(CarbonDark),
+        contentAlignment = Alignment.TopCenter
     ) {
-        // Over-voltage warning is driven by firmware telemetry; target follows the active profile.
-        if (telemetry.isHvOverLimitWarning) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(scrollState)
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+                .widthIn(max = 680.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Over-voltage warning is driven by firmware telemetry; target follows the active profile.
+            if (telemetry.isHvOverLimitWarning) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(2.dp, RaceRedline, RoundedCornerShape(10.dp)),
+                    colors = CardDefaults.cardColors(containerColor = RaceRedline.copy(alpha = 0.15f)),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = "Warning",
+                            tint = RaceRedline,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "FAULT TEGANGAN TINGGI: >= 300 V!",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Black,
+                                color = RaceRedline,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            Text(
+                                text = "Matikan kontak/kill switch, buka SW_SERVICE atau cabut FHV, lalu periksa feedback HV dan clamp.",
+                                fontSize = 9.sp,
+                                color = TextPrimary,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+                }
+            }
+
+            // BINDING APP DENGAN HARDWARE STATUS BAR
+            if (bindingRecord == null) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, SensorAmber.copy(alpha = 0.7f), RoundedCornerShape(8.dp)),
+                    colors = CardDefaults.cardColors(containerColor = SensorAmber.copy(alpha = 0.10f)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LockOpen,
+                                contentDescription = null,
+                                tint = SensorAmber,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "BINDING APP BELUM TERIKAT (READ-ONLY)",
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = SensorAmber,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Text(
+                                    text = "Ikat serial CDI [${firmwareIdentity.serial}] untuk membuka izin tulis konfigurasi.",
+                                    fontSize = 8.sp,
+                                    color = TextSecondary,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+                        MotecButton(
+                            text = "BINDING",
+                            onClick = { viewModel.setTab(ScreenTab.BLE) },
+                            color = SensorAmber,
+                            height = 24.dp
+                        )
+                    }
+                }
+            }
+
+            // TACHOMETER CLUSTER CARD (MoTeC i2 style, Compact Layout)
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(2.dp, RaceRedline, RoundedCornerShape(12.dp)),
-                colors = CardDefaults.cardColors(containerColor = RaceRedline.copy(alpha = 0.15f)),
+                    .border(1.dp, if (isAtLimiter) RaceRedline else BorderSubtle, RoundedCornerShape(12.dp))
+                    .testTag("tacho_cluster_card"),
+                colors = CardDefaults.cardColors(containerColor = CardBackground),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Warning,
-                        contentDescription = "Warning",
-                        tint = RaceRedline,
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = "FAULT TEGANGAN TINGGI: >= 300 V!",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Black,
-                            color = RaceRedline,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        Text(
-                            text = "Matikan kontak/kill switch, buka SW_SERVICE atau cabut FHV, lalu periksa feedback HV PA6/PA7 atau GPIO35/GPIO32 dan rangkaian clamp.",
-                            fontSize = 10.sp,
-                            color = TextPrimary,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-                }
-            }
-        }
-
-        // TACHOMETER CLUSTER CARD (MoTeC i2 style)
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, if (isAtLimiter) RaceRedline else BorderSubtle, RoundedCornerShape(16.dp))
-                .testTag("tacho_cluster_card"),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Header indicators
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(if (telemetry.armed) RacingLime else RaceRedline)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (telemetry.armed) "ARMED & READY" else "DISARMED",
-                            color = if (telemetry.armed) RacingLime else RaceRedline,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-
-                    // Soft Rev-Limiter badge
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(
-                                if (isAtLimiter) RaceRedline.copy(alpha = pulseGlow)
-                                else if (currentRpm > revLimit - 800) SensorAmber.copy(alpha = 0.2f)
-                                else SurfacePanel
-                            )
-                            .border(
-                                1.dp,
-                                if (isAtLimiter) RaceRedline else BorderSubtle,
-                                RoundedCornerShape(6.dp)
-                            )
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    // Header indicators
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = if (isAtLimiter) "LIMITER ACTIVE" else "LIMIT: $revLimit RPM",
-                            color = if (isAtLimiter) Color.White else MotecOrange,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Radial Sweep Tachometer Gauge
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val width = size.width
-                        val height = size.height
-                        val center = Offset(width / 2f, height * 0.9f)
-                        val radius = min(width * 0.45f, height * 0.85f)
-
-                        val startAngle = 180f
-                        val sweepAngle = 180f
-
-                        // Background Track Arc
-                        drawArc(
-                            color = BorderSubtle,
-                            startAngle = startAngle,
-                            sweepAngle = sweepAngle,
-                            useCenter = false,
-                            topLeft = Offset(center.x - radius, center.y - radius),
-                            size = Size(radius * 2, radius * 2),
-                            style = Stroke(width = 20.dp.toPx(), cap = StrokeCap.Round)
-                        )
-
-                        // Redline Zone Arc (9500 to 12000 RPM)
-                        val redlineFraction = (12000f - 9500f) / 12000f
-                        val redlineSweep = sweepAngle * redlineFraction
-                        val redlineStart = startAngle + sweepAngle - redlineSweep
-                        drawArc(
-                            color = RaceRedline.copy(alpha = 0.45f),
-                            startAngle = redlineStart,
-                            sweepAngle = redlineSweep,
-                            useCenter = false,
-                            topLeft = Offset(center.x - radius, center.y - radius),
-                            size = Size(radius * 2, radius * 2),
-                            style = Stroke(width = 20.dp.toPx(), cap = StrokeCap.Round)
-                        )
-
-                        // Active Sweep Progress (Interpolasi dinamis jarum watchdog)
-                        val activeSweep = sweepAngle * animatedRpmFraction
-
-                        val strokeBrush = Brush.sweepGradient(
-                            listOf(
-                                ElectricCyan,
-                                MotecOrange,
-                                if (isAtLimiter) RaceRedline else MotecOrange
-                            ),
-                            center = center
-                        )
-
-                        drawArc(
-                            brush = strokeBrush,
-                            startAngle = startAngle,
-                            sweepAngle = activeSweep,
-                            useCenter = false,
-                            topLeft = Offset(center.x - radius, center.y - radius),
-                            size = Size(radius * 2, radius * 2),
-                            style = Stroke(width = 20.dp.toPx(), cap = StrokeCap.Round)
-                        )
-
-                        // Ticks & Labels (0, 2, 4, 6, 8, 10, 12 kRPM)
-                        for (i in 0..12) {
-                            val angleRad = Math.toRadians((startAngle + (sweepAngle * (i / 12f))).toDouble())
-                            val innerR = radius - 24.dp.toPx()
-                            val outerR = radius - 10.dp.toPx()
-                            val tickColor = if (i >= 10) RaceRedline else if (i >= 8) SensorAmber else TextSecondary
-                            val startP = Offset(
-                                (center.x + innerR * cos(angleRad)).toFloat(),
-                                (center.y + innerR * sin(angleRad)).toFloat()
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(if (telemetry.armed) RacingLime else RaceRedline)
                             )
-                            val endP = Offset(
-                                (center.x + outerR * cos(angleRad)).toFloat(),
-                                (center.y + outerR * sin(angleRad)).toFloat()
-                            )
-                            drawLine(
-                                color = tickColor,
-                                start = startP,
-                                end = endP,
-                                strokeWidth = if (i % 2 == 0) 3.dp.toPx() else 1.5.dp.toPx()
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = if (telemetry.armed) "ARMED & READY" else "DISARMED",
+                                color = if (telemetry.armed) RacingLime else RaceRedline,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
                             )
                         }
 
-                        // Jarum Tachometer Dinamis (Pointer Needle)
-                        val needleAngleRad = Math.toRadians((startAngle + (sweepAngle * animatedRpmFraction)).toDouble())
-                        val needleLength = radius - 14.dp.toPx()
-                        val needleEnd = Offset(
-                            (center.x + needleLength * cos(needleAngleRad)).toFloat(),
-                            (center.y + needleLength * sin(needleAngleRad)).toFloat()
-                        )
-                        drawLine(
-                            color = if (isAtLimiter) RaceRedline else ElectricCyan,
-                            start = center,
-                            end = needleEnd,
-                            strokeWidth = 3.dp.toPx(),
-                            cap = StrokeCap.Round
-                        )
-                        drawCircle(
-                            color = if (isAtLimiter) RaceRedline else MotecOrange,
-                            radius = 6.dp.toPx(),
-                            center = center
-                        )
+                        // Soft Rev-Limiter badge
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(
+                                    if (isAtLimiter) RaceRedline.copy(alpha = pulseGlow)
+                                    else if (currentRpm > revLimit - 800) SensorAmber.copy(alpha = 0.2f)
+                                    else SurfacePanel
+                                )
+                                .border(
+                                    1.dp,
+                                    if (isAtLimiter) RaceRedline else BorderSubtle,
+                                    RoundedCornerShape(4.dp)
+                                )
+                                .padding(horizontal = 7.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = if (isAtLimiter) "LIMITER ACTIVE" else "LIMIT: $revLimit RPM",
+                                color = if (isAtLimiter) Color.White else MotecOrange,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
                     }
 
-                    // Digital RPM Readout & Title (Diposisikan di atas titik pivot jarum agar tidak menutupi jarum)
-                    Column(
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Radial Sweep Tachometer Gauge (Compact)
+                    Box(
                         modifier = Modifier
-                            .align(Alignment.Center)
-                            .offset(y = 12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                            .fillMaxWidth()
+                            .height(140.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "ENGINE RPM",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            color = MotecOrange,
-                            letterSpacing = 1.sp
-                        )
-                        Text(
-                            text = "$currentRpm",
-                            fontSize = 42.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = FontFamily.Monospace,
-                            color = if (isAtLimiter) RaceRedline else TextPrimary,
-                            letterSpacing = 1.sp
-                        )
-                    }
-                }
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val width = size.width
+                            val height = size.height
+                            val center = Offset(width / 2f, height * 0.94f)
+                            val radius = min(width * 0.44f, height * 0.90f)
 
-                // Speed / Stage Footer in Cluster
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceAround
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("STAGE", fontSize = 10.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
-                        Text(
-                            when (telemetry.setupStage) {
-                                4 -> "READY"
-                                3 -> "FIRST START"
-                                2 -> "TDC CAL"
-                                1 -> "PULSER OK"
-                                else -> "INIT"
-                            },
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = RacingLime,
-                            fontFamily = FontFamily.Monospace
-                        )
+                            val startAngle = 180f
+                            val sweepAngle = 180f
+
+                            // Background Track Arc
+                            drawArc(
+                                color = BorderSubtle,
+                                startAngle = startAngle,
+                                sweepAngle = sweepAngle,
+                                useCenter = false,
+                                topLeft = Offset(center.x - radius, center.y - radius),
+                                size = Size(radius * 2, radius * 2),
+                                style = Stroke(width = 14.dp.toPx(), cap = StrokeCap.Round)
+                            )
+
+                            // Redline Zone Arc (9500 to 12000 RPM)
+                            val redlineFraction = (12000f - 9500f) / 12000f
+                            val redlineSweep = sweepAngle * redlineFraction
+                            val redlineStart = startAngle + sweepAngle - redlineSweep
+                            drawArc(
+                                color = RaceRedline.copy(alpha = 0.45f),
+                                startAngle = redlineStart,
+                                sweepAngle = redlineSweep,
+                                useCenter = false,
+                                topLeft = Offset(center.x - radius, center.y - radius),
+                                size = Size(radius * 2, radius * 2),
+                                style = Stroke(width = 14.dp.toPx(), cap = StrokeCap.Round)
+                            )
+
+                            // Active Sweep Progress
+                            val activeSweep = sweepAngle * animatedRpmFraction
+
+                            val strokeBrush = Brush.sweepGradient(
+                                listOf(
+                                    ElectricCyan,
+                                    MotecOrange,
+                                    if (isAtLimiter) RaceRedline else MotecOrange
+                                ),
+                                center = center
+                            )
+
+                            drawArc(
+                                brush = strokeBrush,
+                                startAngle = startAngle,
+                                sweepAngle = activeSweep,
+                                useCenter = false,
+                                topLeft = Offset(center.x - radius, center.y - radius),
+                                size = Size(radius * 2, radius * 2),
+                                style = Stroke(width = 14.dp.toPx(), cap = StrokeCap.Round)
+                            )
+
+                            // Ticks & Labels (0..12 kRPM)
+                            for (i in 0..12) {
+                                val angleRad = Math.toRadians((startAngle + (sweepAngle * (i / 12f))).toDouble())
+                                val innerR = radius - 18.dp.toPx()
+                                val outerR = radius - 8.dp.toPx()
+                                val tickColor = if (i >= 10) RaceRedline else if (i >= 8) SensorAmber else TextSecondary
+                                val startP = Offset(
+                                    (center.x + innerR * cos(angleRad)).toFloat(),
+                                    (center.y + innerR * sin(angleRad)).toFloat()
+                                )
+                                val endP = Offset(
+                                    (center.x + outerR * cos(angleRad)).toFloat(),
+                                    (center.y + outerR * sin(angleRad)).toFloat()
+                                )
+                                drawLine(
+                                    color = tickColor,
+                                    start = startP,
+                                    end = endP,
+                                    strokeWidth = if (i % 2 == 0) 2.5.dp.toPx() else 1.2.dp.toPx()
+                                )
+                            }
+
+                            // Jarum Tachometer Dinamis (Pointer Needle)
+                            val needleAngleRad = Math.toRadians((startAngle + (sweepAngle * animatedRpmFraction)).toDouble())
+                            val needleLength = radius - 10.dp.toPx()
+                            val needleEnd = Offset(
+                                (center.x + needleLength * cos(needleAngleRad)).toFloat(),
+                                (center.y + needleLength * sin(needleAngleRad)).toFloat()
+                            )
+                            drawLine(
+                                color = if (isAtLimiter) RaceRedline else ElectricCyan,
+                                start = center,
+                                end = needleEnd,
+                                strokeWidth = 2.5.dp.toPx(),
+                                cap = StrokeCap.Round
+                            )
+                            drawCircle(
+                                color = if (isAtLimiter) RaceRedline else MotecOrange,
+                                radius = 5.dp.toPx(),
+                                center = center
+                            )
+                        }
+
+                        // Digital RPM Readout & Title
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .offset(y = 6.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "ENGINE RPM",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                color = MotecOrange,
+                                letterSpacing = 1.sp
+                            )
+                            Text(
+                                text = "$currentRpm",
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.Black,
+                                fontFamily = FontFamily.Monospace,
+                                color = if (isAtLimiter) RaceRedline else TextPrimary,
+                                letterSpacing = 1.sp
+                            )
+                        }
                     }
 
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("MAP SLOT", fontSize = 10.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
-                        Text(
-                            "MAP ${telemetry.slot + 1}",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = ElectricCyan,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
+                    // Speed / Stage Footer in Cluster
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceAround
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("STAGE", fontSize = 9.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
+                            Text(
+                                when (telemetry.setupStage) {
+                                    4 -> "READY"
+                                    3 -> "FIRST START"
+                                    2 -> "TDC CAL"
+                                    1 -> "PULSER OK"
+                                    else -> "INIT"
+                                },
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = RacingLime,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
 
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("PICKUP", fontSize = 10.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
-                        Text(
-                            "${telemetry.pickupQuality}%",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary,
-                            fontFamily = FontFamily.Monospace
-                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("MAP SLOT", fontSize = 9.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
+                            Text(
+                                "MAP ${telemetry.slot + 1}",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ElectricCyan,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("PICKUP", fontSize = 9.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
+                            Text(
+                                "${telemetry.pickupQuality}%",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        // DUAL CAPACITOR MONITOR CARD (J1.12 & J1.6)
+        // CAPACITOR MONITOR CARD (J1.12 Core tunggal atau J1.12+J1.6 Dual Coil)
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp)),
+                .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp)),
             colors = CardDefaults.cardColors(containerColor = CardBackground),
-            shape = RoundedCornerShape(14.dp)
+            shape = RoundedCornerShape(10.dp)
         ) {
-            Column(modifier = Modifier.padding(14.dp)) {
+            Column(modifier = Modifier.padding(10.dp)) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { isCapacitorExpanded = !isCapacitorExpanded },
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "DUAL CAPACITOR MONITOR (CDI HV)",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        color = SensorAmber
-                    )
-                    Text(
-                        text = "TARGET: ${targetHv}V",
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace,
-                        color = TextMuted
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Bolt,
+                            contentDescription = null,
+                            tint = SensorAmber,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Text(
+                            text = if (isDualCoil) "KAPASITOR DUAL COIL (HV)" else "KAPASITOR CORE (CDI HV)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            color = SensorAmber
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(3.dp),
+                            color = (if (isDualCoil && isSideActive) RacingLime else if (isDualCoil) SensorAmber else ElectricCyan).copy(alpha = 0.15f),
+                            border = BorderStroke(0.5.dp, if (isDualCoil && isSideActive) RacingLime else if (isDualCoil) SensorAmber else ElectricCyan)
+                        ) {
+                            Text(
+                                text = if (!isDualCoil) "J1.12: ${telemetry.hvCenter}V" else "CTR: ${telemetry.hvCenter}V | SIDE: ${telemetry.hvSide}V",
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                color = if (isDualCoil && isSideActive) RacingLime else if (isDualCoil) SensorAmber else ElectricCyan,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "TARGET: ${targetHv}V",
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = TextMuted
+                        )
+                        Text(
+                            text = if (isCapacitorExpanded) "▲" else "▼",
+                            fontSize = 10.sp,
+                            color = TextSecondary,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                if (isCapacitorExpanded) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalDivider(color = BorderSubtle, thickness = 0.5.dp)
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    // Center Capacitor (J1.12)
-                    CapacitorMeter(
-                        modifier = Modifier.weight(1f),
-                        label = "CENTER CAP (J1.12)",
-                        voltage = telemetry.hvCenter,
-                        isFull = telemetry.hvCenter >= 220
-                    )
+                    if (isDualCoil) {
+                        // 2 Coil Motor: SEJAJAR KANAN KIRI
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Center Capacitor (J1.12)
+                            CapacitorMeter(
+                                modifier = Modifier.weight(1f),
+                                label = "HV CORE / CENTER",
+                                pin = "PIN J1.12 • KANAL UTAMA",
+                                voltage = telemetry.hvCenter,
+                                targetVoltage = targetHv,
+                                isFull = telemetry.hvCenter >= 220,
+                                isActive = telemetry.centerEnabled
+                            )
 
-                    // Side Capacitor (J1.6)
-                    CapacitorMeter(
-                        modifier = Modifier.weight(1f),
-                        label = "SIDE CAP (J1.6)",
-                        voltage = telemetry.hvSide,
-                        isFull = telemetry.hvSide >= 220
-                    )
+                            // Side Capacitor (J1.6)
+                            CapacitorMeter(
+                                modifier = Modifier.weight(1f),
+                                label = "HV SIDE",
+                                pin = if (isSideActive) "PIN J1.6 • KANAL KEDUA" else "PIN J1.6 • STANDBY",
+                                voltage = telemetry.hvSide,
+                                targetVoltage = targetHv,
+                                isFull = telemetry.hvSide >= 220,
+                                isActive = isSideActive && telemetry.sideEnabled
+                            )
+                        }
+                    } else {
+                        // 1 Coil Motor: RATA TENGAH (CENTERED) & RAPI
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CapacitorMeter(
+                                modifier = Modifier
+                                    .widthIn(max = 380.dp)
+                                    .fillMaxWidth(),
+                                label = "HV CORE / CENTER",
+                                pin = "PIN J1.12 • KANAL TUNGGAL",
+                                voltage = telemetry.hvCenter,
+                                targetVoltage = targetHv,
+                                isFull = telemetry.hvCenter >= 220,
+                                isActive = telemetry.centerEnabled
+                            )
+                        }
+                    }
                 }
             }
         }
+
+        // HARDWARE MODULES STATUS (PAKET HARDWARE FISIK TAMBAHAN)
+        HardwareModulesCard(viewModel)
 
         // TELEMETRY METRICS ROW: ADVANCE ANGLE (°BTDC) & PULSER OFFSET
         Row(
@@ -524,7 +672,7 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "COOLANT (J1.5)",
+                            text = "COOLANT (J1.3)",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = SensorAmber,
@@ -538,91 +686,149 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                             fontFamily = FontFamily.Monospace
                         )
                     }
-                    Text(
-                        text = "Battery: %.1fV".format(telemetry.batteryCv / 100f),
-                        fontSize = 11.sp,
-                        color = TextSecondary,
-                        fontFamily = FontFamily.Monospace
-                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    val battVolt = telemetry.batteryCv / 100f
+                    val (battStatus, battColor) = when {
+                        battVolt >= 12.4f -> Pair("NORMAL / CHARGING", RacingLime)
+                        battVolt >= 11.8f -> Pair("SIAGA", SensorAmber)
+                        else -> Pair("AKI DROP (<11.8V)", RaceRedline)
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "AKI: %.1fV".format(battVolt),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = battColor,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(3.dp),
+                            color = battColor.copy(alpha = 0.15f),
+                            border = BorderStroke(0.5.dp, battColor)
+                        ) {
+                            Text(
+                                text = battStatus,
+                                fontSize = 7.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = battColor,
+                                fontFamily = FontFamily.Monospace,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        // ENGINE RUN / STOP STATUS & STARTER PANEL (DEMO / SIMULATION MODE)
+        // ENGINE SIMULATION & STARTER PANEL (COLLAPSIBLE / AUTO-HIDE)
         if (!isBleConnected) {
             val isEngineOn = demoEngineRunning && currentRpm > 50
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .border(
-                        1.5.dp,
-                        if (isEngineOn) RacingLime.copy(alpha = 0.6f) else SensorAmber,
-                        RoundedCornerShape(14.dp)
+                        1.dp,
+                        if (isEngineOn) RacingLime.copy(alpha = 0.5f) else BorderSubtle,
+                        RoundedCornerShape(10.dp)
                     ),
                 colors = CardDefaults.cardColors(containerColor = CardBackground),
-                shape = RoundedCornerShape(14.dp)
+                shape = RoundedCornerShape(10.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { isSimulatorExpanded = !isSimulatorExpanded },
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(12.dp)
-                                .clip(CircleShape)
-                                .background(if (isEngineOn) RacingLime else RaceRedline)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                text = if (isEngineOn) "MESIN MENYALA • IDLE $currentRpm RPM" else "MESIN MATI • 0 RPM",
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isEngineOn) RacingLime else SensorAmber,
-                                fontFamily = FontFamily.Monospace
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isEngineOn) RacingLime else RaceRedline)
                             )
                             Text(
-                                text = if (isEngineOn) "Pengapian koil aktif. Putar gas atau gunakan slider." else "Kunci kontak OFF / HV 0V. Tekan starter untuk hidupkan.",
-                                fontSize = 9.5.sp,
+                                text = "KONTROL GAS & STARTER",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                color = if (isEngineOn) RacingLime else SensorAmber
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(3.dp),
+                                color = (if (isEngineOn) RacingLime else SensorAmber).copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = if (isEngineOn) "IDLE • $currentRpm RPM" else "MATI • 0 RPM",
+                                    fontSize = 8.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = if (isEngineOn) RacingLime else SensorAmber,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = if (isSimulatorExpanded) "▲" else "▼",
+                                fontSize = 10.sp,
                                 color = TextSecondary,
                                 fontFamily = FontFamily.Monospace
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    if (isSimulatorExpanded) {
+                        HorizontalDivider(color = BorderSubtle, thickness = 0.5.dp)
 
-                    if (!isEngineOn) {
-                        MotecButton(
-                            text = "STARTER",
-                            onClick = { viewModel.simulateStartEngine() },
-                            color = RacingLime,
-                            icon = Icons.Default.PlayArrow,
-                            height = 30.dp,
-                            modifier = Modifier.testTag("dashboard_engine_starter_btn")
-                        )
-                    } else {
-                        MotecButton(
-                            text = "STOP MESIN",
-                            onClick = { viewModel.simulateStopEngine() },
-                            color = RaceRedline,
-                            icon = Icons.Default.Stop,
-                            height = 30.dp,
-                            modifier = Modifier.testTag("dashboard_engine_stop_btn")
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (isEngineOn) "Koil memercik • Kontak ON" else "Kunci kontak OFF / 0 RPM",
+                                fontSize = 9.5.sp,
+                                color = TextSecondary,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            if (!isEngineOn) {
+                                MotecButton(
+                                    text = "STARTER",
+                                    onClick = { viewModel.simulateStartEngine() },
+                                    color = RacingLime,
+                                    icon = Icons.Default.PlayArrow,
+                                    height = 28.dp,
+                                    modifier = Modifier.testTag("dashboard_engine_starter_btn")
+                                )
+                            } else {
+                                MotecButton(
+                                    text = "STOP MESIN",
+                                    onClick = { viewModel.simulateStopEngine() },
+                                    color = RaceRedline,
+                                    icon = Icons.Default.Stop,
+                                    height = 28.dp,
+                                    modifier = Modifier.testTag("dashboard_engine_stop_btn")
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
 
         // INTERACTIVE THROTTLE / RPM SLIDER (HOLDS RPM IN DEMO, FOLLOWS REAL MOTORCYCLE IN BLE)
+        if (isSimulatorExpanded) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -820,7 +1026,7 @@ fun DashboardScreen(viewModel: CdiViewModel) {
             }
         }
 
-        // Quick Idle / Engine Reset button
+        // Quick Idle & Demo Reset buttons
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -828,129 +1034,170 @@ fun DashboardScreen(viewModel: CdiViewModel) {
         ) {
             Text(
                 text = "THROTTLE: ${telemetry.tps / 10f}% • TPS ADC",
-                fontSize = 11.sp,
+                fontSize = 10.5.sp,
                 color = TextSecondary,
                 fontFamily = FontFamily.Monospace
             )
-            MotecButton(
-                text = "RESET RPM / IDLE",
-                onClick = { viewModel.resetVirtualEngine() },
-                color = SensorAmber,
-                icon = Icons.Default.Refresh,
-                height = 26.dp,
-                testTag = "reset_engine_btn"
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                MotecButton(
+                    text = "RESET RPM",
+                    onClick = { viewModel.resetVirtualEngine() },
+                    color = SensorAmber,
+                    icon = Icons.Default.Refresh,
+                    height = 26.dp,
+                    testTag = "reset_engine_btn"
+                )
+                MotecButton(
+                    text = "RESET DEMO",
+                    onClick = { viewModel.resetDemoCommissioning() },
+                    color = MotecOrange,
+                    icon = Icons.Default.Refresh,
+                    height = 26.dp,
+                    testTag = "reset_demo_btn"
+                )
+            }
+        }
         }
 
         // TECHNICAL DATA GRID & HARDWARE DIAGNOSTICS (MoTeC / AIM Race Studio Style)
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp)),
+                .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp)),
             colors = CardDefaults.cardColors(containerColor = CardBackground),
-            shape = RoundedCornerShape(14.dp)
+            shape = RoundedCornerShape(10.dp)
         ) {
-            Column(modifier = Modifier.padding(14.dp)) {
+            Column(modifier = Modifier.padding(10.dp)) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { isTechDataExpanded = !isTechDataExpanded },
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "TECHNICAL DATA GRID & HARDWARE STATUS",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = ElectricCyan,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Text(
-                        text = "SEQ: #${telemetry.sequence}",
-                        fontSize = 10.sp,
-                        color = TextMuted,
-                        fontFamily = FontFamily.Monospace
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = ElectricCyan,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Text(
+                            text = "DATA TEKNIS & DIAGNOSTIK GATT",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ElectricCyan,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "SEQ: #${telemetry.sequence}",
+                            fontSize = 9.sp,
+                            color = TextMuted,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = if (isTechDataExpanded) "▲" else "▼",
+                            fontSize = 10.sp,
+                            color = TextSecondary,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                if (isTechDataExpanded) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalDivider(color = BorderSubtle, thickness = 0.5.dp)
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                // Technical Data Grid 2-column key-value
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(SurfacePanel, RoundedCornerShape(8.dp))
-                        .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
-                        .padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    TechDataRow(
-                        "GATT STATUS",
-                        if (isConnected) "CONNECTED (GATT READY)" else connectionStatus.uppercase(),
-                        if (isConnected) RacingLime else TextMuted
-                    )
-                    TechDataRow(
-                        "PACKET RATE",
-                        when {
-                            !isConnected -> "0 Hz (OFFLINE)"
-                            telemetryPacketCount < 2L -> "MENUNGGU (${telemetryPacketCount} frame)"
-                            else -> "$packetRate Hz (target 18-22 Hz)"
-                        },
-                        when {
-                            !isConnected || packetRate == 0 -> TextMuted
-                            packetRate in 18..22 -> RacingLime
-                            packetRate in 12..17 || packetRate > 22 -> MotecOrange
-                            else -> RaceRedline
-                        }
-                    )
-                    TechDataRow(
-                        "CRC VALID",
-                        when {
-                            !isConnected -> "OFFLINE"
-                            telemetryPacketCount == 0L -> "BELUM ADA FRAME"
-                            else -> "%.1f%% VALID".format(crcPercent)
-                        },
-                        when {
-                            !isConnected || packetRate == 0 -> TextMuted
-                            crcPercent >= 99f -> RacingLime
-                            crcPercent >= 95f -> MotecOrange
-                            else -> RaceRedline
-                        }
-                    )
-                    TechDataRow(
-                        "TELEMETRY RX",
-                        when {
-                            !isConnected -> "OFFLINE"
-                            telemetryPacketCount == 0L -> "NO FRAME"
-                            packetRate == 0 -> "STOPPED"
-                            else -> "ACTIVE • #$telemetryPacketCount"
-                        },
-                        when {
-                            !isConnected -> TextMuted
-                            telemetryPacketCount == 0L -> RaceRedline
-                            packetRate == 0 -> RaceRedline
-                            crcPercent >= 99f -> RacingLime
-                            else -> MotecOrange
-                        }
-                    )
-                    TechDataRow("SETUP STAGE", "${telemetry.stage.name} (${telemetry.stage.label})", when (telemetry.setupStage) {
-                        5 -> RacingLime
-                        4 -> MotecOrange
-                        else -> SensorAmber
-                    })
-                    val oemPinsLabel = if (selectedPlatform == McuPlatform.STM32WB55) "BACA OEM PB3/PB4" else "BACA OEM GPIO16/17"
-                    val fanPinLabel = if (selectedPlatform == McuPlatform.STM32WB55) "ACTIVE (PB5 HIGH)" else "ACTIVE (GPIO13 HIGH)"
-                    TechDataRow("MODE FIRMWARE", "${fwMode.name} (${if (fwMode == FirmwareRunMode.DIY) "MANDIRI" else if (fwMode == FirmwareRunMode.OEM_LEARN) oemPinsLabel else "MANUAL"})", ElectricCyan)
-                    TechDataRow("TARGET TEGANGAN HV", "$targetHv V (${if (isPro) "PRO 345V" else "NORMAL 285V"})", RacingLime)
-                    TechDataRow("OUTPUT COILS", "CENTER: ${if (telemetry.centerEnabled) "ON" else "OFF"} | SIDE: ${if (telemetry.sideEnabled) "ON" else "OFF"}", RacingLime)
-                    TechDataRow("PULSER QUALITY", "${telemetry.pickupQuality} / 100 (PPR=1 Gate=80µs)", if (telemetry.pickupQuality >= 10) RacingLime else RaceRedline)
-                    TechDataRow("TRIGGER TIMING", "%.1f° BTDC".format(telemetry.triggerCdeg / 100f), ElectricCyan)
-                    TechDataRow("FAN RELAY (J1.7)", if (telemetry.fanEnabled) fanPinLabel else "OFF (LOW)", if (telemetry.fanEnabled) SensorAmber else TextMuted)
-                    TechDataRow("FAULT BITS", if (telemetry.faults == 0) "0x0000 (NO FAULT)" else "0x%04X".format(telemetry.faults), if (telemetry.faults == 0) RacingLime else RaceRedline)
+                    // Technical Data Grid 2-column key-value
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(SurfacePanel, RoundedCornerShape(8.dp))
+                            .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        TechDataRow(
+                            "GATT STATUS",
+                            if (isConnected) "CONNECTED (GATT READY)" else connectionStatus.uppercase(),
+                            if (isConnected) RacingLime else TextMuted
+                        )
+                        TechDataRow(
+                            "PACKET RATE",
+                            when {
+                                !isConnected -> "0 Hz (OFFLINE)"
+                                telemetryPacketCount < 2L -> "MENUNGGU (${telemetryPacketCount} frame)"
+                                else -> "$packetRate Hz (target 18-22 Hz)"
+                            },
+                            when {
+                                !isConnected || packetRate == 0 -> TextMuted
+                                packetRate in 18..22 -> RacingLime
+                                packetRate in 12..17 || packetRate > 22 -> MotecOrange
+                                else -> RaceRedline
+                            }
+                        )
+                        TechDataRow(
+                            "CRC VALID",
+                            when {
+                                !isConnected -> "OFFLINE"
+                                telemetryPacketCount == 0L -> "BELUM ADA FRAME"
+                                else -> "%.1f%% VALID".format(crcPercent)
+                            },
+                            when {
+                                !isConnected || packetRate == 0 -> TextMuted
+                                crcPercent >= 99f -> RacingLime
+                                crcPercent >= 95f -> MotecOrange
+                                else -> RaceRedline
+                            }
+                        )
+                        TechDataRow(
+                            "TELEMETRY RX",
+                            when {
+                                !isConnected -> "OFFLINE"
+                                telemetryPacketCount == 0L -> "NO FRAME"
+                                packetRate == 0 -> "STOPPED"
+                                else -> "ACTIVE • #$telemetryPacketCount"
+                            },
+                            when {
+                                !isConnected -> TextMuted
+                                telemetryPacketCount == 0L -> RaceRedline
+                                packetRate == 0 -> RaceRedline
+                                crcPercent >= 99f -> RacingLime
+                                else -> MotecOrange
+                            }
+                        )
+                        TechDataRow("SETUP STAGE", "${telemetry.stage.name} (${telemetry.stage.label})", when (telemetry.setupStage) {
+                            5 -> RacingLime
+                            4 -> MotecOrange
+                            else -> SensorAmber
+                        })
+                        val oemPinsLabel = if (selectedPlatform == McuPlatform.STM32WB55) "BACA OEM PB3/PB4" else "BACA OEM GPIO16/17"
+                        val fanPinLabel = if (selectedPlatform == McuPlatform.STM32WB55) "ACTIVE (PB5 HIGH)" else "ACTIVE (GPIO13 HIGH)"
+                        TechDataRow("MODE FIRMWARE", "${fwMode.name} (${if (fwMode == FirmwareRunMode.DIY) "MANDIRI" else if (fwMode == FirmwareRunMode.OEM_LEARN) oemPinsLabel else "MANUAL"})", ElectricCyan)
+                        TechDataRow("TARGET TEGANGAN HV", "$targetHv V (${if (isPro) "PRO 345V" else "NORMAL 285V"})", RacingLime)
+                        TechDataRow("OUTPUT KOIL", if (isDualCoil) "CTR: ${if (telemetry.centerEnabled) "ON" else "OFF"} | SIDE: ${if (telemetry.sideEnabled) "ON" else "OFF"}" else "CORE J1.12: ${if (telemetry.centerEnabled) "ON" else "OFF"} (1 KOIL)", RacingLime)
+                        TechDataRow("PULSER QUALITY", "${telemetry.pickupQuality} / 100 (PPR=1 Gate=80µs)", if (telemetry.pickupQuality >= 10) RacingLime else RaceRedline)
+                        TechDataRow("TRIGGER TIMING", "%.1f° BTDC".format(telemetry.triggerCdeg / 100f), ElectricCyan)
+                        TechDataRow("FAN RELAY (J1.7)", if (telemetry.fanEnabled) fanPinLabel else "OFF (LOW)", if (telemetry.fanEnabled) SensorAmber else TextMuted)
+                        TechDataRow("FAULT BITS", if (telemetry.faults == 0) "0x0000 (NO FAULT)" else "0x%04X".format(telemetry.faults), if (telemetry.faults == 0) RacingLime else RaceRedline)
+                    }
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
     }
+}
 }
 
 @Composable
@@ -968,46 +1215,116 @@ private fun TechDataRow(label: String, value: String, valueColor: Color) {
 private fun CapacitorMeter(
     modifier: Modifier = Modifier,
     label: String,
+    pin: String,
     voltage: Int,
-    isFull: Boolean
+    targetVoltage: Int = 285,
+    isFull: Boolean,
+    isActive: Boolean = true
 ) {
     Card(
-        modifier = modifier.border(1.dp, if (isFull) RacingLime.copy(alpha = 0.5f) else BorderSubtle, RoundedCornerShape(10.dp)),
+        modifier = modifier.border(
+            1.dp,
+            if (isFull) RacingLime.copy(alpha = 0.6f) else BorderSubtle,
+            RoundedCornerShape(10.dp)
+        ),
         colors = CardDefaults.cardColors(containerColor = SurfacePanel),
         shape = RoundedCornerShape(10.dp)
     ) {
         Column(
             modifier = Modifier.padding(10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = label,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = ElectricCyan,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1
+                )
+                Surface(
+                    shape = RoundedCornerShape(3.dp),
+                    color = (if (isActive) RacingLime else TextMuted).copy(alpha = 0.15f),
+                    border = BorderStroke(0.5.dp, if (isActive) RacingLime else TextMuted)
+                ) {
+                    Text(
+                        text = if (isActive) "PULSE ON" else "OFF",
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isActive) RacingLime else TextMuted,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                    )
+                }
+            }
+
             Text(
-                text = label,
-                fontSize = 10.sp,
+                text = pin,
+                fontSize = 8.5.sp,
                 color = TextSecondary,
-                fontFamily = FontFamily.Monospace,
-                maxLines = 1
+                fontFamily = FontFamily.Monospace
             )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "${voltage}V",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Black,
-                fontFamily = FontFamily.Monospace,
-                color = if (isFull) TextPrimary else SensorAmber
+
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "$voltage",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = FontFamily.Monospace,
+                    color = if (isFull) TextPrimary else SensorAmber
+                )
+                Text(
+                    text = " V",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextMuted,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.padding(bottom = 2.dp)
+                )
+            }
+
+            val progress = (voltage / targetVoltage.toFloat().coerceAtLeast(1f)).coerceIn(0f, 1f)
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp)),
+                color = if (isFull) RacingLime else SensorAmber,
+                trackColor = CardBackground
             )
-            Spacer(modifier = Modifier.height(4.dp))
+
+            val chargeLabel = when {
+                voltage < 30 -> "DISCHARGED (<30V)"
+                isFull -> "CHARGED • SIAP TEMBAK"
+                else -> "CHARGING (${(progress * 100).toInt()}%)"
+            }
+            val chargeColor = when {
+                voltage < 30 -> TextMuted
+                isFull -> RacingLime
+                else -> SensorAmber
+            }
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(4.dp))
-                    .background(if (isFull) RacingLime.copy(alpha = 0.2f) else SensorAmber.copy(alpha = 0.2f))
-                    .border(1.dp, if (isFull) RacingLime else SensorAmber, RoundedCornerShape(4.dp))
+                    .background(chargeColor.copy(alpha = 0.15f))
+                    .border(1.dp, chargeColor.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
                     .padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
                 Text(
-                    text = if (isFull) "CHARGED" else "CHARGING",
-                    fontSize = 10.sp,
+                    text = chargeLabel,
+                    fontSize = 8.5.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isFull) RacingLime else SensorAmber,
+                    color = chargeColor,
                     fontFamily = FontFamily.Monospace
                 )
             }

@@ -89,94 +89,7 @@ fun McuPinGuidance(
 
 @Composable
 fun SetupScreen(viewModel: CdiViewModel) {
-    val page by viewModel.quickSetupPage.collectAsState()
-    val unlocked by viewModel.quickSetupUnlockedStage.collectAsState()
-    val telemetry by viewModel.telemetry.collectAsState()
-    val message by viewModel.quickSetupMessage.collectAsState()
-    val selectedPlatform by viewModel.selectedPlatform.collectAsState()
-    val setupCanWrite by viewModel.setupCanWrite.collectAsState()
-    val setupWriteBlockReason by viewModel.setupWriteBlockReason.collectAsState()
-    val stage = SetupStage.entries.getOrNull(page) ?: SetupStage.BARU
-    val visibleProgress = maxOf(unlocked, telemetry.setupStage)
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(CarbonDark)
-    ) {
-        ThermalFanQuickAccess(viewModel)
-        CompactSetupHeader(
-            stage = stage,
-            visibleProgress = visibleProgress,
-            message = message,
-            selectedPlatform = selectedPlatform,
-            onTogglePlatform = {
-                viewModel.setMcuPlatform(
-                    if (selectedPlatform == McuPlatform.STM32WB55) McuPlatform.ESP32_WROOM else McuPlatform.STM32WB55
-                )
-            },
-            onSelect = viewModel::selectQuickSetupPage
-        )
-
-        // Banner Proteksi Keselamatan Command Guard (setup_can_write)
-        if (!setupCanWrite && setupWriteBlockReason != null) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-                color = RaceRedline.copy(alpha = 0.15f),
-                border = BorderStroke(1.dp, RaceRedline.copy(alpha = 0.8f)),
-                shape = RoundedCornerShape(6.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Warning,
-                        contentDescription = null,
-                        tint = RaceRedline,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        Text(
-                            text = "COMMAND GUARD • setup_can_write() DIBLOKIR",
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Black,
-                            color = RaceRedline,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        Text(
-                            text = setupWriteBlockReason ?: "",
-                            fontSize = 8.5.sp,
-                            color = TextPrimary,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-        }
-
-        val fwMode by viewModel.firmwareMode.collectAsState()
-
-        Box(modifier = Modifier.weight(1f)) {
-            when (stage) {
-                SetupStage.BARU -> BaruStage(viewModel, telemetry, selectedPlatform)
-                SetupStage.PULSER -> PulserStage(viewModel, telemetry, selectedPlatform)
-                SetupStage.TDC -> {
-                    if (fwMode == FirmwareRunMode.MANUAL) {
-                        StrobeScreen(viewModel)
-                    } else {
-                        OemLearnTdcCheckpointStage(viewModel, telemetry, selectedPlatform)
-                    }
-                }
-                SetupStage.TPS_CAL -> TpsStage(viewModel, telemetry, selectedPlatform)
-                SetupStage.FIRST_START -> FirstStartStage(viewModel, telemetry, selectedPlatform)
-                SetupStage.READY -> ReadyStage(viewModel, telemetry, selectedPlatform)
-            }
-        }
-    }
+    ThreeScreenSetupWizard(viewModel = viewModel)
 }
 
 @Composable
@@ -227,17 +140,11 @@ private fun CompactSetupHeader(
                     }
                 }
 
-                // Platform Toggle Chip
-                val isStm = selectedPlatform == McuPlatform.STM32WB55
+                // Versi Firmware Badge
                 Surface(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable { onTogglePlatform() },
-                    color = if (isStm) ElectricCyan.copy(alpha = 0.15f) else SparkAmber.copy(alpha = 0.15f),
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        if (isStm) ElectricCyan else SparkAmber
-                    ),
+                    modifier = Modifier.clip(RoundedCornerShape(4.dp)),
+                    color = RacingLime.copy(alpha = 0.15f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, RacingLime.copy(alpha = 0.6f)),
                     shape = RoundedCornerShape(4.dp)
                 ) {
                     Row(
@@ -247,23 +154,16 @@ private fun CompactSetupHeader(
                         Icon(
                             imageVector = Icons.Default.Memory,
                             contentDescription = null,
-                            tint = if (isStm) ElectricCyan else SparkAmber,
+                            tint = RacingLime,
                             modifier = Modifier.size(11.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = selectedPlatform.displayName,
+                            text = "VERSI FIRMWARE: R9.2.0 (ESP32)",
                             fontSize = 8.5.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
-                            color = if (isStm) ElectricCyan else SparkAmber
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "⇄",
-                            fontSize = 8.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextMuted
+                            color = RacingLime
                         )
                     }
                 }
@@ -418,7 +318,7 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: M
             title = "1 • PEMERIKSAAN AWAL",
             subtitle = "Mesin mati, HV < 30V. Aplikasi memeriksa PING, STATUS, SETUP, RPM dan tegangan HV sebelum lanjut."
         ) {
-            CompactStatusRow("TARGET MCU", selectedPlatform.displayName, true)
+            CompactStatusRow("VERSI FIRMWARE", "IgniTra R9.2.0 (ESP32)", true)
             CompactStatusRow("BLE / STATUS", if (connected || demo) "SIAP" else "BELUM TERHUBUNG", connected || demo)
             CompactStatusRow("RPM", "${t.rpm}", t.rpm == 0)
             CompactStatusRow("HV CENTER", "${t.hvCenter} V", t.hvCenter < 30)
@@ -1099,7 +999,7 @@ private fun ReadyStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: 
             title = "6 • CDI READY",
             subtitle = "Konfigurasi awal tersimpan di flash MCU ${selectedPlatform.displayName}. Boot berikutnya langsung memakai timing dan map tersimpan tanpa firmware lain."
         ) {
-            CompactStatusRow("TARGET MCU", selectedPlatform.displayName, true)
+            CompactStatusRow("VERSI FIRMWARE", "IgniTra R9.2.0 (ESP32)", true)
             CompactStatusRow("STATUS", if (t.ready) "READY" else "MENUNGGU SYNC", t.ready)
             CompactStatusRow("KOIL CENTER", if (t.centerEnabled) "AKTIF" else "NONAKTIF", t.centerEnabled)
             CompactStatusRow("KOIL SIDE", if (t.sideEnabled) "AKTIF" else "NONAKTIF", !t.sideEnabled)

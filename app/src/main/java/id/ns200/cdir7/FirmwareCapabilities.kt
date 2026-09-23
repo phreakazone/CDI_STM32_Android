@@ -29,25 +29,102 @@ data class FirmwareCapabilities(
 }
 
 data class EngineProfile(
-    val name:String,val rpmMin:Int,val rpmMax:Int,val advanceMinDeg:Float,
-    val advanceMaxDeg:Float,val pulserPpr:Int,val triggerAngleDeg:Float
-){
-    fun clamped(c:FirmwareCapabilities):EngineProfile{
-        val minRpm=rpmMin.coerceIn(c.rpmMin,c.rpmMax)
-        val minAdvance=advanceMinDeg.coerceIn(c.advanceMinDeg,c.advanceMaxDeg)
-        return copy(name=name.uppercase().replace(Regex("[^A-Z0-9_]"),"_").take(19).ifBlank{"UNIVERSAL"},
-            rpmMin=minRpm,rpmMax=rpmMax.coerceIn(minRpm,c.rpmMax),
-            advanceMinDeg=minAdvance,advanceMaxDeg=advanceMaxDeg.coerceIn(minAdvance,c.advanceMaxDeg),
-            pulserPpr=pulserPpr.coerceIn(1,c.maxPulserPpr),triggerAngleDeg=triggerAngleDeg.coerceIn(0f,c.advanceMaxDeg))
+    val name: String,
+    val rpmMin: Int,
+    val rpmMax: Int,
+    val advanceMinDeg: Float,
+    val advanceMaxDeg: Float,
+    val pulserPpr: Int,
+    val triggerAngleDeg: Float,
+    val description: String = "Profil Karakteristik & Limit Mesin"
+) {
+    fun clamped(c: FirmwareCapabilities): EngineProfile {
+        val minRpm = rpmMin.coerceIn(c.rpmMin, c.rpmMax)
+        val minAdvance = advanceMinDeg.coerceIn(c.advanceMinDeg, c.advanceMaxDeg)
+        return copy(
+            name = name.uppercase().replace(Regex("[^A-Z0-9_]"), "_").take(19).ifBlank { "STD_STREET" },
+            rpmMin = minRpm,
+            rpmMax = rpmMax.coerceIn(minRpm, c.rpmMax),
+            advanceMinDeg = minAdvance,
+            advanceMaxDeg = advanceMaxDeg.coerceIn(minAdvance, c.advanceMaxDeg),
+            pulserPpr = pulserPpr.coerceIn(1, c.maxPulserPpr),
+            triggerAngleDeg = triggerAngleDeg.coerceIn(0f, c.advanceMaxDeg)
+        )
     }
-    companion object{
-        fun universal()=EngineProfile("UNIVERSAL_BASE",300,22000,-15f,60f,1,35f)
-        fun ns200()=EngineProfile("NS200_BASE",800,11500,0f,36f,1,35f)
-        fun parse(f:List<String>):EngineProfile?{
-            if(f.size<8)return null
-            return EngineProfile(f[1],f[2].toIntOrNull()?:return null,f[3].toIntOrNull()?:return null,
-                (f[4].toIntOrNull()?:return null)/10f,(f[5].toIntOrNull()?:return null)/10f,
-                f[6].toIntOrNull()?:return null,(f[7].toIntOrNull()?:return null)/10f)
+
+    companion object {
+        fun standardStreet() = EngineProfile(
+            name = "STD_STREET",
+            rpmMin = 800,
+            rpmMax = 10500,
+            advanceMinDeg = 0f,
+            advanceMaxDeg = 36f,
+            pulserPpr = 1,
+            triggerAngleDeg = 35f,
+            description = "Profil Standar Harian: Efisien, aman untuk bahan bakar umum, limiter 10.500 RPM."
+        )
+
+        fun touringEndurance() = EngineProfile(
+            name = "TOURING",
+            rpmMin = 800,
+            rpmMax = 11500,
+            advanceMinDeg = 0f,
+            advanceMaxDeg = 38f,
+            pulserPpr = 1,
+            triggerAngleDeg = 35f,
+            description = "Profil Touring Jarak Jauh: Respon putaran menengah stabil, limiter 11.500 RPM."
+        )
+
+        fun highRevRacing() = EngineProfile(
+            name = "HIGH_REV",
+            rpmMin = 1000,
+            rpmMax = 15000,
+            advanceMinDeg = -5f,
+            advanceMaxDeg = 42f,
+            pulserPpr = 1,
+            triggerAngleDeg = 35f,
+            description = "Profil Sirkuit / Balap: Putaran tinggi responsif, limiter hingga 15.000 RPM."
+        )
+
+        fun customEngine() = EngineProfile(
+            name = "CUSTOM",
+            rpmMin = 800,
+            rpmMax = 12000,
+            advanceMinDeg = -5f,
+            advanceMaxDeg = 40f,
+            pulserPpr = 1,
+            triggerAngleDeg = 35f,
+            description = "Profil Pengaturan Mandiri: Sesuai spesifikasi mesin kustom."
+        )
+
+        // Aliases untuk backward compatibility
+        fun core1Coil() = standardStreet()
+        fun dualCoil() = highRevRacing()
+        fun thermalFan() = touringEndurance()
+        fun proTrack() = highRevRacing()
+        fun oemReference() = standardStreet()
+        fun universal() = standardStreet()
+        fun ns200() = touringEndurance()
+
+        val ALL_PROFILES = listOf(
+            standardStreet(),
+            touringEndurance(),
+            highRevRacing(),
+            customEngine()
+        )
+        val ALL_MODULAR_PROFILES = ALL_PROFILES
+
+        fun parse(f: List<String>): EngineProfile? {
+            if (f.size < 8) return null
+            return EngineProfile(
+                name = f[1],
+                rpmMin = f[2].toIntOrNull() ?: return null,
+                rpmMax = f[3].toIntOrNull() ?: return null,
+                advanceMinDeg = (f[4].toIntOrNull() ?: return null) / 10f,
+                advanceMaxDeg = (f[5].toIntOrNull() ?: return null) / 10f,
+                pulserPpr = f[6].toIntOrNull() ?: return null,
+                triggerAngleDeg = (f[7].toIntOrNull() ?: return null) / 10f
+            )
         }
     }
 }

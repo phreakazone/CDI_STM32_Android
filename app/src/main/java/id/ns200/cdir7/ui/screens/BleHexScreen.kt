@@ -41,6 +41,9 @@ import id.ns200.cdir7.CdiViewModel
 import id.ns200.cdir7.OtaState
 import id.ns200.cdir7.ui.components.MotecButton
 import id.ns200.cdir7.ui.theme.*
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 enum class LinkQuality(val label: String, val color: Color) {
     STABIL("STABIL", Color(0xFF00E676)),
@@ -92,12 +95,32 @@ fun BleHexScreen(
     val otaState by viewModel.otaState.collectAsState()
     val selectedPlatform by viewModel.selectedPlatform.collectAsState()
     val savedDeviceMac by viewModel.savedDeviceMac.collectAsState()
+    val bindingRecord by viewModel.bindingRecord.collectAsState()
+    val firmwareIdentity by viewModel.firmwareIdentity.collectAsState()
+    val firmwareVersionInfo by viewModel.firmwareVersionInfo.collectAsState()
+    val sessionPhase by viewModel.sessionPhase.collectAsState()
     val context = LocalContext.current
 
     val linkQuality = evaluateLinkQuality(isConnected, packetRate, crcPercent)
     var filterOnlyCdi by remember { mutableStateOf(false) }
     var showManualMacDialog by remember { mutableStateOf(false) }
     var manualMacInput by remember { mutableStateOf(savedDeviceMac ?: "") }
+
+    val currentSerial = firmwareIdentity.serial
+    val isBound = bindingRecord != null && (bindingRecord?.serial == currentSerial || isSimulation)
+    val boundDateStr = remember(bindingRecord?.boundAtEpochMs) {
+        val ms = bindingRecord?.boundAtEpochMs ?: 0L
+        if (ms > 0L) {
+            SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(ms))
+        } else {
+            "Baru saja"
+        }
+    }
+
+    var showBindDialog by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var showUnbindConfirmDialog by remember { mutableStateOf(false) }
+    var vehicleNameInput by remember { mutableStateOf("") }
 
     // Deteksi Layanan Lokasi (GPS) HP - Hanya relevan untuk Android 11 ke bawah (SDK < 31)
     val locationManager = remember { context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager }
@@ -353,7 +376,353 @@ fun BleHexScreen(
             }
 
             // ==========================================
-            // 2. HARDWARE BLE CDI SCANNER (FOKUS UTAMA)
+            // 2. IDENTITAS PERANGKAT & BINDING APLIKASI (PROTEKSI TULIS)
+            // ==========================================
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(
+                        1.dp,
+                        if (isBound) RacingLime.copy(alpha = 0.8f) else if (isConnected) SensorAmber.copy(alpha = 0.8f) else BorderSubtle,
+                        RoundedCornerShape(3.dp)
+                    )
+                    .testTag("device_binding_card"),
+                colors = CardDefaults.cardColors(containerColor = CardBackground),
+                shape = RoundedCornerShape(3.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // Header Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (isBound) Icons.Default.Lock else Icons.Default.LockOpen,
+                                contentDescription = null,
+                                tint = if (isBound) RacingLime else if (isConnected) SensorAmber else TextMuted,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "BINDING APLIKASI & IDENTITAS",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isBound) RacingLime else if (isConnected) SensorAmber else TextPrimary,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(2.dp),
+                            color = (if (isBound) RacingLime else if (isConnected) SensorAmber else TextMuted).copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, if (isBound) RacingLime else if (isConnected) SensorAmber else BorderSubtle)
+                        ) {
+                            Text(
+                                text = when {
+                                    isBound -> "TERIKAT (BOUND)"
+                                    isConnected -> "BELUM TERIKAT (READ-ONLY)"
+                                    else -> "OFFLINE"
+                                },
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                color = if (isBound) RacingLime else if (isConnected) SensorAmber else TextSecondary,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
+                    // Identity & Binding Specs Grid
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(SurfacePanel, RoundedCornerShape(2.dp))
+                            .border(1.dp, BorderSubtle, RoundedCornerShape(2.dp))
+                            .padding(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("SERIAL CDI:", fontSize = 9.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
+                            Text(
+                                text = if (isConnected || isSimulation) currentSerial else (bindingRecord?.serial ?: "TIDAK TERKONEKSI"),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ElectricCyan,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("NAMA KENDARAAN:", fontSize = 9.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
+                            Text(
+                                text = bindingRecord?.vehicleName ?: "Belum Terikat",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (bindingRecord != null) RacingLime else TextSecondary,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("FIRMWARE / PLATFORM:", fontSize = 9.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
+                            Text(
+                                text = "${firmwareVersionInfo.release} ${firmwareVersionInfo.semver} (${firmwareVersionInfo.platform})",
+                                fontSize = 9.5.sp,
+                                color = TextPrimary,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("STATUS AKSES:", fontSize = 9.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
+                            Text(
+                                text = if (isBound) "IZIN TULIS AKTIF (FULL ACCESS)" else "HANYA BACA (READ-ONLY)",
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isBound) RacingLime else SensorAmber,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+
+                        if (bindingRecord != null) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("TANGGAL BINDING:", fontSize = 9.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
+                                Text(
+                                    text = boundDateStr,
+                                    fontSize = 9.sp,
+                                    color = TextSecondary,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+                    }
+
+                    // Action Buttons (Bind, Edit Name, Unbind)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (!isBound) {
+                            MotecButton(
+                                text = "IKAT PERANGKAT (BIND)",
+                                onClick = {
+                                    vehicleNameInput = bindingRecord?.vehicleName ?: "NS200"
+                                    showBindDialog = true
+                                },
+                                icon = Icons.Default.Link,
+                                color = RacingLime,
+                                height = 30.dp,
+                                modifier = Modifier.weight(1f),
+                                testTag = "bind_device_btn"
+                            )
+                        } else {
+                            MotecButton(
+                                text = "UBAH NAMA",
+                                onClick = {
+                                    vehicleNameInput = bindingRecord?.vehicleName ?: "NS200"
+                                    showRenameDialog = true
+                                },
+                                icon = Icons.Default.Edit,
+                                color = ElectricCyan,
+                                height = 30.dp,
+                                modifier = Modifier.weight(1f),
+                                testTag = "edit_vehicle_name_btn"
+                            )
+
+                            MotecButton(
+                                text = "LEPAS BINDING",
+                                onClick = { showUnbindConfirmDialog = true },
+                                icon = Icons.Default.LinkOff,
+                                color = RaceRedline,
+                                height = 30.dp,
+                                modifier = Modifier.weight(1f),
+                                testTag = "unbind_device_btn"
+                            )
+                        }
+                    }
+
+                    // Explanatory Note (sesuai dokumen section 9)
+                    Text(
+                        text = "Binding R9.2 adalah proteksi lokal pada aplikasi ini agar konfigurasi pengapian tidak tertukar antar sepeda motor. Tanpa binding yang cocok, akses dibatasi ke mode Read-Only yang aman.",
+                        fontSize = 8.sp,
+                        color = TextMuted,
+                        fontFamily = FontFamily.Monospace,
+                        lineHeight = 11.sp
+                    )
+                }
+            }
+
+            // Dialog: Ikat Perangkat (Bind)
+            if (showBindDialog) {
+                AlertDialog(
+                    onDismissRequest = { showBindDialog = false },
+                    shape = RoundedCornerShape(4.dp),
+                    containerColor = CardBackground,
+                    title = {
+                        Text(
+                            text = "IKAT PERANGKAT KE APLIKASI",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = RacingLime,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "Serial: $currentSerial\nMasukkan nama/tipe sepeda motor untuk identifikasi profil lokal:",
+                                fontSize = 10.sp,
+                                color = TextSecondary,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            OutlinedTextField(
+                                value = vehicleNameInput,
+                                onValueChange = { vehicleNameInput = it },
+                                placeholder = { Text("Contoh: Pulsar 200NS Harian", fontSize = 11.sp, color = TextMuted) },
+                                singleLine = true,
+                                shape = RoundedCornerShape(3.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary,
+                                    focusedBorderColor = RacingLime,
+                                    unfocusedBorderColor = BorderSubtle,
+                                    focusedContainerColor = SurfacePanel,
+                                    unfocusedContainerColor = SurfacePanel
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        MotecButton(
+                            text = "IKAT (BIND)",
+                            onClick = {
+                                viewModel.confirmBinding(vehicleNameInput.ifBlank { "NS200" })
+                                showBindDialog = false
+                            },
+                            color = RacingLime
+                        )
+                    },
+                    dismissButton = {
+                        MotecButton(
+                            text = "BATAL",
+                            onClick = { showBindDialog = false },
+                            color = TextSecondary
+                        )
+                    }
+                )
+            }
+
+            // Dialog: Ubah Nama Kendaraan
+            if (showRenameDialog) {
+                AlertDialog(
+                    onDismissRequest = { showRenameDialog = false },
+                    shape = RoundedCornerShape(4.dp),
+                    containerColor = CardBackground,
+                    title = {
+                        Text(
+                            text = "UBAH NAMA KENDARAAN",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ElectricCyan,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "Perbarui nama kendaraan lokal untuk CDI [$currentSerial]:",
+                                fontSize = 10.sp,
+                                color = TextSecondary,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            OutlinedTextField(
+                                value = vehicleNameInput,
+                                onValueChange = { vehicleNameInput = it },
+                                singleLine = true,
+                                shape = RoundedCornerShape(3.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary,
+                                    focusedBorderColor = ElectricCyan,
+                                    unfocusedBorderColor = BorderSubtle,
+                                    focusedContainerColor = SurfacePanel,
+                                    unfocusedContainerColor = SurfacePanel
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        MotecButton(
+                            text = "SIMPAN",
+                            onClick = {
+                                viewModel.updateBoundVehicleName(vehicleNameInput)
+                                showRenameDialog = false
+                            },
+                            color = ElectricCyan
+                        )
+                    },
+                    dismissButton = {
+                        MotecButton(
+                            text = "BATAL",
+                            onClick = { showRenameDialog = false },
+                            color = TextSecondary
+                        )
+                    }
+                )
+            }
+
+            // Dialog: Konfirmasi Lepas Binding
+            if (showUnbindConfirmDialog) {
+                AlertDialog(
+                    onDismissRequest = { showUnbindConfirmDialog = false },
+                    shape = RoundedCornerShape(4.dp),
+                    containerColor = CardBackground,
+                    title = {
+                        Text(
+                            text = "LEPASKAN BINDING PERANGKAT?",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = RaceRedline,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = "Jika binding dilepas, aplikasi akan kembali ke mode Read-Only untuk perangkat [$currentSerial]. Anda tetap dapat melihat telemetri dan kode fault, tetapi fitur tulis kurva dan konfigurasi modul akan dikunci.",
+                            fontSize = 10.sp,
+                            color = TextSecondary,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    },
+                    confirmButton = {
+                        MotecButton(
+                            text = "LEPASKAN BINDING",
+                            onClick = {
+                                viewModel.unbindCurrentDevice()
+                                showUnbindConfirmDialog = false
+                            },
+                            color = RaceRedline
+                        )
+                    },
+                    dismissButton = {
+                        MotecButton(
+                            text = "BATAL",
+                            onClick = { showUnbindConfirmDialog = false },
+                            color = TextSecondary
+                        )
+                    }
+                )
+            }
+
+            // ==========================================
+            // 3. HARDWARE BLE CDI SCANNER (FOKUS UTAMA)
             // ==========================================
             Card(
                 modifier = Modifier

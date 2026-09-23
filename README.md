@@ -166,15 +166,21 @@ BOM lengkap per-reference ada di [`hardware/easyeda/generated/BOM.csv`](hardware
 Menampilkan instrumen balap presisi tinggi:
 - **Tachometer Radial & Linear**: Skala visual hingga 13.000 RPM; batas mengikuti profil aktif; format protokol maksimum 30.000 RPM dengan redline dinamis.
 - **Panel Status Dual/Triple Spark**: Indikator busi utama (Center Plug) dan busi sekunder (Side Plugs) aktif berkedip sesuai sinyal pemantik.
-- **Telemetry Readout Matrix**:
+- **Monitor Kapasitor Core / Dual Coil**:
+  - Konfigurasi **1 Koil** terdeteksi: Tampilan kapasitor HV Core (J1.12) tersaji rapi dan **rata tengah** (*centered*) di dashboard.
+  - Konfigurasi **2 Koil** terdeteksi (Dual/Triple Spark): Tampilan kapasitor tersaji **sejajar kanan dan kiri** (HV Core J1.12 di kiri & HV Side J1.6 di kanan) lengkap dengan bar meter progres pengisian tegangan HV menuju target (285V / 345V), indikator *PULSE ON*, dan status discharge aman.
+- **Telemetry Readout Matrix & Status Kelistrikan**:
   - `ADVANCE`: Derajat pengapian (° BTDC)
-  - `TPS`: Persentase bukaan gas (0–100%)
-  - `BATTERY`: Tegangan aki motor (contoh: 14.1V)
+  - `TPS`: Persentase bukaan gas (0–100%) dengan bar visual respon gas
+  - `BATTERY`: Tegangan aki motor (contoh: 14.1V) lengkap dengan badge kesehatan aki (`NORMAL / CHARGING`, `SIAGA`, `AKI DROP <11.8V`)
   - `HV CAP`: Tegangan kapasitor discharge CDI (hingga 345V pada mode PRO)
-  - `TEMP`: `N/A` pada firmware saat ini sampai kurva NTC dikalibrasi dan diimplementasikan
-  - `MODE FIRMWARE`: Indikator mode aktif (OEM_LEARN / MANUAL / DIY)
-- **Interactive Tacho Slider**: Pengontrol putaran mesin simulasi di mode demo, dan pengikut RPM motor di mode BLE.
-- **Tombol Aksi Cepat**: Preset instan `IDLE (1.4K)`, `5K`, `8K`, `LIMITER`, serta tombol interaktif `BLIP GAS`.
+  - `STATUS OPERASIONAL`: Mode limiter pemantik (FIRE NORMAL, SOFT CUT, HARD CUT), status relay kipas radiator (J1.7), status penguncian komisi Flash, dan diagnostik GATT BLE real-time (packet rate & CRC valid).
+- **Interactive Tacho Slider & Simulasi Demo Lengkap**:
+  - Pada **Mode Demo**: Default dual coil dengan seluruh 5 modul fisik disimulasikan terpasang (Core Single Coil, Dual Coil / Triple Spark DTS-i, Quickshifter, Tacho Out, Shift Light).
+  - Alur simulasi wizard komisi setup 3 layar dapat dijalankan sampai benar-benar tuntas hingga tahap final status `READY` (Flash Terkunci).
+  - Tersedia tombol **RESET DEMO** baik di Dashboard maupun Setup Wizard untuk mereset seluruh variabel komisi kembali ke kondisi nol/awal setiap saat.
+  - Pada **Koneksi BLE Nyata**: Slider mengikuti putaran mesin motor asli secara *real-time*.
+- **Tombol Aksi Cepat**: Preset instan `IDLE (1.4K)`, `5K`, `8K`, `LIMITER`, tombol interaktif `BLIP GAS`, `RESET RPM`, serta `RESET DEMO`.
 
 ### 2. Ignition Maps (4-Slot Timing)
 Antarmuka tuning pengapian komprehensif:

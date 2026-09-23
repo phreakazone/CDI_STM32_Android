@@ -3,9 +3,12 @@ package id.ns200.cdir7.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
@@ -26,9 +29,8 @@ import id.ns200.cdir7.ui.theme.*
 fun EngineProfileCard(vm: CdiViewModel) {
     val profile by vm.engineProfile.collectAsState()
     val caps by vm.firmwareCapabilities.collectAsState()
-
-    val isNs200 = profile.name.contains("NS200", ignoreCase = true)
-    val isUniversal = profile.name.contains("UNIVERSAL", ignoreCase = true)
+    val moduleStatus by vm.moduleStatus.collectAsState()
+    var isExpanded by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
@@ -39,11 +41,13 @@ fun EngineProfileCard(vm: CdiViewModel) {
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Header Row: Title + Active Profile Badge
+            // Header Row: Title + Active Profile Badge + Modular Tag
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isExpanded = !isExpanded },
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -58,30 +62,70 @@ fun EngineProfileCard(vm: CdiViewModel) {
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "ENGINE PROFILE",
-                        fontSize = 12.sp,
+                        text = "GUARDRAIL PROFIL MESIN",
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Black,
                         fontFamily = FontFamily.Monospace,
                         color = MotecOrange
                     )
                 }
 
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(ElectricCyan.copy(alpha = 0.12f))
-                        .border(1.dp, ElectricCyan.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 7.dp, vertical = 3.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(ElectricCyan.copy(alpha = 0.12f))
+                            .border(1.dp, ElectricCyan.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = profile.name.replace("_", " "),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            color = ElectricCyan
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(RacingLime.copy(alpha = 0.12f))
+                            .border(1.dp, RacingLime.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "${profile.rpmMax} RPM",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            color = RacingLime
+                        )
+                    }
+
                     Text(
-                        text = profile.name,
+                        text = if (isExpanded) "▲" else "▼",
                         fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        color = ElectricCyan
+                        color = TextSecondary,
+                        fontFamily = FontFamily.Monospace
                     )
                 }
             }
+
+            if (isExpanded) {
+                HorizontalDivider(color = BorderSubtle, thickness = 0.5.dp)
+
+                // Description of active profile
+                Text(
+                    text = profile.description,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = TextSecondary,
+                    lineHeight = 13.sp
+                )
 
             // Telemetry Grid: 4 data tiles (2x2)
             Row(
@@ -90,13 +134,13 @@ fun EngineProfileCard(vm: CdiViewModel) {
             ) {
                 ProfileSpecTile(
                     modifier = Modifier.weight(1f),
-                    label = "RPM LIMIT",
+                    label = "RENTANG RPM",
                     value = "${profile.rpmMin} - ${profile.rpmMax}",
                     accentColor = TextPrimary
                 )
                 ProfileSpecTile(
                     modifier = Modifier.weight(1f),
-                    label = "TIMING LIMIT",
+                    label = "TIMING ADVANCE",
                     value = "${profile.advanceMinDeg}°..+${profile.advanceMaxDeg}°",
                     accentColor = SparkAmber
                 )
@@ -108,42 +152,55 @@ fun EngineProfileCard(vm: CdiViewModel) {
             ) {
                 ProfileSpecTile(
                     modifier = Modifier.weight(1f),
-                    label = "PULSER / TRIG",
+                    label = "PULSER / TRIGGER",
                     value = "PPR ${profile.pulserPpr} • ${profile.triggerAngleDeg}°",
                     accentColor = TextPrimary
                 )
                 ProfileSpecTile(
                     modifier = Modifier.weight(1f),
-                    label = "FIRMWARE GRID",
+                    label = "GRID FIRMWARE",
                     value = "v${caps.protocolVersion} • ${caps.maxRpmPoints}x${caps.maxLoadPoints} (${caps.mapSlots}S)",
                     accentColor = ElectricCyan
                 )
             }
 
-            // Segmented Profile Switcher (Sharp corners semi-transparent)
+            // Segmented Profile Selector
+            Text(
+                text = "PILIH KARAKTER / PROFIL MESIN:",
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                color = TextMuted
+            )
+
+            val scrollState = rememberScrollState()
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(2.dp))
+                    .horizontalScroll(scrollState)
+                    .clip(RoundedCornerShape(3.dp))
                     .background(SurfacePanel)
-                    .border(1.dp, BorderSubtle, RoundedCornerShape(2.dp))
-                    .padding(2.dp),
-                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(3.dp))
+                    .padding(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                ProfileSegmentButton(
-                    modifier = Modifier.weight(1f),
-                    title = "NS200 BASE",
-                    subtitle = "800-11.5k RPM",
-                    selected = isNs200,
-                    onClick = { vm.setEngineProfile(EngineProfile.ns200()) }
-                )
-                ProfileSegmentButton(
-                    modifier = Modifier.weight(1f),
-                    title = "UNIVERSAL",
-                    subtitle = "300-22k RPM",
-                    selected = isUniversal,
-                    onClick = { vm.setEngineProfile(EngineProfile.universal()) }
-                )
+                EngineProfile.ALL_PROFILES.forEach { item ->
+                    val isSelected = profile.name == item.name
+                    val (displayTitle, displayTag, displaySubtitle) = when (item.name) {
+                        "STD_STREET" -> Triple("STANDAR", "HARIAN", "Max 10.500 RPM")
+                        "TOURING" -> Triple("TOURING", "ENDURANCE", "Max 11.500 RPM")
+                        "HIGH_REV" -> Triple("HIGH REV", "RACING", "Max 15.000 RPM")
+                        "CUSTOM" -> Triple("KUSTOM", "BEBAS", "Spesifikasi Mandiri")
+                        else -> Triple(item.name.replace("_", " "), "PROFIL", "${item.rpmMin / 1000}k-${item.rpmMax / 1000}k RPM")
+                    }
+                    ModularProfileChip(
+                        title = displayTitle,
+                        subtitle = displaySubtitle,
+                        category = displayTag,
+                        selected = isSelected,
+                        onClick = { vm.setEngineProfile(item) }
+                    )
+                }
             }
 
             // Disclaimer Footnote
@@ -158,12 +215,13 @@ fun EngineProfileCard(vm: CdiViewModel) {
                     modifier = Modifier.size(12.dp)
                 )
                 Text(
-                    text = "Batas profil adalah software guardrail, bukan jaminan mekanis mesin/koil.",
-                    fontSize = 9.5.sp,
+                    text = "Batas profil adalah software guardrail proteksi modular, disesuaikan dengan konfigurasi koil dan sensor.",
+                    fontSize = 9.sp,
                     color = TextMuted,
                     fontFamily = FontFamily.Monospace,
                     lineHeight = 12.sp
                 )
+            }
             }
         }
     }
@@ -204,41 +262,50 @@ private fun ProfileSpecTile(
 }
 
 @Composable
-private fun ProfileSegmentButton(
-    modifier: Modifier = Modifier,
+private fun ModularProfileChip(
     title: String,
     subtitle: String,
+    category: String,
     selected: Boolean,
     onClick: () -> Unit
 ) {
     Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(1.dp))
+        modifier = Modifier
+            .clip(RoundedCornerShape(2.dp))
             .background(if (selected) MotecOrange.copy(alpha = 0.22f) else Color.Transparent)
-            .border(1.dp, if (selected) MotecOrange.copy(alpha = 0.85f) else Color.Transparent, RoundedCornerShape(1.dp))
+            .border(
+                1.dp,
+                if (selected) MotecOrange.copy(alpha = 0.9f) else BorderSubtle,
+                RoundedCornerShape(2.dp)
+            )
             .clickable(onClick = onClick)
-            .padding(vertical = 5.dp, horizontal = 4.dp),
+            .padding(vertical = 6.dp, horizontal = 8.dp),
         contentAlignment = Alignment.Center
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
-        ) {
-            Text(
-                text = title,
-                fontSize = 10.5.sp,
-                fontWeight = FontWeight.Black,
-                fontFamily = FontFamily.Monospace,
-                color = if (selected) Color.White else TextSecondary
-            )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = title,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = FontFamily.Monospace,
+                    color = if (selected) Color.White else TextPrimary
+                )
+                Text(
+                    text = "[$category]",
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    color = if (selected) RacingLime else TextMuted
+                )
+            }
             Text(
                 text = subtitle,
                 fontSize = 8.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
-                color = if (selected) MotecOrange else TextMuted
+                color = if (selected) MotecOrange else TextSecondary
             )
         }
     }
 }
-

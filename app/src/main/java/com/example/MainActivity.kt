@@ -47,6 +47,7 @@ import androidx.core.location.LocationManagerCompat
 import com.example.ui.screens.WiringWorkshopHubScreen
 import com.example.viewmodel.WiringViewModel
 import id.ns200.cdir7.CdiViewModel
+import id.ns200.cdir7.HardwareModule
 import id.ns200.cdir7.ui.components.MotecButton
 import id.ns200.cdir7.McuPlatform
 import id.ns200.cdir7.ScreenTab
@@ -211,6 +212,10 @@ fun MainAppScreen(
     val verificationProgress by wiringViewModel.verificationProgress.collectAsState()
     val connectedDeviceName by cdiViewModel.connectedDeviceName.collectAsState()
     val selectedPlatform by cdiViewModel.selectedPlatform.collectAsState()
+    val moduleStatus by cdiViewModel.moduleStatus.collectAsState()
+    val isSideInstalled = moduleStatus.isInstalled(HardwareModule.DUAL_COIL)
+    val isSideActive = moduleStatus.isActive(HardwareModule.DUAL_COIL) || telemetry.sideEnabled
+    val isDualCoil = isSideInstalled || isSideActive
 
     Scaffold(
         modifier = Modifier
@@ -224,6 +229,7 @@ fun MainAppScreen(
                 isBleBusy = isBleBusy,
                 isBleScanning = isBleScanning,
                 telemetry = telemetry,
+                isDualCoil = isDualCoil,
                 packetRateHz = packetRateHz,
                 isTelemetryStreaming = isTelemetryStreaming,
                 verificationProgress = verificationProgress,
@@ -266,10 +272,7 @@ fun MainAppScreen(
             when (currentTab) {
                 ScreenTab.TACHO -> DashboardScreen(cdiViewModel)
                 ScreenTab.MAPS -> MapsScreen(cdiViewModel)
-                ScreenTab.WIRING -> WiringWorkshopHubScreen(
-                    wiringViewModel = wiringViewModel,
-                    cdiViewModel = cdiViewModel
-                )
+                ScreenTab.WIRING -> BukuPetunjukScreen(cdiViewModel)
                 ScreenTab.SETUP -> SetupScreen(cdiViewModel)
                 ScreenTab.SUARA -> SoundScreen(cdiViewModel)
                 ScreenTab.BLE -> BleHexScreen(
@@ -288,6 +291,7 @@ fun MotorsportTopBar(
     isBleBusy: Boolean,
     isBleScanning: Boolean,
     telemetry: Telemetry,
+    isDualCoil: Boolean = true,
     packetRateHz: Int = 0,
     isTelemetryStreaming: Boolean = false,
     verificationProgress: Pair<Int, Int>,
@@ -478,11 +482,19 @@ fun MotorsportTopBar(
                     value = if (isConnected || isSimulation) "${telemetry.hvCenter}V" else "---V",
                     color = if (telemetry.hvCenter >= 280) RacingLime else MotecOrange
                 )
-                TelemetryMetricItem(
-                    label = "HV SIDE",
-                    value = if (isConnected || isSimulation) "${telemetry.hvSide}V" else "---V",
-                    color = if (telemetry.hvSide >= 280) RacingLime else MotecOrange
-                )
+                if (isDualCoil) {
+                    TelemetryMetricItem(
+                        label = "HV SIDE",
+                        value = if (isConnected || isSimulation) "${telemetry.hvSide}V" else "---V",
+                        color = if (telemetry.hvSide >= 280) RacingLime else MotecOrange
+                    )
+                } else {
+                    TelemetryMetricItem(
+                        label = "COIL",
+                        value = "1-CTR",
+                        color = RacingLime
+                    )
+                }
                 TelemetryMetricItem(
                     label = "IGN ADV",
                     value = if (isConnected || isSimulation) "%.1f°".format(telemetry.advanceCdeg / 100f) else "--.-°",
@@ -541,17 +553,17 @@ fun MotorsportBottomNav(
                 val icon = when (tab) {
                     ScreenTab.TACHO -> Icons.Default.Speed
                     ScreenTab.MAPS -> Icons.Default.ShowChart
-                    ScreenTab.WIRING -> Icons.Default.Build
                     ScreenTab.SETUP -> Icons.Default.FactCheck
                     ScreenTab.SUARA -> Icons.Default.VolumeUp
+                    ScreenTab.WIRING -> Icons.Default.MenuBook
                     ScreenTab.BLE -> Icons.Default.Bluetooth
                 }
                 val activeColor = when (tab) {
                     ScreenTab.TACHO -> RacingLime
                     ScreenTab.MAPS -> MotecOrange
-                    ScreenTab.WIRING -> ElectricCyan
                     ScreenTab.SETUP -> SensorAmber
                     ScreenTab.SUARA -> ElectricCyan
+                    ScreenTab.WIRING -> ElectricCyan
                     ScreenTab.BLE -> RacingLime
                 }
 

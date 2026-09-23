@@ -91,7 +91,11 @@ enum class McuPlatform(
     );
 
     companion object {
+        const val CURRENT_FIRMWARE_VERSION = "IgniTra R9.2.0 (ESP32) • Build 20260923"
+        const val CURRENT_FIRMWARE_RELEASE = "R9"
+        const val CURRENT_FIRMWARE_SEMVER = "9.2.0"
+
         fun fromId(id: String?): McuPlatform =
-            entries.find { it.id.equals(id, ignoreCase = true) } ?: STM32WB55
+            entries.find { it.id.equals(id, ignoreCase = true) } ?: ESP32_WROOM
     }
 }

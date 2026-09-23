@@ -20,16 +20,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import java.util.UUID
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
 enum class ScreenTab(val title: String, val badge: String) {
-    TACHO("Tacho", "CLUSTER"),
+    TACHO("Dashboard", "LIVE"),
     MAPS("Maps", "KURVA"),
-    WIRING("Wiring", "WORKSHOP"),
     SETUP("Setup", "KOMISI"),
     SUARA("Suara", "AUDIO"),
-    BLE("BLE", "DIAG")
+    WIRING("Buku", "MANUAL"),
+    BLE("Perangkat", "DEVICE")
 }
 
 data class MapSlotData(
@@ -308,7 +309,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     private val cdiPrefs = context.getSharedPreferences("cdi_r8_prefs", Context.MODE_PRIVATE)
 
     private val _selectedPlatform = MutableStateFlow(
-        McuPlatform.fromId(cdiPrefs.getString("mcu_platform", McuPlatform.STM32WB55.id))
+        McuPlatform.fromId(cdiPrefs.getString("mcu_platform", McuPlatform.ESP32_WROOM.id))
     )
     val selectedPlatform: StateFlow<McuPlatform> = _selectedPlatform.asStateFlow()
 
@@ -316,6 +317,216 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         _selectedPlatform.value = platform
         cdiPrefs.edit().putString("mcu_platform", platform.id).apply()
         appendLog("Platform Hardware aktif dialihkan ke: ${platform.displayName} (${platform.architecture})")
+    }
+
+    // ==========================================
+    // FIRMWARE R9 MODUL HARDWARE & STATUS SISTEM
+    // ==========================================
+    private val bindingPrefs = context.getSharedPreferences("ignitra_binding_prefs", Context.MODE_PRIVATE)
+
+    private fun getOrCreateAppInstanceId(): String {
+        val existing = bindingPrefs.getString("app_instance_id", null)
+        if (!existing.isNullOrBlank()) return existing
+        val newId = UUID.randomUUID().toString()
+        bindingPrefs.edit().putString("app_instance_id", newId).apply()
+        return newId
+    }
+
+    private fun loadSavedBinding(): BindingRecord? {
+        val serial = bindingPrefs.getString("bound_serial", null) ?: return null
+        val appInstanceId = getOrCreateAppInstanceId()
+        val epoch = bindingPrefs.getLong("bound_at", 0L)
+        val fw = bindingPrefs.getString("bound_fw", "R9") ?: "R9"
+        val vehicle = bindingPrefs.getString("bound_vehicle", null)
+        return BindingRecord(serial, appInstanceId, epoch, fw, vehicle)
+    }
+
+    private val _sessionPhase = MutableStateFlow(SessionPhase.DISCONNECTED)
+    val sessionPhase: StateFlow<SessionPhase> = _sessionPhase.asStateFlow()
+
+    private val _bindingRecord = MutableStateFlow<BindingRecord?>(loadSavedBinding())
+    val bindingRecord: StateFlow<BindingRecord?> = _bindingRecord.asStateFlow()
+
+    fun isSerialBound(serial: String): Boolean = _bindingRecord.value?.serial == serial
+
+    fun confirmBinding(vehicleName: String? = null) {
+        val currentSerial = _firmwareIdentity.value.serial
+        if (currentSerial == "UNAVAILABLE" || currentSerial.isBlank()) {
+            Toast.makeText(context, "Serial perangkat tidak valid untuk binding!", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val appInstanceId = getOrCreateAppInstanceId()
+        val record = BindingRecord(
+            serial = currentSerial,
+            appInstanceId = appInstanceId,
+            boundAtEpochMs = System.currentTimeMillis(),
+            firmwareRelease = _firmwareVersionInfo.value.release,
+            vehicleName = vehicleName ?: "NS200"
+        )
+        bindingPrefs.edit()
+            .putString("bound_serial", record.serial)
+            .putLong("bound_at", record.boundAtEpochMs)
+            .putString("bound_fw", record.firmwareRelease)
+            .putString("bound_vehicle", record.vehicleName)
+            .apply()
+        _bindingRecord.value = record
+        if (_sessionPhase.value == SessionPhase.NEEDS_BINDING || _sessionPhase.value == SessionPhase.READY_READ_ONLY) {
+            _sessionPhase.value = SessionPhase.READY_FULL
+        }
+        appendLog("BINDING: Serial [${record.serial}] berhasil di-binding ke aplikasi ini.")
+        Toast.makeText(context, "Perangkat berhasil di-binding. Izin tulis aktif!", Toast.LENGTH_SHORT).show()
+    }
+
+    fun updateBoundVehicleName(newName: String) {
+        val current = _bindingRecord.value ?: return
+        val cleanName = newName.trim().ifBlank { "NS200" }
+        val updated = current.copy(vehicleName = cleanName)
+        bindingPrefs.edit().putString("bound_vehicle", updated.vehicleName).apply()
+        _bindingRecord.value = updated
+        appendLog("BINDING: Nama kendaraan diubah menjadi [${updated.vehicleName}].")
+        Toast.makeText(context, "Nama kendaraan diperbarui ke [${updated.vehicleName}]", Toast.LENGTH_SHORT).show()
+    }
+
+    fun unbindCurrentDevice() {
+        bindingPrefs.edit()
+            .remove("bound_serial")
+            .remove("bound_at")
+            .remove("bound_fw")
+            .remove("bound_vehicle")
+            .apply()
+        _bindingRecord.value = null
+        if (_isConnected.value) {
+            _sessionPhase.value = SessionPhase.NEEDS_BINDING
+        }
+        appendLog("BINDING: Binding serial telah dilepas.")
+        Toast.makeText(context, "Binding perangkat dilepas. Mode beralih ke Read-Only.", Toast.LENGTH_SHORT).show()
+    }
+
+    private val _moduleStatus = MutableStateFlow(
+        ModuleStatus(
+            installedMask = 31, // Default Mode Demo: seluruh 5 modul terpasang (SIDE=1, THERMAL=2, OEM_LEARN=4, AUX=8, TPS_DIAG=16)
+            activeMask = 27,    // SIDE, THERMAL, AUX, TPS_DIAG aktif
+            observedMask = 31,
+            faultMask = 0,
+            coreProfile = 2     // Default Mode Demo: Dual Coil (Core + SIDE)
+        )
+    )
+    val moduleStatus: StateFlow<ModuleStatus> = _moduleStatus.asStateFlow()
+
+    private val _firmwareVersionInfo = MutableStateFlow(
+        FirmwareVersionInfo(
+            schema = 1,
+            release = McuPlatform.CURRENT_FIRMWARE_RELEASE,
+            semver = McuPlatform.CURRENT_FIRMWARE_SEMVER,
+            buildId = "20260923",
+            platform = "ESP32",
+            protocolVersion = 5,
+            telemetryVersion = 3
+        )
+    )
+    val firmwareVersionInfo: StateFlow<FirmwareVersionInfo> = _firmwareVersionInfo.asStateFlow()
+
+    private val _firmwareIdentity = MutableStateFlow(FirmwareIdentityInfo())
+    val firmwareIdentity: StateFlow<FirmwareIdentityInfo> = _firmwareIdentity.asStateFlow()
+
+    private val _commissionStatus = MutableStateFlow(CommissionStatus())
+    val commissionStatus: StateFlow<CommissionStatus> = _commissionStatus.asStateFlow()
+
+    private val _adcReadings = MutableStateFlow(AdcReadings())
+    val adcReadings: StateFlow<AdcReadings> = _adcReadings.asStateFlow()
+
+    private val _firmwareTempStatus = MutableStateFlow(FirmwareTempStatus())
+    val firmwareTempStatus: StateFlow<FirmwareTempStatus> = _firmwareTempStatus.asStateFlow()
+
+    fun toggleModuleInstalled(module: HardwareModule) {
+        val current = _moduleStatus.value
+        val isCurrentlyInstalled = current.isInstalled(module)
+        val targetOn = !isCurrentlyInstalled
+
+        if (_isSimulationMode.value) {
+            val newInstalled = if (targetOn) (current.installedMask or module.bitMask) else (current.installedMask and module.bitMask.inv())
+            val newActive = if (!targetOn) (current.activeMask and module.bitMask.inv()) else current.activeMask
+            val newCore = if (module == HardwareModule.SIDE) {
+                if (targetOn && (newActive and module.bitMask) != 0) 2 else if (targetOn) 1 else 0
+            } else current.coreProfile
+            _moduleStatus.value = current.copy(installedMask = newInstalled, activeMask = newActive, coreProfile = newCore)
+            appendLog("Demo: Modul [${module.title}] ${if (targetOn) "TERPASANG" else "DILEPAS"}")
+            return
+        }
+
+        if (!canWrite()) {
+            Toast.makeText(context, setupWriteBlockReason.value ?: "Izin tulis diblokir (Read-Only)", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!checkSetupWriteSafety("Ubah modul ${module.title}")) return
+
+        val stateStr = if (targetOn) "ON" else "OFF"
+        appendLog("Kirim: MODULE,SET,${module.id},$stateStr")
+        markSetupCommandPending()
+        bleClient.send("MODULE,SET,${module.id},$stateStr")
+    }
+
+    fun setModuleActive(module: HardwareModule, active: Boolean) {
+        val current = _moduleStatus.value
+        if (!current.isInstalled(module)) {
+            appendLog("Modul [${module.title}] belum terpasang fisik!")
+            return
+        }
+        if (_isSimulationMode.value) {
+            val newActive = if (active) (current.activeMask or module.bitMask) else (current.activeMask and module.bitMask.inv())
+            val newCore = if (module == HardwareModule.SIDE) {
+                if (active) 2 else 1
+            } else current.coreProfile
+            _moduleStatus.value = current.copy(activeMask = newActive, coreProfile = newCore)
+            appendLog("Demo: Modul [${module.title}] ${if (active) "AKTIF" else "NONAKTIF"}")
+            return
+        }
+        if (!canWrite()) {
+            Toast.makeText(context, setupWriteBlockReason.value ?: "Izin tulis diblokir (Read-Only)", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!checkSetupWriteSafety("Aktivasi modul ${module.title}")) return
+        markSetupCommandPending()
+        bleClient.send("MODULE,SET,${module.id},${if (active) "ON" else "OFF"}")
+    }
+
+    fun installCoreOemRemoved() {
+        if (!requireMcuOrDemo("Pemasangan Core")) return
+        if (!checkSetupWriteSafety("Pemasangan Core")) return
+        if (bleClient.gattReady) {
+            markSetupCommandPending()
+            bleClient.send("SETUP,INSTALL,CORE,OEM_REMOVED")
+            appendLog("BLE Send: SETUP,INSTALL,CORE,OEM_REMOVED")
+        } else {
+            val cur = _moduleStatus.value
+            _moduleStatus.value = cur.copy(coreProfile = 0)
+            _commissionStatus.value = _commissionStatus.value.copy(stage = 1, nextAction = 2)
+            appendLog("Demo: Pemasangan Core (1 Coil) tersimpan. Lanjut ke Pemeriksaan Pickup.")
+        }
+        Toast.makeText(context, if (bleClient.gattReady) "Perintah Pasang Core dikirim" else "Core terpasang di Demo", Toast.LENGTH_SHORT).show()
+    }
+
+    fun installDualOemRemoved() {
+        if (!requireMcuOrDemo("Pemasangan Dual Coil")) return
+        if (!checkSetupWriteSafety("Pemasangan Dual Coil")) return
+        if (bleClient.gattReady) {
+            markSetupCommandPending()
+            bleClient.send("SETUP,INSTALL,DUAL,OEM_REMOVED")
+            appendLog("BLE Send: SETUP,INSTALL,DUAL,OEM_REMOVED")
+        } else {
+            val cur = _moduleStatus.value
+            _moduleStatus.value = cur.copy(
+                installedMask = cur.installedMask or HardwareModule.SIDE.bitMask,
+                coreProfile = 1
+            )
+            _commissionStatus.value = _commissionStatus.value.copy(stage = 1, nextAction = 2)
+            appendLog("Demo: Pemasangan Dual Coil tersimpan. Lanjut ke Pemeriksaan Pickup.")
+        }
+        Toast.makeText(context, if (bleClient.gattReady) "Perintah Pasang Dual dikirim" else "Dual Coil terpasang di Demo", Toast.LENGTH_SHORT).show()
+    }
+
+    fun confirmReadyDual(sideOffsetCdeg: Int = 0) {
+        confirmReadyTripleSpark(sideOffsetCdeg)
     }
 
     // ==========================================
@@ -327,20 +538,45 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     val isTelemetryStreaming: StateFlow<Boolean> = _isTelemetryStreaming.asStateFlow()
 
     // ==========================================
-    // LOGIKA KEAMANAN TOMBOL (COMMAND GUARDS)
+    // LOGIKA KEAMANAN TOMBOL (COMMAND GUARDS & WRITE GATE)
     // ==========================================
-    // Evaluasi aturan keselamatan setup_can_write() firmware secara reaktif.
-    // Mencegah pengguna mengirim perintah jika menyalahi aturan keselamatan (RPM > 0, HV > 30V, antrean sibuk, dll).
+    fun canWrite(): Boolean {
+        if (_isSimulationMode.value) return true
+        if (!_isConnected.value) return false
+        if (_sessionPhase.value != SessionPhase.READY_FULL) return false
+        val serial = _firmwareIdentity.value.serial
+        if (serial == "UNAVAILABLE" || serial == "IGT-ESP32-UNKNOWN" || serial.isBlank()) return false
+        val bound = _bindingRecord.value
+        return bound != null && bound.serial == serial
+    }
+
     private fun computeSetupWriteBlockReason(
         t: Telemetry,
         connected: Boolean,
         isSim: Boolean,
         pending: Boolean,
         isBusy: Boolean,
-        learning: Boolean
+        learning: Boolean,
+        phase: SessionPhase,
+        boundRecord: BindingRecord?,
+        identity: FirmwareIdentityInfo
     ): String? {
         if (!connected && !isSim) {
             return "CDI belum terhubung. Hubungkan BLE atau aktifkan Mode Simulasi."
+        }
+        if (connected && !isSim) {
+            if (phase == SessionPhase.SYNCING) {
+                return "Sinkronisasi firmware sedang berjalan..."
+            }
+            if (identity.serial == "UNAVAILABLE") {
+                return "Perangkat dalam mode Read-Only (Serial UNAVAILABLE / Firmware dibatasi)."
+            }
+            if (boundRecord == null || boundRecord.serial != identity.serial) {
+                return "Perangkat dalam mode Read-Only. Konfirmasi binding serial [${identity.serial}] di tab Perangkat untuk mengaktifkan izin tulis."
+            }
+            if (phase == SessionPhase.READY_READ_ONLY) {
+                return "Perangkat dalam mode Terbatas (Read-Only)."
+            }
         }
         if (t.rpm > 0 && !learning) {
             return "Mesin sedang menyala (${t.rpm} RPM). Matikan mesin (RPM 0) demi aturan keselamatan setup_can_write()!"
@@ -359,9 +595,10 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     val setupWriteBlockReason: StateFlow<String?> = combine(
         combine(_telemetry, _isConnected, _isSimulationMode) { t, conn, sim -> Triple(t, conn, sim) },
-        combine(_setupCommandPending, bleClient.isBusy, _isOemLearning) { pending, busy, learning -> Triple(pending, busy, learning) }
-    ) { (t, conn, sim), (pending, busy, learning) ->
-        computeSetupWriteBlockReason(t, conn, sim, pending, busy, learning)
+        combine(_setupCommandPending, bleClient.isBusy, _isOemLearning) { pending, busy, learning -> Triple(pending, busy, learning) },
+        combine(_sessionPhase, _bindingRecord, _firmwareIdentity) { phase, bound, id -> Triple(phase, bound, id) }
+    ) { (t, conn, sim), (pending, busy, learning), (phase, bound, id) ->
+        computeSetupWriteBlockReason(t, conn, sim, pending, busy, learning, phase, bound, id)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val setupCanWrite: StateFlow<Boolean> = setupWriteBlockReason.map { it == null }
@@ -377,6 +614,57 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         simRpm = 0f
         simTps = 0f
         engineSound.stop()
+    }
+
+    /**
+     * Mereset seluruh simulasi commissioning dan status demo dari awal (Tahap 1: Pemasangan).
+     * Memastikan mode demo kembali ke kondisi bawaan: Dual Coil aktif & seluruh modul disimulasikan terpasang.
+     */
+    fun resetDemoCommissioning() {
+        resetDemoState()
+
+        val curT = _telemetry.value
+        _telemetry.value = curT.copy(
+            rpm = 0,
+            tps = 0,
+            advanceCdeg = 0,
+            hvCenter = 0,
+            hvSide = 0,
+            setupStage = 0,
+            flags = 0,
+            outputFlags = 0x03, // Dual coil ready di demo
+            limiter = 0,
+            pickupQuality = 95
+        )
+
+        _commissionStatus.value = CommissionStatus(
+            stage = 0,
+            nextAction = 1,
+            ready = false,
+            advisoryMask = 0
+        )
+
+        // Reset modul ke default demo: Seluruh 5 modul terpasang & Dual Coil aktif
+        _moduleStatus.value = ModuleStatus(
+            installedMask = 31, // Seluruh modul: SIDE=1, THERMAL=2, OEM_LEARN=4, AUX=8, TPS_DIAG=16
+            activeMask = 27,    // SIDE, THERMAL, AUX, TPS_DIAG aktif
+            observedMask = 31,
+            faultMask = 0,
+            coreProfile = 2     // Dual Coil (Core + SIDE)
+        )
+
+        _tpsClosedAdc.value = 820
+        _tpsOpenAdc.value = 3940
+        _pulserOffsetDeg.value = 0f
+        _quickSetupPage.value = 0
+        _quickSetupUnlockedStage.value = 0
+
+        context.getSharedPreferences("cdi_r7_prefs", Context.MODE_PRIVATE).edit()
+            .putInt("setup_stage", 0)
+            .apply()
+
+        appendLog("DEMO RESET: Seluruh simulasi commissioning direset ke Tahap 1 (Pemasangan). Dual Coil & 5 modul aktif.")
+        Toast.makeText(context, "Simulasi Demo & Wizard Setup berhasil direset ke awal!", Toast.LENGTH_SHORT).show()
     }
 
     // Maps State - 4 Flash Memory Slots (ECO, STREET, RAIN, PRO) with two flash pages & CRC32
@@ -1279,7 +1567,10 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             _isSimulationMode.value,
             _setupCommandPending.value,
             bleClient.isBusy.value,
-            _isOemLearning.value
+            _isOemLearning.value,
+            _sessionPhase.value,
+            _bindingRecord.value,
+            _firmwareIdentity.value
         )
         if (reason != null) {
             val msg = "SAFETY GUARD: Perintah '$action' diblokir! $reason"
@@ -1412,6 +1703,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             appendLog("BLE Send: SETUP,PICKUP,CONFIRM")
         } else {
             appendLog("Pulser Pick-up Dikonfirmasi (PPR=1, Gate=80µs). Lanjut ke TDC.")
+            _commissionStatus.value = _commissionStatus.value.copy(stage = 2, nextAction = 3, advisoryMask = 0)
             advanceSetupStage(SetupStage.TDC.code)
         }
         Toast.makeText(context, if (bleClient.gattReady) "Konfirmasi pickup masuk antrean" else "Pickup terverifikasi di Demo", Toast.LENGTH_SHORT).show()
@@ -1426,6 +1718,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             appendLog("BLE Send: SETUP,SAVE_TDC (TDC Strobo disimpan ke Flash)")
         } else {
             appendLog("TDC Strobo disimpan ke Flash A/B. Lanjut ke TPS.")
+            _commissionStatus.value = _commissionStatus.value.copy(stage = 3, nextAction = 4, advisoryMask = 0)
             advanceSetupStage(SetupStage.TPS_CAL.code)
         }
         _flashSaved.value = !bleClient.gattReady
@@ -1444,6 +1737,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             appendLog("BLE Send: SETUP,MANUAL_TDC,$triggerCdeg,CONFIRM")
         } else {
             appendLog("TDC Manual Terukur ${clamped}° BTDC disimpan tanpa strobo. Lanjut ke TPS.")
+            _commissionStatus.value = _commissionStatus.value.copy(stage = 3, nextAction = 4, advisoryMask = 0)
             advanceSetupStage(SetupStage.TPS_CAL.code)
         }
         triggerEditBaseCdeg = triggerCdeg
@@ -1460,6 +1754,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             bleClient.send("SETUP,TPS,CLOSED")
             appendLog("BLE Send: SETUP,TPS,CLOSED (Simpan Gas Tertutup 0%)")
         } else {
+            _tpsClosedAdc.value = 820
+            _commissionStatus.value = _commissionStatus.value.copy(stage = 3, nextAction = 4)
             appendLog("TPS Gas Tertutup (0%) Disimpan.")
         }
         Toast.makeText(context, if (bleClient.gattReady) "TPS CLOSED masuk antrean" else "TPS CLOSED tersimpan di Demo", Toast.LENGTH_SHORT).show()
@@ -1473,6 +1769,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             bleClient.send("SETUP,TPS,OPEN")
             appendLog("BLE Send: SETUP,TPS,OPEN (Simpan Gas Penuh 100%)")
         } else {
+            _tpsOpenAdc.value = 3940
+            _commissionStatus.value = _commissionStatus.value.copy(stage = 4, nextAction = 5, advisoryMask = 0)
             appendLog("TPS Gas Terbuka Penuh (100%) Disimpan. Lanjut ke FIRST START.")
             advanceSetupStage(SetupStage.FIRST_START.code)
         }
@@ -1488,6 +1786,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             appendLog("BLE Send: SETUP,FIRST_START (Mode Aman: 220V, CENTER saja, Max 10° Adv, Limiter 3.000 RPM, Otomatis simpan setelah 3 detik)")
         } else {
             appendLog("Mode FIRST START Siap (220V, CENTER saja, Limiter 3.000 RPM, Otomatis 3 detik)")
+            _commissionStatus.value = _commissionStatus.value.copy(stage = 4, nextAction = 6, advisoryMask = 0)
             advanceSetupStage(SetupStage.FIRST_START.code)
         }
         Toast.makeText(context, if (bleClient.gattReady) "FIRST START aktif. Hidupkan mesin 3 detik untuk simpan otomatis." else "FIRST START aktif di Demo", Toast.LENGTH_LONG).show()
@@ -1506,35 +1805,68 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 Toast.makeText(context, "Matikan mesin terlebih dahulu (RPM 0)!", Toast.LENGTH_SHORT).show()
                 return
             }
-            _demoEngineRunning.value = true
-            simRpm = 1420f
-            simTps = 0.02f
-            appendLog("Setup Selesai: READY - CENTER Saja. Disimpan Permanen di Flash. Mesin menyala idle ~1.420 RPM siap test ride!")
+            val curMod = _moduleStatus.value
+            _moduleStatus.value = curMod.copy(
+                coreProfile = 0,
+                activeMask = curMod.activeMask and HardwareModule.SIDE.bitMask.inv()
+            )
+            _commissionStatus.value = CommissionStatus(
+                stage = 5,
+                nextAction = 7,
+                ready = true,
+                advisoryMask = 0
+            )
+            _telemetry.value = _telemetry.value.copy(
+                setupStage = 4,
+                flags = _telemetry.value.flags or 0x20,
+                outputFlags = 0x01
+            )
+            _demoEngineRunning.value = false
+            simRpm = 0f
+            simTps = 0f
+            appendLog("Setup Selesai: READY - Core 1-Coil (J1.12). Disimpan Permanen di Flash & Komisi Selesai!")
             advanceSetupStage(SetupStage.READY.code)
         }
-        Toast.makeText(context, if (bleClient.gattReady) "READY CENTER masuk antrean; tunggu ACK" else "READY CENTER aktif di Demo (Mesin Idle 1.420 RPM)", Toast.LENGTH_LONG).show()
+        Toast.makeText(context, if (bleClient.gattReady) "READY CENTER masuk antrean; tunggu ACK" else "READY CENTER aktif di Demo (Komisi Selesai)", Toast.LENGTH_LONG).show()
     }
 
     fun confirmReadyTripleSpark(sideOffsetCdeg: Int = 0) {
-        if (!requireMcuOrDemo("READY tiga busi")) return
+        if (!requireMcuOrDemo("READY dual/tiga busi")) return
         val t = _telemetry.value
         if (bleClient.gattReady) {
-            if (!checkSetupWriteSafety("Simpan READY tiga busi")) return
+            if (!checkSetupWriteSafety("Simpan READY dual/tiga busi")) return
             markSetupCommandPending()
             bleClient.send("SETUP,READY,THREE,$sideOffsetCdeg")
-            appendLog("BLE Send: SETUP,READY,THREE,$sideOffsetCdeg (Mode Triple Spark Terkalibrasi)")
+            appendLog("BLE Send: SETUP,READY,THREE,$sideOffsetCdeg (Mode Dual Coil / Triple Spark Terkalibrasi)")
         } else {
             if (t.rpm > 0) {
                 Toast.makeText(context, "Matikan mesin terlebih dahulu (RPM 0)!", Toast.LENGTH_SHORT).show()
                 return
             }
-            _demoEngineRunning.value = true
-            simRpm = 1420f
-            simTps = 0.02f
-            appendLog("Setup Selesai: READY - 3 Busi (Triple Spark DTS-i). Offset SIDE: ${sideOffsetCdeg/100f}°. Mesin menyala idle ~1.420 RPM siap test ride!")
+            val curMod = _moduleStatus.value
+            _moduleStatus.value = curMod.copy(
+                coreProfile = 2,
+                installedMask = curMod.installedMask or HardwareModule.SIDE.bitMask,
+                activeMask = curMod.activeMask or HardwareModule.SIDE.bitMask
+            )
+            _commissionStatus.value = CommissionStatus(
+                stage = 5,
+                nextAction = 7,
+                ready = true,
+                advisoryMask = 0
+            )
+            _telemetry.value = _telemetry.value.copy(
+                setupStage = 4,
+                flags = _telemetry.value.flags or 0x20,
+                outputFlags = 0x03
+            )
+            _demoEngineRunning.value = false
+            simRpm = 0f
+            simTps = 0f
+            appendLog("Setup Selesai: READY - Dual Coil (Core J1.12 + SIDE J1.6). Disimpan Permanen di Flash & Komisi Selesai!")
             advanceSetupStage(SetupStage.READY.code)
         }
-        Toast.makeText(context, if (bleClient.gattReady) "READY tiga busi masuk antrean; tunggu ACK" else "READY tiga busi aktif di Demo (Mesin Idle 1.420 RPM)", Toast.LENGTH_LONG).show()
+        Toast.makeText(context, if (bleClient.gattReady) "READY Dual Coil masuk antrean; tunggu ACK" else "READY Dual Coil aktif di Demo (Komisi Selesai)", Toast.LENGTH_LONG).show()
     }
 
     // --- R8 Mode & Flow Controls ---
@@ -1895,16 +2227,25 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     }
                 }
             }
-            bleClient.send("GET,CAPS")
-            bleClient.send("GET,PROFILE")
-            bleClient.send("GET,TEMP")
-            bleClient.send("GET,STATUS")
-            bleClient.send("GET,META")
-            bleClient.send("GET,SETUP")
-            bleClient.send("GET,MODE")
-            bleClient.send("GET,LEARN")
-            bleClient.send("GET,OTA")
+            _sessionPhase.value = SessionPhase.SYNCING
+            viewModelScope.launch {
+                delay(80)
+                val handshakeQueries = listOf(
+                    "PING", "GET,INFO", "GET,VERSION", "GET,IDENTITY",
+                    "GET,CAPS", "GET,HARDWARE", "GET,MODULES", "GET,COMMISSION",
+                    "GET,SETUP", "GET,STATUS", "GET,META", "GET,PROFILE",
+                    "GET,TEMP", "GET,ADC", "GET,MODE", "GET,LEARN", "GET,OTA"
+                )
+                for (q in handshakeQueries) {
+                    if (!_isConnected.value) break
+                    bleClient.send(q)
+                    delay(40)
+                }
+                delay(300)
+                evaluateSessionPhaseAfterSync()
+            }
         } else {
+            _sessionPhase.value = SessionPhase.DISCONNECTED
             telemetryWatchdogJob?.cancel()
             _isTelemetryStreaming.value = false
             _packetRateHz.value = 0
@@ -2025,10 +2366,39 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         }
     }
 
+    private fun evaluateSessionPhaseAfterSync() {
+        if (!_isConnected.value) {
+            _sessionPhase.value = SessionPhase.DISCONNECTED
+            return
+        }
+        val currentSerial = _firmwareIdentity.value.serial
+        if (currentSerial == "UNAVAILABLE" || currentSerial == "IGT-ESP32-UNKNOWN") {
+            _sessionPhase.value = SessionPhase.READY_READ_ONLY
+            appendLog("Sesi: Serial [$currentSerial] -> Mode Terbatas (READY_READ_ONLY)")
+        } else {
+            val bound = _bindingRecord.value
+            if (bound != null && bound.serial == currentSerial) {
+                _sessionPhase.value = SessionPhase.READY_FULL
+                appendLog("Sesi: Serial [$currentSerial] cocok dengan binding lokal -> Siap Penuh (READY_FULL)")
+            } else {
+                _sessionPhase.value = SessionPhase.NEEDS_BINDING
+                appendLog("Sesi: Serial [$currentSerial] belum di-binding ke ponsel ini -> Menunggu Binding (NEEDS_BINDING)")
+            }
+        }
+    }
+
     private fun refreshSetupAfterAck() {
         viewModelScope.launch {
-            delay(100)
-            requestSetupState()
+            delay(80)
+            bleClient.send("GET,COMMISSION")
+            delay(25)
+            bleClient.send("GET,SETUP")
+            delay(25)
+            bleClient.send("GET,MODULES")
+            delay(25)
+            bleClient.send("GET,STATUS")
+            delay(25)
+            bleClient.send("GET,TEMP")
         }
     }
 
@@ -2056,17 +2426,42 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 appendLog("MCU CAPS v${parsed.protocolVersion}: ${parsed.rpmMin}-${parsed.rpmMax} RPM, " +
                     "${parsed.advanceMinDeg}..${parsed.advanceMaxDeg}°, ${parsed.maxRpmPoints}x${parsed.maxLoadPoints}")
             }
-            "TEMP" -> if (f.size >= 5) {
-                f[2].toIntOrNull()?.let { code ->
-                    _fanMode.value = when (code) { 0 -> "OFF"; 1 -> "ON"; else -> "AUTO" }
-                }
-                f[3].toIntOrNull()?.let { _fanOnCdeg.value = it * 10 }
-                f[4].toIntOrNull()?.let { _fanOffCdeg.value = it * 10 }
+            "TEMP" -> CdiProtocol.parseTemp(value)?.let { tempStatus ->
+                _firmwareTempStatus.value = tempStatus
+                _fanMode.value = tempStatus.fanMode
+                _fanOnCdeg.value = tempStatus.onX10 * 10
+                _fanOffCdeg.value = tempStatus.offX10 * 10
+            }
+            "HARDWARE", "HW" -> {
+                val hw = CdiProtocol.parseHardware(value)
+                appendLog("MCU Hardware: ${hw.joinToString(", ")}")
             }
             "PROFILE" -> EngineProfile.parse(f)?.let {
                 _engineProfile.value = it
                 _pulserPpr.value = it.pulserPpr
                 _softRevLimiterRpm.value = _softRevLimiterRpm.value.coerceIn(it.rpmMin, it.rpmMax)
+            }
+            "VERSION" -> CdiProtocol.parseVersion(value)?.let {
+                _firmwareVersionInfo.value = it
+                appendLog("Firmware: ${it.displayLabel}")
+            }
+            "IDENTITY" -> CdiProtocol.parseIdentity(value)?.let {
+                _firmwareIdentity.value = it
+                appendLog("Device Identity: ${it.serial} [${it.bindingPolicy}]")
+                if (_isConnected.value && _sessionPhase.value != SessionPhase.SYNCING) {
+                    evaluateSessionPhaseAfterSync()
+                }
+            }
+            "MODULES" -> CdiProtocol.parseModules(value)?.let {
+                _moduleStatus.value = it
+                appendLog("Hardware Modules: profile=${it.profileLabel}")
+            }
+            "COMMISSION" -> CdiProtocol.parseCommission(value)?.let {
+                _commissionStatus.value = it
+                appendLog("Commission Status: Stage ${it.stage}, Ready=${it.ready}")
+            }
+            "ADC" -> CdiProtocol.parseAdc(value)?.let {
+                _adcReadings.value = it
             }
             "STATUS" -> if (f.size >= 9) {
                 val slot = f[5].toIntOrNull()?.coerceIn(0, _firmwareCapabilities.value.mapSlots - 1) ?: _selectedMapSlot.value
@@ -2226,15 +2621,24 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     Toast.makeText(context, "MCU ACK: $operation", Toast.LENGTH_SHORT).show()
 
                 val setupChangingOperations = setOf(
+                    "INSTALL_CORE",
+                    "INSTALL_DUAL",
+                    "MODULE_SET",
                     "PICKUP_OK",
+                    "EDGE",
                     "EDGE_REQUIRES_PICKUP_TDC",
+                    "PPR",
                     "PPR_REQUIRES_TDC",
                     "GATE_US",
+                    "STROBE",
                     "TDC_SAVED",
                     "TDC_MANUAL_SAVED",
                     "TPS",
+                    "TPS_CLOSED",
+                    "TPS_OPEN",
                     "FIRST_START",
                     "READY_CENTER",
+                    "READY_DUAL",
                     "READY_THREE",
                     "FAN",
                     "SETUP_RESET"
@@ -2471,11 +2875,22 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     } else {
                         0 // Fully discharged safely when engine is stopped!
                     }
-                    val currentHvSide = if (isRunning && _telemetry.value.setupStage != SetupStage.FIRST_START.code) {
+                    val dualActive = _moduleStatus.value.isInstalled(HardwareModule.DUAL_COIL) && _moduleStatus.value.isActive(HardwareModule.DUAL_COIL)
+                    val thermalInstalled = _moduleStatus.value.isInstalled(HardwareModule.THERMAL_FAN)
+
+                    val currentHvSide = if (isRunning && dualActive && _telemetry.value.setupStage != SetupStage.FIRST_START.code) {
                         targetHv + (sin(seq * 0.25) * 5).toInt()
                     } else {
-                        0 // Side coil off during FIRST_START or when stopped
+                        0 // Side coil 0V if dual coil module is not installed, inactive, during FIRST_START or stopped
                     }
+
+                    val simTempCdeg = if (thermalInstalled) {
+                        (7500 + (simTps * 1500).toInt() + (simRpm / 150f * 100).toInt()).coerceIn(3200, 11500)
+                    } else {
+                        Short.MIN_VALUE.toInt() // Sensor tidak terpasang
+                    }
+                    val fanRelayOn = thermalInstalled && simTempCdeg >= _fanOnCdeg.value
+
                     val simTelemetry = Telemetry(
                         sequence = seq,
                         rpm = simRpm.toInt().coerceIn(0, _firmwareCapabilities.value.rpmMax),
@@ -2484,13 +2899,16 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                         batteryCv = if (isRunning) 1380 + (sin(seq * 0.1) * 20).toInt() else 1260,
                         hvCenter = currentHvCenter,
                         hvSide = currentHvSide,
-                        tempCdeg = 8200 + (simTps * 500).toInt(),
+                        tempCdeg = simTempCdeg,
                         slot = _selectedMapSlot.value,
                         limiter = limiterState,
                         flags = 0x21 or (if (_flashSaved.value) 0x08 else 0x00),
                         faults = 0,
                         setupStage = _telemetry.value.setupStage,
-                        outputFlags = (if (currentHvCenter > 0) 0x01 else 0x00) or (if (currentHvSide > 0) 0x02 else 0x00) or (if (_strobeActive.value) 0x04 else 0x00),
+                        outputFlags = (if (currentHvCenter > 0) 0x01 else 0x00) or
+                            (if (currentHvSide > 0) 0x02 else 0x00) or
+                            (if (_strobeActive.value && _moduleStatus.value.isActive(HardwareModule.AUX)) 0x04 else 0x00) or
+                            (if (fanRelayOn) 0x08 else 0x00),
                         triggerCdeg = candidateTriggerCdeg(_pulserOffsetDeg.value),
                         pickupQuality = if (isRunning) 99 else 0,
                         firstStartSeconds = fsSeconds

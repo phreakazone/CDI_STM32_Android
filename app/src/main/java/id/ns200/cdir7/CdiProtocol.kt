@@ -42,6 +42,144 @@ enum class FirmwareOtaState(val code: Int) {
     }
 }
 
+enum class HardwareModule(
+    val bitMask: Int,
+    val id: String,
+    val title: String,
+    val description: String,
+    val pinInfo: String
+) {
+    SIDE(1, "SIDE", "Modul Koil Kedua (SIDE)", "Output kanal pengapian kedua bertingkat", "J1.6 (COIL_SIDE)"),
+    THERMAL(2, "THERMAL", "Modul Sensor Suhu & Fan", "Sensor suhu NTC & kendali relay kipas", "J1.3 (NTC) & J1.7 (Relay)"),
+    OEM_LEARN(4, "OEM_LEARN", "Modul Rekam OEM Learn", "Sadapan pasif pulsa optocoupler PC817", "GPIO16 & GPIO17"),
+    AUX(8, "AUX", "Modul AUX (Strobe)", "Lampu stroboskop sinkronis TDC (Audio reserved)", "GPIO27 (Strobe)"),
+    TPS_DIAG(16, "TPS_DIAG", "Modul TPS Diagnostic", "Memantau sinyal & referensi ADC TPS", "J1.4 & GPIO34 (TPS_REF)");
+
+    companion object {
+        // Alias kompatibilitas
+        val DUAL_COIL = SIDE
+        val THERMAL_FAN = THERMAL
+    }
+}
+
+enum class SessionPhase(val displayName: String, val allowsWrite: Boolean) {
+    DISCONNECTED("Terputus", false),
+    SCANNING("Memindai BLE", false),
+    CONNECTING("Menghubungkan GATT", false),
+    SUBSCRIBING("Mendaftar Notifikasi", false),
+    SYNCING("Sinkronisasi Firmware", false),
+    NEEDS_BINDING("Menunggu Binding Serial", false),
+    READY_READ_ONLY("Mode Terbatas (Read-Only)", false),
+    READY_FULL("Siap Penuh (Izin Tulis Aktif)", true),
+    DEGRADED("Koneksi Terdegradasi", false)
+}
+
+data class BindingRecord(
+    val serial: String,
+    val appInstanceId: String,
+    val boundAtEpochMs: Long,
+    val firmwareRelease: String,
+    val vehicleName: String? = null
+)
+
+data class ModuleStatus(
+    val installedMask: Int,
+    val activeMask: Int,
+    val observedMask: Int,
+    val faultMask: Int,
+    val coreProfile: Int
+) {
+    fun isInstalled(m: HardwareModule) = (installedMask and m.bitMask) != 0
+    fun isActive(m: HardwareModule) = (activeMask and m.bitMask) != 0
+    fun isObserved(m: HardwareModule) = (observedMask and m.bitMask) != 0
+    fun hasFault(m: HardwareModule) = (faultMask and m.bitMask) != 0
+
+    val profileLabel: String get() = when (coreProfile) {
+        0 -> "IgniTra Core • 1 Coil"
+        1 -> "Dual Coil (belum aktif)"
+        2 -> "IgniTra Core + SIDE • Dual Coil"
+        else -> "IgniTra Core • 1 Coil"
+    }
+
+    companion object {
+        fun defaultCore() = ModuleStatus(
+            installedMask = 0,
+            activeMask = 0,
+            observedMask = 0,
+            faultMask = 0,
+            coreProfile = 0
+        )
+    }
+}
+
+data class FirmwareVersionInfo(
+    val schema: Int = 1,
+    val release: String = "R9",
+    val semver: String = "9.2.0",
+    val buildId: String = "20260923",
+    val platform: String = "ESP32",
+    val protocolVersion: Int = 5,
+    val telemetryVersion: Int = 3
+) {
+    val displayLabel: String get() = "IgniTra $release v$semver ($platform) • Build $buildId"
+}
+
+data class FirmwareIdentityInfo(
+    val schema: Int = 1,
+    val serial: String = "IGT-ESP32-A109F2B83C01",
+    val serialScheme: String = "SERIAL_V1",
+    val bindingPolicy: String = "LOCAL_APP",
+    val firmwareEnforced: Boolean = false
+)
+
+data class CommissionStatus(
+    val stage: Int = 0,
+    val nextAction: Int = 1,
+    val ready: Boolean = false,
+    val advisoryMask: Int = 0
+) {
+    val nextActionText: String get() = when (nextAction) {
+        1 -> "Pilih Pemasangan Core/Dual"
+        2 -> "Verifikasi Pickup / Starter"
+        3 -> "Kalibrasi TDC Strobo"
+        4 -> "Kalibrasi TPS (Closed & Open)"
+        5 -> "First Start (Limit 3.000 RPM & 10°)"
+        6 -> "Matikan Mesin & Konfirmasi Ready"
+        7 -> "Sistem Siap (Ready)"
+        8 -> "OEM Learn Lanjutan"
+        else -> "Pemeriksaan Sistem"
+    }
+
+    val pickupAdvisory get() = (advisoryMask and 1) != 0
+    val tdcAdvisory get() = (advisoryMask and 2) != 0
+    val tpsAdvisory get() = (advisoryMask and 4) != 0
+    val firstStartAdvisory get() = (advisoryMask and 8) != 0
+    val sideAdvisory get() = (advisoryMask and 16) != 0
+    val thermalAdvisory get() = (advisoryMask and 32) != 0
+}
+
+data class FirmwareTempStatus(
+    val fanMode: String = "AUTO",
+    val onX10: Int = 920,
+    val offX10: Int = 860,
+    val currentTempX10: Int = 850,
+    val valid: Boolean = true,
+    val fanOutput: Boolean = false
+) {
+    val currentTempC: Float? get() = if (valid && currentTempX10 != -32768) currentTempX10 / 10f else null
+}
+
+data class AdcReadings(
+    val tpsRaw: Int = 0,
+    val tempRaw: Int = 0,
+    val tpsRefRaw: Int = 0,
+    val hvCenter: Int = 0,
+    val hvSide: Int = 0,
+    val vbatRaw: Int = 0,
+    val hardwareFault: Boolean = false,
+    val fanOutput: Boolean = false
+)
+
 data class FirmwareModeStatus(
     val mode: FirmwareRunMode,
     val diyUnplugged: Boolean,
@@ -322,6 +460,100 @@ object CdiProtocol {
             put16(out, 14, t.triggerCdeg); out[16] = t.pickupQuality.toByte(); out[17] = t.firstStartSeconds.toByte()
         }
         put16(out, 18, crc16(out, 18)); return out
+    }
+
+    fun parseVersion(body: String): FirmwareVersionInfo? {
+        val f = body.split(',')
+        if (f.isEmpty() || f[0] != "VERSION") return null
+        return FirmwareVersionInfo(
+            schema = f.getOrNull(1)?.toIntOrNull() ?: 1,
+            release = f.getOrNull(2)?.trim() ?: "R9",
+            semver = f.getOrNull(3)?.trim() ?: "9.2.0",
+            buildId = f.getOrNull(4)?.trim() ?: "20260923",
+            platform = f.getOrNull(5)?.trim() ?: "ESP32",
+            protocolVersion = f.getOrNull(6)?.toIntOrNull() ?: 5,
+            telemetryVersion = f.getOrNull(7)?.toIntOrNull() ?: 3
+        )
+    }
+
+    fun parseIdentity(body: String): FirmwareIdentityInfo? {
+        val f = body.split(',')
+        if (f.isEmpty() || f[0] != "IDENTITY") return null
+        return FirmwareIdentityInfo(
+            schema = f.getOrNull(1)?.toIntOrNull() ?: 1,
+            serial = f.getOrNull(2)?.trim() ?: "IGT-ESP32-UNKNOWN",
+            serialScheme = f.getOrNull(3)?.trim() ?: "SERIAL_V1",
+            bindingPolicy = f.getOrNull(4)?.trim() ?: "LOCAL_APP",
+            firmwareEnforced = f.getOrNull(5)?.trim() == "1"
+        )
+    }
+
+    fun parseModules(body: String): ModuleStatus? {
+        val f = body.split(',')
+        if (f.isEmpty() || f[0] != "MODULES") return null
+        return ModuleStatus(
+            installedMask = f.getOrNull(2)?.toIntOrNull() ?: 0,
+            activeMask = f.getOrNull(3)?.toIntOrNull() ?: 0,
+            observedMask = f.getOrNull(4)?.toIntOrNull() ?: 0,
+            faultMask = f.getOrNull(5)?.toIntOrNull() ?: 0,
+            coreProfile = f.getOrNull(6)?.toIntOrNull() ?: 0
+        )
+    }
+
+    fun parseCommission(body: String): CommissionStatus? {
+        val f = body.split(',')
+        if (f.isEmpty() || f[0] != "COMMISSION") return null
+        return CommissionStatus(
+            stage = f.getOrNull(2)?.toIntOrNull() ?: 0,
+            nextAction = f.getOrNull(3)?.toIntOrNull() ?: 1,
+            ready = f.getOrNull(4)?.trim() == "1",
+            advisoryMask = f.getOrNull(5)?.toIntOrNull() ?: 0
+        )
+    }
+
+    fun parseAdc(body: String): AdcReadings? {
+        val f = body.split(',')
+        if (f.isEmpty() || f[0] != "ADC") return null
+        return AdcReadings(
+            tpsRaw = f.getOrNull(1)?.toIntOrNull() ?: 0,
+            tempRaw = f.getOrNull(2)?.toIntOrNull() ?: 0,
+            tpsRefRaw = f.getOrNull(3)?.toIntOrNull() ?: 0,
+            hvCenter = f.getOrNull(4)?.toIntOrNull() ?: 0,
+            hvSide = f.getOrNull(5)?.toIntOrNull() ?: 0,
+            vbatRaw = f.getOrNull(6)?.toIntOrNull() ?: 0,
+            hardwareFault = f.getOrNull(7)?.toIntOrNull() == 1,
+            fanOutput = f.getOrNull(8)?.toIntOrNull() == 1
+        )
+    }
+
+    fun parseTemp(body: String): FirmwareTempStatus? {
+        val f = body.split(',')
+        if (f.isEmpty() || f[0] != "TEMP") return null
+        val rawMode = f.getOrNull(1)?.trim()?.uppercase() ?: "AUTO"
+        val mode = when (rawMode) {
+            "0", "OFF" -> "OFF"
+            "1", "ON" -> "ON"
+            else -> "AUTO"
+        }
+        val onX10 = f.getOrNull(2)?.toIntOrNull() ?: 920
+        val offX10 = f.getOrNull(3)?.toIntOrNull() ?: 860
+        val currentTempX10 = f.getOrNull(4)?.toIntOrNull() ?: -32768
+        val valid = f.getOrNull(5)?.trim() == "1" || (currentTempX10 != -32768)
+        val fanOutput = f.getOrNull(6)?.trim() == "1"
+        return FirmwareTempStatus(
+            fanMode = mode,
+            onX10 = onX10,
+            offX10 = offX10,
+            currentTempX10 = currentTempX10,
+            valid = valid,
+            fanOutput = fanOutput
+        )
+    }
+
+    fun parseHardware(body: String): List<String> {
+        val f = body.split(',')
+        if (f.isEmpty() || (f[0] != "HARDWARE" && f[0] != "HW")) return emptyList()
+        return f.drop(2).map { it.trim() }.filter { it.isNotEmpty() }
     }
 
     fun toHexDump(bytes: ByteArray) = bytes.joinToString(" ") { "%02X".format(it) }
