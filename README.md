@@ -176,7 +176,7 @@ Menampilkan instrumen balap presisi tinggi:
   - `HV CAP`: Tegangan kapasitor discharge CDI (hingga 345V pada mode PRO)
   - `STATUS OPERASIONAL`: Mode limiter pemantik (FIRE NORMAL, SOFT CUT, HARD CUT), status relay kipas radiator (J1.7), status penguncian komisi Flash, dan diagnostik GATT BLE real-time (packet rate & CRC valid).
 - **Interactive Tacho Slider & Simulasi Demo Lengkap**:
-  - Pada **Mode Demo**: Default dual coil dengan seluruh 5 modul fisik disimulasikan terpasang (Core Single Coil, Dual Coil / Triple Spark DTS-i, Quickshifter, Tacho Out, Shift Light).
+  - Pada **Mode Demo**: Default dual coil dengan lima modul firmware disimulasikan terpasang: SIDE, THERMAL, OEM_LEARN, AUX/Strobe, dan TPS_DIAG.
   - Alur simulasi wizard komisi setup 3 layar dapat dijalankan sampai benar-benar tuntas hingga tahap final status `READY` (Flash Terkunci).
   - Tersedia tombol **RESET DEMO** baik di Dashboard maupun Setup Wizard untuk mereset seluruh variabel komisi kembali ke kondisi nol/awal setiap saat.
   - Pada **Koneksi BLE Nyata**: Slider mengikuti putaran mesin motor asli secara *real-time*.
@@ -262,7 +262,7 @@ Setiap nilai yang ditampilkan di layar memiliki rantai keterlacakan (*traceabili
 | **TEGANGAN HV SIDE** | `HV Side` | 0 – 400 V DC | Kapasitor Film Busi Samping C_SIDE via R-Divider (4x270k / 8.2k) | PA7 (STM32) / GPIO32 (ESP32) ADC1 | Frame CORE (Byte 16–17, `uint16` volt) | `telemetry.hvSide`, status pengisian inverter push-pull Bank 2 |
 | **PUTARAN MESIN** | `RPM` | 0 – 30.000 RPM (Resolusi 1 RPM) | Pick-up Sensor Magnet Pulser Kruk As (J1.10) via LM339 | PA0 / TIM1 (STM32) / GPIO4 esp_timer (ESP32) | Frame CORE (Byte 6–7, `uint16` RPM) | `telemetry.rpm`, animasi jarum tachometer + Watchdog 2.000 ms |
 | **BUKAAN GAS** | `TPS` | 0 – 100.0 % (Resolusi 0.1%) | Sensor TPS Karburator NS200 (J1.2 & J1.4) via Filter RC | PA3 / PA5 (STM32) / GPIO36 / GPIO34 (ESP32) | Frame CORE (Byte 8–9, `uint16` permille 0–1000) | `telemetry.tps / 10f`, bar indikator persentase bukaan gas |
-| **DERAJAT PENGAPIAN** | `ADVANCE` | 0.0 – 45.0 °BTDC | Hasil lookup tabel peta ignition 32x16 berdasarkan RPM & TPS | Timer Internal MCU Gate Trigger Scheduler | Frame CORE (Byte 10–11, `int16` centi-degree) | `telemetry.advanceCdeg / 100f`, jarum sudut advance balap |
+| **DERAJAT PENGAPIAN** | `ADVANCE` | -30.0 – +80.0° (batas format; batas aktif mengikuti CAPS/PROFILE) | Hasil lookup tabel peta ignition 32x16 berdasarkan RPM & TPS | Timer Internal MCU Gate Trigger Scheduler | Frame CORE (Byte 10–11, `int16` centi-degree) | `telemetry.advanceCdeg / 100f`, jarum sudut advance balap |
 | **SUHU MESIN** | `TEMP` | -40 – +150 °C (atau `N/A`) | Sensor NTC Silinder Mesin (J1.3) via R-Pullup 4.7k | PA4 (STM32) / GPIO39 (ESP32) ADC1 | Frame DIAGNOSTIC (Byte 6–7, `int16` centi-°C) | `telemetry.tempCdeg`, menampilkan `N/A` jika `INT16_MIN` |
 | **SLOT MAP AKTIF** | `SLOT` | Slot 0, 1, 2, 3 | Memori NVM / Flash MCU yang sedang aktif di-load | EEPROM Emulation / NVS Partition | Frame DIAGNOSTIC (Byte 8, `uint8` 0–3) | `telemetry.slot`, indikator profil berkendara aktif |
 | **STATUS REV LIMITER** | `LIMITER` | IDLE, SOFT, HARD | Deteksi frekuensi RPM terhadap ambang batas profil | Firmware Limiter Controller | Frame DIAGNOSTIC (Byte 9, `uint8` state) | `telemetry.limiter`, indikator visual lampu redline warning |
@@ -372,7 +372,7 @@ Setiap nilai yang ditampilkan di layar memiliki rantai keterlacakan (*traceabili
 Selain telemetri biner periodik 20 Hz, aplikasi bertukar data konfigurasi kritis dengan mikrokontroler menggunakan protokol teks berbingkai CRC16: `@<seq>,<body>*<CRC16-hex>\n`.
 
 1. **Jabat Tangan Kapabilitas (`GET,CAPS`)**:
-   - Sumber: Firmware MCU merespons string kapabilitas hardware yang didukung (contoh: `CAPS,R9.0,PROTO4,OEM_LEARN,MANUAL,OTA_STAGE,AUTO_FIRST_START,NO_JUMPERS`).
+   - Sumber: Firmware MCU merespons string kapabilitas hardware yang didukung (contoh: `CAPS,R9.0,PROTO4,OEM_LEARN,MANUAL,OTA,AUTO_FIRST_START,NO_JUMPERS`).
    - Aplikasi menyesuaikan batas antarmuka (RPM max 30.000, 4 slot map, dimensi 32x16) mengikuti kapabilitas nyata firmware yang terhubung.
 2. **Sinkronisasi Wizard Setup (`GET,SETUP`)**:
    - Firmware mengembalikan data konfigurasi: jenis trigger edge, nilai PPR, durasi pulsa SCR gate (60–120 µs), ambang ADC TPS tutup/buka, status kalibrasi strobo TDC, dan tahapan wizard setup (0..4).
@@ -405,6 +405,22 @@ Untuk menjamin integritas data teknis dan menghindari kebingungan saat diagnosa 
 
 ---
 
+## Kontrak aktif aplikasi ↔ firmware R9.2
+
+Implementasi aktif mengikuti `Firmware_CDI_NS200_ESP32/docs/APP_FIRMWARE_REFERENCE.md`:
+
+- firmware adalah sumber kebenaran untuk identity, capability, module, commissioning, setup, map, output, dan fault;
+- state awal aplikasi adalah `UNKNOWN`, bukan serial/modul contoh;
+- binding disimpan lokal per serial CDI dan hanya boleh dibuat setelah `VERSION` serta `IDENTITY` diterima;
+- seluruh write memerlukan sesi `READY_FULL`, binding cocok, capability tersedia, dan telemetri segar;
+- modul firmware hanya `SIDE`, `THERMAL`, `OEM_LEARN`, `AUX`, dan `TPS_DIAG`;
+- receiver audio eksternal memakai Classic Bluetooth A2DP Android dan bukan bagian `GET,MODULES`;
+- READY dual menggunakan `SETUP,READY,DUAL,<offsetCdeg>`;
+- map menggunakan matrix RPM×TPS dinamis dari `CAPS/META/PROFILE`, maksimum 32×16;
+- OTA memakai capability `OTA`, platform dari `VERSION`, dan build delapan digit pada nama image.
+
+Bagian R7/R8 di bawah dipertahankan hanya sebagai riwayat kompatibilitas. Kontrak aktif tidak boleh diturunkan dari contoh R8 lama.
+
 ## 📡 Protokol Komunikasi BLE Firmware R8/R9 & Kontrak Android
 
 Aplikasi berkomunikasi melalui BLE GATT Custom Service:
@@ -434,7 +450,7 @@ Tahap setup tidak dikodekan di telemetri v3. Aplikasi mengambilnya dari `GET,SET
 ### Perintah Teks Firmware R8
 - Semua perintah/respons ASCII dibungkus sebagai `@<seq>,<body>*<CRC16-hex>\n`.
 - **Handshake dan pembacaan**:
-  - `GET,CAPS` → `CAPS,R8.0,PROTO4,OEM_LEARN,MANUAL,OTA_STAGE,AUTO_FIRST_START,NO_JUMPERS`.
+  - `GET,CAPS` → `CAPS,R8.0,PROTO4,OEM_LEARN,MANUAL,OTA,AUTO_FIRST_START,NO_JUMPERS`.
   - `GET,STATUS`, `GET,META`, `GET,SETUP`, `GET,MODE`, `GET,LEARN`, `GET,OTA`, `GET,CELL,<tps>,<rpm>`.
 - **Mode & Pembelajaran**:
   - `MODE,OEM_LEARN` : Mengaktifkan mode belajar timing pasif dari CDI OEM.
@@ -600,7 +616,7 @@ Menu **Pinout MCU** dalam aplikasi menyediakan visualisasi ganda (**Mode Tabel 2
   - Penambahan bab komprehensif mengenai **Ekosistem Sumber Data Lengkap Aplikasi**:
     - **STATUS / BLE Link**: Terkelola reaktif melalui `BluetoothAdapter` dan `BluetoothGattCallback`, mendukung status `STANDBY` autentik saat mesin mati tanpa memicu false disconnect.
     - **BATT (Voltase Aki)**: Berasal dari jalur kunci kontak +12V (soket J1.5) via dioda schottky DREV dan pembagi tegangan presisi (27kΩ/10kΩ) ke pin analog MCU (PA5 STM32 / GPIO35 ESP32). Dikirim pada frame CORE byte 12–13 dalam satuan centivolt (centivolts/100).
-    - **HV Center & HV Side (Tegangan Tinggi Kapasitor)**: Bersumber langsung dari tegangan kapasitor film C_CENTER dan C_SIDE (1.0µF 630V MKP) dari keluaran trafo inverter push-pull MOSFET IRF3205. Dibaca via pembagi tegangan 4x270kΩ / 8.2kΩ ke pin ADC PA6/PA7 (STM32) atau GPIO32/GPIO33 (ESP32) dan dikirim pada frame CORE byte 14–17 dalam satuan Volt integer.
+    - **HV Center & HV Side (Tegangan Tinggi Kapasitor)**: Bersumber langsung dari tegangan kapasitor film C_CENTER dan C_SIDE (1.0µF 630V MKP) dari keluaran trafo inverter push-pull MOSFET IRF3205. Dibaca via pembagi tegangan 4x270kΩ / 8.2kΩ ke pin ADC PA6/PA7 (STM32 legacy) atau GPIO35/GPIO32 (ESP32: Center/Side) dan dikirim pada frame CORE byte 14–17 dalam satuan Volt integer.
     - **RPM & Sinyal Pulser**: Sinyal pick-up magnet stator kruk as (soket J1.10) difilter RC dan distabilkan oleh komparator presisi LM339/LM393 ke pin Timer Capture PA0 / GPIO4. Dihitung berdasarkan delta waktu mikrodetik dan dikirim pada frame CORE byte 6–7.
     - **TPS (Bukaan Gas)**: Sensor TPS karburator NS200 (soket J1.2 dan J1.4) dibaca pin ADC PA3/PA5 (STM32) atau GPIO36/GPIO34 (ESP32), dinormalisasi menjadi 0–1000 permille (0.0%–100.0%) pada frame CORE byte 8–9.
     - **Derajat Advance**: Dihasilkan real-time dari tabel interpolasi 32x16 timing matrix sesuai titik operasi RPM dan TPS, memicu gate SCR PA1/PA2 atau GPIO25/GPIO26, dikirim pada frame CORE byte 10–11 (°BTDC x 100).
@@ -669,7 +685,7 @@ Menu **Pinout MCU** dalam aplikasi menyediakan visualisasi ganda (**Mode Tabel 2
   - **Dukungan ScanSettings Low Latency**: Scanner BLE menggunakan `ScanSettings.SCAN_MODE_LOW_LATENCY` dan `setReportDelay(0)` untuk deteksi cepat dan andal pada semua chipset Android.
   - **Pesan Diagnostik Scan yang Jelas**: Menangani kode kegagalan BLE (`SCAN_FAILED_ALREADY_STARTED`, `SCAN_FAILED_APPLICATION_REGISTRATION_FAILED`, `SCAN_FAILED_INTERNAL_ERROR`, dll.) dengan pesan solusi yang informatif bagi pengguna.
   - **Penyelarasan Menu BLE HARDWARE CDI SCANNER**:
-    - Pemindaian BLE menangkap semua perangkat di sekitar (*broad scan*) agar modul dengan nama custom atau paket advert parsial tetap terdeteksi.
+    - Pemindaian BLE utama memakai service UUID IgniTra. Jika UUID tidak muncul pada advertising selama 6 detik, aplikasi melakukan fallback nama `NS200-CDI`/`IGNITRA`; daftar semua perangkat hanya digunakan pada mode discovery diagnostik.
     - Dilengkapi **Filter Chips**: `Semua BLE` vs `Hanya Target CDI` (mendeteksi `"IGNITRA"`, `"IGNITRA-CDI"`, `"NS200-CDI"`, `"CDI"`).
     - Penanda visual badge jelas: `TARGET CDI` (hijau balap) vs `BLE LAIN` (abu-abu).
     - Tombol "KONEK" instan pada tiap kartu perangkat untuk menghubungkan perangkat target tanpa proses pairing/bonding manual.
@@ -793,7 +809,7 @@ Menu **Pinout MCU** dalam aplikasi menyediakan visualisasi ganda (**Mode Tabel 2
   - Panduan legacy memakai modul eksternal; PCB Rev C terbaru memakai MP1584, LM339N, serta BC337 + 1N4007 diskrit. Modul boost HV generik tetap tidak kompatibel karena tidak mengikuti kontrol PWM, feedback, serta target 285V/345V firmware.
   - Mempertahankan 100% kompatibilitas wiring soket harness bawaan NS200 12-pin (J1).
 - **Kontrak Firmware R8 & Handshake Kapabilitas**:
-  - Menambahkan handshake `GET,CAPS` saat koneksi BLE terhubung untuk mendeteksi kapabilitas firmware R8 (`PROTO4`, `OEM_LEARN`, `MANUAL`, `OTA_STAGE`, `AUTO_FIRST_START`, `NO_JUMPERS`).
+  - Menambahkan handshake `GET,CAPS` saat koneksi BLE terhubung untuk mendeteksi kapabilitas firmware R8 (`PROTO4`, `OEM_LEARN`, `MANUAL`, `OTA`, `AUTO_FIRST_START`, `NO_JUMPERS`).
   - Menjaga keutuhan UUID BLE GATT dan struktur telemetri biner v3 (20-byte).
   - Menghapus asumsi pin lawas sebagai jumper fisik lama; pin sadap kini murni diakui sebagai probe pasif OEM Center & Side.
 - **Penyempurnaan Alur Setup Checkpoint**:
