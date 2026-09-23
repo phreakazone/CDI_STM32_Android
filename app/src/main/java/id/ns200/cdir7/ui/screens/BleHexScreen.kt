@@ -102,11 +102,16 @@ fun BleHexScreen(
     val context = LocalContext.current
 
     val linkQuality = evaluateLinkQuality(isConnected, packetRate, crcPercent)
-    var filterOnlyCdi by remember { mutableStateOf(false) }
+    var filterOnlyCdi by remember { mutableStateOf(true) }
     var showManualMacDialog by remember { mutableStateOf(false) }
     var manualMacInput by remember { mutableStateOf(savedDeviceMac ?: "") }
 
     val currentSerial = firmwareIdentity.serial
+    val identityReady = currentSerial.isNotBlank() &&
+        currentSerial != "UNAVAILABLE" &&
+        currentSerial != "IGT-ESP32-UNKNOWN"
+    val canBind = isConnected && identityReady &&
+        sessionPhase != id.ns200.cdir7.SessionPhase.SYNCING
     val isBound = bindingRecord != null && (bindingRecord?.serial == currentSerial || isSimulation)
     val boundDateStr = remember(bindingRecord?.boundAtEpochMs) {
         val ms = bindingRecord?.boundAtEpochMs ?: 0L
@@ -518,7 +523,8 @@ fun BleHexScreen(
                                 color = RacingLime,
                                 height = 30.dp,
                                 modifier = Modifier.weight(1f),
-                                testTag = "bind_device_btn"
+                                testTag = "bind_device_btn",
+                                enabled = canBind || isSimulation
                             )
                         } else {
                             MotecButton(
