@@ -2538,6 +2538,11 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             _sessionPhase.value = SessionPhase.DISCONNECTED
             return
         }
+        if (!(syncPongSeen && syncVersionSeen && syncIdentitySeen &&
+                syncCapsSeen && syncStatusSeen && syncSetupSeen)) {
+            _sessionPhase.value = SessionPhase.SYNCING
+            return
+        }
         val currentSerial = _firmwareIdentity.value.serial
         if (currentSerial == "UNAVAILABLE" || currentSerial == "IGT-ESP32-UNKNOWN") {
             _sessionPhase.value = SessionPhase.READY_READ_ONLY
