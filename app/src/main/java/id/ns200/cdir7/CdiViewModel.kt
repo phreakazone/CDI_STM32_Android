@@ -332,27 +332,49 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         return newId
     }
 
-    private fun loadSavedBinding(): BindingRecord? {
-        val serial = bindingPrefs.getString("bound_serial", null) ?: return null
-        val appInstanceId = getOrCreateAppInstanceId()
-        val epoch = bindingPrefs.getLong("bound_at", 0L)
-        val fw = bindingPrefs.getString("bound_fw", "R9") ?: "R9"
-        val vehicle = bindingPrefs.getString("bound_vehicle", null)
-        return BindingRecord(serial, appInstanceId, epoch, fw, vehicle)
+    private fun bindingKey(serial: String, field: String): String =
+        "binding_${serial.replace(Regex("[^A-Za-z0-9_-]"), "_")}_$field"
+
+    private fun loadBindingForSerial(serial: String): BindingRecord? {
+        if (serial.isBlank() || serial == "UNAVAILABLE" || serial == "IGT-ESP32-UNKNOWN") return null
+        val epoch = bindingPrefs.getLong(bindingKey(serial, "bound_at"), 0L)
+        if (epoch <= 0L) {
+            // Migrasi satu record lama tanpa menghapus binding perangkat lain.
+            val legacySerial = bindingPrefs.getString("bound_serial", null)
+            if (legacySerial != serial) return null
+            return BindingRecord(
+                serial = serial,
+                appInstanceId = getOrCreateAppInstanceId(),
+                boundAtEpochMs = bindingPrefs.getLong("bound_at", 0L),
+                firmwareRelease = bindingPrefs.getString("bound_fw", "R9") ?: "R9",
+                vehicleName = bindingPrefs.getString("bound_vehicle", null)
+            )
+        }
+        return BindingRecord(
+            serial = serial,
+            appInstanceId = getOrCreateAppInstanceId(),
+            boundAtEpochMs = epoch,
+            firmwareRelease = bindingPrefs.getString(bindingKey(serial, "bound_fw"), "R9") ?: "R9",
+            vehicleName = bindingPrefs.getString(bindingKey(serial, "vehicle"), null)
+        )
     }
 
     private val _sessionPhase = MutableStateFlow(SessionPhase.DISCONNECTED)
     val sessionPhase: StateFlow<SessionPhase> = _sessionPhase.asStateFlow()
 
-    private val _bindingRecord = MutableStateFlow<BindingRecord?>(loadSavedBinding())
+    private val _bindingRecord = MutableStateFlow<BindingRecord?>(null)
     val bindingRecord: StateFlow<BindingRecord?> = _bindingRecord.asStateFlow()
 
     fun isSerialBound(serial: String): Boolean = _bindingRecord.value?.serial == serial
 
     fun confirmBinding(vehicleName: String? = null) {
         val currentSerial = _firmwareIdentity.value.serial
-        if (currentSerial == "UNAVAILABLE" || currentSerial.isBlank()) {
-            Toast.makeText(context, "Serial perangkat tidak valid untuk binding!", Toast.LENGTH_SHORT).show()
+        if (!_isConnected.value || _sessionPhase.value == SessionPhase.SYNCING) {
+            Toast.makeText(context, "Tunggu koneksi dan sinkronisasi IDENTITY selesai.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (currentSerial == "UNAVAILABLE" || currentSerial == "IGT-ESP32-UNKNOWN" || currentSerial.isBlank()) {
+            Toast.makeText(context, "Serial perangkat nyata belum diterima; binding diblokir.", Toast.LENGTH_SHORT).show()
             return
         }
         val appInstanceId = getOrCreateAppInstanceId()
@@ -364,10 +386,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             vehicleName = vehicleName ?: "NS200"
         )
         bindingPrefs.edit()
-            .putString("bound_serial", record.serial)
-            .putLong("bound_at", record.boundAtEpochMs)
-            .putString("bound_fw", record.firmwareRelease)
-            .putString("bound_vehicle", record.vehicleName)
+            .putLong(bindingKey(record.serial, "bound_at"), record.boundAtEpochMs)
+            .putString(bindingKey(record.serial, "bound_fw"), record.firmwareRelease)
+            .putString(bindingKey(record.serial, "vehicle"), record.vehicleName)
             .apply()
         _bindingRecord.value = record
         if (_sessionPhase.value == SessionPhase.NEEDS_BINDING || _sessionPhase.value == SessionPhase.READY_READ_ONLY) {
@@ -381,18 +402,20 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         val current = _bindingRecord.value ?: return
         val cleanName = newName.trim().ifBlank { "NS200" }
         val updated = current.copy(vehicleName = cleanName)
-        bindingPrefs.edit().putString("bound_vehicle", updated.vehicleName).apply()
+        bindingPrefs.edit()
+            .putString(bindingKey(current.serial, "vehicle"), updated.vehicleName)
+            .apply()
         _bindingRecord.value = updated
         appendLog("BINDING: Nama kendaraan diubah menjadi [${updated.vehicleName}].")
         Toast.makeText(context, "Nama kendaraan diperbarui ke [${updated.vehicleName}]", Toast.LENGTH_SHORT).show()
     }
 
     fun unbindCurrentDevice() {
+        val serial = _firmwareIdentity.value.serial
         bindingPrefs.edit()
-            .remove("bound_serial")
-            .remove("bound_at")
-            .remove("bound_fw")
-            .remove("bound_vehicle")
+            .remove(bindingKey(serial, "bound_at"))
+            .remove(bindingKey(serial, "bound_fw"))
+            .remove(bindingKey(serial, "vehicle"))
             .apply()
         _bindingRecord.value = null
         if (_isConnected.value) {
@@ -402,15 +425,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         Toast.makeText(context, "Binding perangkat dilepas. Mode beralih ke Read-Only.", Toast.LENGTH_SHORT).show()
     }
 
-    private val _moduleStatus = MutableStateFlow(
-        ModuleStatus(
-            installedMask = 31, // Default Mode Demo: seluruh 5 modul terpasang (SIDE=1, THERMAL=2, OEM_LEARN=4, AUX=8, TPS_DIAG=16)
-            activeMask = 27,    // SIDE, THERMAL, AUX, TPS_DIAG aktif
-            observedMask = 31,
-            faultMask = 0,
-            coreProfile = 2     // Default Mode Demo: Dual Coil (Core + SIDE)
-        )
-    )
+    // State perangkat nyata dimulai UNKNOWN/CORE kosong. Mask demo hanya diisi
+    // saat pengguna benar-benar mengaktifkan mode simulasi.
+    private val _moduleStatus = MutableStateFlow(ModuleStatus.defaultCore())
     val moduleStatus: StateFlow<ModuleStatus> = _moduleStatus.asStateFlow()
 
     private val _firmwareVersionInfo = MutableStateFlow(
@@ -540,9 +557,14 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     // ==========================================
     // LOGIKA KEAMANAN TOMBOL (COMMAND GUARDS & WRITE GATE)
     // ==========================================
+    private fun isTelemetryFresh(maxAgeMs: Long = 2_000L): Boolean {
+        val last = lastTelemetryPacketAtMs
+        return last > 0L && SystemClock.elapsedRealtime() - last <= maxAgeMs
+    }
+
     fun canWrite(): Boolean {
         if (_isSimulationMode.value) return true
-        if (!_isConnected.value) return false
+        if (!_isConnected.value || !isTelemetryFresh()) return false
         if (_sessionPhase.value != SessionPhase.READY_FULL) return false
         val serial = _firmwareIdentity.value.serial
         if (serial == "UNAVAILABLE" || serial == "IGT-ESP32-UNKNOWN" || serial.isBlank()) return false
@@ -833,11 +855,6 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             .coerceIn(SetupStage.BARU.code, SetupStage.READY.code)
         _quickSetupPage.value = savedStage
         _quickSetupUnlockedStage.value = savedStage
-        _telemetry.value = _telemetry.value.copy(
-            setupStage = savedStage,
-            flags = if (savedStage == SetupStage.READY.code) (_telemetry.value.flags or 0x28) else _telemetry.value.flags,
-            outputFlags = if (savedStage == SetupStage.READY.code) 0x03 else if (savedStage == SetupStage.FIRST_START.code) 0x01 else 0x00
-        )
 
         // Restore Custom Map Points if previously saved
         val savedCustomMap = prefs.getString("custom_map_points", null)
@@ -1561,6 +1578,12 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     }
 
     fun checkSetupWriteSafety(action: String): Boolean {
+        if (_isConnected.value && !_isSimulationMode.value && !isTelemetryFresh()) {
+            val msg = "SAFETY GUARD: Perintah '$action' diblokir! Telemetri tidak segar; kondisi RPM/HV tidak dapat dipastikan."
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            appendLog("GUARD [telemetry_fresh]: $msg")
+            return false
+        }
         val reason = computeSetupWriteBlockReason(
             _telemetry.value,
             _isConnected.value,
@@ -1836,8 +1859,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (bleClient.gattReady) {
             if (!checkSetupWriteSafety("Simpan READY dual/tiga busi")) return
             markSetupCommandPending()
-            bleClient.send("SETUP,READY,THREE,$sideOffsetCdeg")
-            appendLog("BLE Send: SETUP,READY,THREE,$sideOffsetCdeg (Mode Dual Coil / Triple Spark Terkalibrasi)")
+            bleClient.send("SETUP,READY,DUAL,$sideOffsetCdeg")
+            appendLog("BLE Send: SETUP,READY,DUAL,$sideOffsetCdeg (Core + SIDE)")
         } else {
             if (t.rpm > 0) {
                 Toast.makeText(context, "Matikan mesin terlebih dahulu (RPM 0)!", Toast.LENGTH_SHORT).show()
@@ -2011,6 +2034,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun checkOtaPreflightSafety(): String? {
         val t = _telemetry.value
+        if (!_isConnected.value || !bleClient.gattReady) return "CDI belum terhubung penuh."
+        if (_sessionPhase.value != SessionPhase.READY_FULL || !canWrite()) return "Binding atau sinkronisasi belum siap."
+        if (!isTelemetryFresh()) return "Telemetri basi; kondisi mesin dan HV tidak dapat dipastikan."
         if (t.rpm > 0) return "Mesin masih berputar (${t.rpm} RPM)! Matikan mesin (RPM = 0)."
         if (t.armed) return "Output pengapian masih diizinkan. Nonaktifkan output sebelum OTA."
         if (t.hvEnabled) return "Charger HV masih aktif. Nonaktifkan charger sebelum OTA."
@@ -2026,17 +2052,32 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             return
         }
 
-        if ("OTA_STAGE" !in _mcuCapabilities.value) {
-            Toast.makeText(context, "Firmware tidak melaporkan capability OTA_STAGE", Toast.LENGTH_LONG).show()
+        if ("OTA" !in _mcuCapabilities.value) {
+            Toast.makeText(context, "Firmware tidak melaporkan capability OTA", Toast.LENGTH_LONG).show()
             return
         }
 
-        if (bleClient.gattReady) {
-            appendLog("Memulai OTA BLE untuk file: $fileName (${bytes.size} byte)")
-            bleClient.startOta(bytes, _selectedPlatform.value)
-        } else {
-            Toast.makeText(context, "OTA hanya tersedia saat BLE NS200-CDI terhubung", Toast.LENGTH_SHORT).show()
+        val version = Regex("""(?:^|[^0-9])(20[0-9]{6})(?:[^0-9]|$)""")
+            .find(fileName)?.groupValues?.getOrNull(1)?.toLongOrNull()
+        if (version == null) {
+            Toast.makeText(
+                context,
+                "Nama file OTA wajib memuat build 8 digit, contoh ignitra_esp32_20260924.bin",
+                Toast.LENGTH_LONG
+            ).show()
+            return
         }
+        val platform = when (_firmwareVersionInfo.value.platform.trim().uppercase()) {
+            "ESP32" -> McuPlatform.ESP32_WROOM
+            "STM32", "STM32WB55" -> McuPlatform.STM32WB55
+            else -> {
+                Toast.makeText(context, "Platform firmware belum teridentifikasi dari VERSION.", Toast.LENGTH_LONG).show()
+                return
+            }
+        }
+
+        appendLog("Memulai OTA $platform build $version: $fileName (${bytes.size} byte)")
+        bleClient.startOta(bytes, platform, version)
     }
 
     fun cancelOtaUpload() {
@@ -2260,6 +2301,10 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             )
             setupSyncedThisConnection = false
             _mcuCapabilities.value = emptySet()
+            _firmwareIdentity.value = FirmwareIdentityInfo()
+            _firmwareVersionInfo.value = FirmwareVersionInfo()
+            _moduleStatus.value = ModuleStatus.defaultCore()
+            _bindingRecord.value = null
             oemLearnPollJob?.cancel()
             resetBleStatistics()
             clearSetupCommandPending()
@@ -2443,10 +2488,15 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             }
             "VERSION" -> CdiProtocol.parseVersion(value)?.let {
                 _firmwareVersionInfo.value = it
+                when (it.platform.trim().uppercase()) {
+                    "ESP32" -> _selectedPlatform.value = McuPlatform.ESP32_WROOM
+                    "STM32", "STM32WB55" -> _selectedPlatform.value = McuPlatform.STM32WB55
+                }
                 appendLog("Firmware: ${it.displayLabel}")
             }
             "IDENTITY" -> CdiProtocol.parseIdentity(value)?.let {
                 _firmwareIdentity.value = it
+                _bindingRecord.value = loadBindingForSerial(it.serial)
                 appendLog("Device Identity: ${it.serial} [${it.bindingPolicy}]")
                 if (_isConnected.value && _sessionPhase.value != SessionPhase.SYNCING) {
                     evaluateSessionPhaseAfterSync()
@@ -2486,7 +2536,10 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     ?: _targetHvVoltage.value
                 val rpmCount = f[8].toIntOrNull() ?: 0
                 val tpsCount = f[9].toIntOrNull() ?: 0
-                if (rpmCount in listOf(8, 16) && tpsCount in listOf(4, 8)) requestMapReadback(rpmCount, tpsCount)
+                val caps = _firmwareCapabilities.value
+                if (rpmCount in 2..caps.maxRpmPoints && tpsCount in 2..caps.maxLoadPoints) {
+                    requestMapReadback(rpmCount, tpsCount)
+                }
             }
             "MODE" -> CdiProtocol.firmwareMode(value)?.let { status ->
                 _firmwareMode.value = status.mode
@@ -2502,10 +2555,18 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 if (ti == mapReadbackTpsRow && ri != null && cdeg != null) {
                     mapReadback[ri] = cdeg / 100f
                     if (mapReadback.size == mapReadbackExpected) {
-                        val axis = if (mapReadbackExpected == 16)
-                            listOf(500,750,1000,1500,2000,2500,3000,4000,5000,6000,7000,8000,9000,10000,11000,11500)
-                        else listOf(500,1000,1500,2500,4000,6000,8000,10000)
-                        _customAdvancePoints.value = axis.mapIndexed { i, rpm -> CustomAdvancePoint(rpm, mapReadback[i] ?: 0f) }
+                        val caps = _firmwareCapabilities.value
+                        val axis = if (_customAdvancePoints.value.size == mapReadbackExpected) {
+                            _customAdvancePoints.value.map { it.rpm }
+                        } else {
+                            List(mapReadbackExpected) { index ->
+                                caps.rpmMin + ((caps.rpmMax - caps.rpmMin).toLong() * index /
+                                    (mapReadbackExpected - 1).coerceAtLeast(1)).toInt()
+                            }
+                        }
+                        _customAdvancePoints.value = axis.mapIndexed { i, rpm ->
+                            CustomAdvancePoint(rpm, mapReadback[i] ?: 0f)
+                        }
                         appendLog("Map readback lengkap: ${axis.size} titik")
                     }
                 }
