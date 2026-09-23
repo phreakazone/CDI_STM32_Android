@@ -498,8 +498,8 @@ Tabel ini memetakan fungsi kabel harness bawaan motor NS200 ke pin yang tepat un
 | 5 | IGN_12V | Cokelat | Fuse input | +12 V setelah kunci kontak; diturunkan ke 5 V sebelum MCU. |
 | 6 | COIL_SIDE | Hitam-Merah | C_SIDE/SCR2 + tap OEM Learn | Pulsa CDI HV ke koil Side; **bukan GPIO26/PA2 langsung**. |
 | 7 | FAN_RELAY | Biru-Kuning | Kolektor BC337 + flyback | Low-side sink untuk koil relay eksternal; GPIO13/PB5 HIGH menyalakan transistor. |
-| 8 | OEM_SIDE_PROBE | Kosong / NC | NC/probe opsional | Bukan jalur langsung ke GPIO17/PB4. |
-| 9 | OEM_CENTER_PROBE | Kosong / NC | NC/probe opsional | Bukan jalur langsung ke GPIO16/PB3. |
+| 8 | NC | Kosong | Tidak terhubung | **Wajib dibiarkan kosong.** |
+| 9 | NC | Kosong | Tidak terhubung | **Wajib dibiarkan kosong.** |
 | 10 | PICKUP_RAW | Putih-Merah | 39k + clamp + LM339N | Input pulser mentah; keluaran komparator menuju PA0/GPIO4. |
 | 11 | GND_STAR | Hitam-Kuning | Titik star ground | Pertemuan ground harness yang dikontrol. |
 | 12 | COIL_CENTER | Oranye | C_CENTER/SCR1 + tap OEM Learn | Pulsa CDI HV ke koil Center; **bukan GPIO25/PA1 langsung**. |
@@ -615,8 +615,8 @@ Menu **Pinout MCU** dalam aplikasi menyediakan visualisasi ganda (**Mode Tabel 2
 - **Dokumentasi Ekosistem Data Lengkap & Keterlacakan Sumber Data Fisik**:
   - Penambahan bab komprehensif mengenai **Ekosistem Sumber Data Lengkap Aplikasi**:
     - **STATUS / BLE Link**: Terkelola reaktif melalui `BluetoothAdapter` dan `BluetoothGattCallback`, mendukung status `STANDBY` autentik saat mesin mati tanpa memicu false disconnect.
-    - **BATT (Voltase Aki)**: Berasal dari jalur kunci kontak +12V (soket J1.5) via dioda schottky DREV dan pembagi tegangan presisi (27kΩ/10kΩ) ke pin analog MCU (PA5 STM32 / GPIO35 ESP32). Dikirim pada frame CORE byte 12–13 dalam satuan centivolt (centivolts/100).
-    - **HV Center & HV Side (Tegangan Tinggi Kapasitor)**: Bersumber langsung dari tegangan kapasitor film C_CENTER dan C_SIDE (1.0µF 630V MKP) dari keluaran trafo inverter push-pull MOSFET IRF3205. Dibaca via pembagi tegangan 4x270kΩ / 8.2kΩ ke pin ADC PA6/PA7 (STM32 legacy) atau GPIO35/GPIO32 (ESP32: Center/Side) dan dikirim pada frame CORE byte 14–17 dalam satuan Volt integer.
+    - **BATT (Voltase Aki)**: Berasal dari J1.5 melalui proteksi input dan pembagi 100kΩ/22kΩ menuju GPIO33 ESP32 pada PCB Rev C. Dikirim pada frame CORE byte 12–13 dalam centivolt.
+    - **HV Center & HV Side (Tegangan Tinggi Kapasitor)**: Dibaca melalui pembagi 4×270kΩ/8,2kΩ menuju GPIO35 (Center) dan GPIO32 (Side) ESP32. Pemetaan PA6/PA7 hanya untuk adapter STM32 legacy.
     - **RPM & Sinyal Pulser**: Sinyal pick-up magnet stator kruk as (soket J1.10) difilter RC dan distabilkan oleh komparator presisi LM339/LM393 ke pin Timer Capture PA0 / GPIO4. Dihitung berdasarkan delta waktu mikrodetik dan dikirim pada frame CORE byte 6–7.
     - **TPS (Bukaan Gas)**: Sensor TPS karburator NS200 (soket J1.2 dan J1.4) dibaca pin ADC PA3/PA5 (STM32) atau GPIO36/GPIO34 (ESP32), dinormalisasi menjadi 0–1000 permille (0.0%–100.0%) pada frame CORE byte 8–9.
     - **Derajat Advance**: Dihasilkan real-time dari tabel interpolasi 32x16 timing matrix sesuai titik operasi RPM dan TPS, memicu gate SCR PA1/PA2 atau GPIO25/GPIO26, dikirim pada frame CORE byte 10–11 (°BTDC x 100).
