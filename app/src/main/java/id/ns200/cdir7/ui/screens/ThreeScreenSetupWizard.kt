@@ -338,6 +338,65 @@ private fun LayarPemasangan(
             }
         }
 
+        // Hardware Terpasang: lima switch independen sesuai MODULES R9.
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(6.dp),
+            colors = CardDefaults.cardColors(containerColor = SurfacePanel),
+            border = BorderStroke(1.dp, BorderSubtle)
+        ) {
+            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(
+                    text = "HARDWARE TERPASANG",
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Black,
+                    color = ElectricCyan,
+                    fontFamily = FontFamily.Monospace
+                )
+                Text(
+                    text = "Aktifkan hanya modul fisik yang benar-benar dipasang. Setiap perubahan dikirim satu per satu dan diverifikasi ulang melalui MODULES.",
+                    fontSize = 8.5.sp,
+                    color = TextSecondary,
+                    lineHeight = 11.sp
+                )
+                HardwareModule.entries.forEach { module ->
+                    val installed = moduleStatus.isInstalled(module)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(CardBackground, RoundedCornerShape(4.dp))
+                            .padding(horizontal = 7.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = module.title,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (installed) RacingLime else TextPrimary
+                            )
+                            Text(
+                                text = module.pinInfo,
+                                fontSize = 7.5.sp,
+                                color = TextMuted,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        Switch(
+                            checked = installed,
+                            onCheckedChange = { viewModel.toggleModuleInstalled(module) },
+                            enabled = setupCanWrite,
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = RacingLime,
+                                checkedTrackColor = RacingLime.copy(alpha = 0.35f)
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
         // Checklist Konfirmasi CDI OEM
         Surface(
             modifier = Modifier.fillMaxWidth(),
