@@ -374,6 +374,12 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     fun isSerialBound(serial: String): Boolean = _bindingRecord.value?.serial == serial
 
     fun confirmBinding(vehicleName: String? = null) {
+        val legacyMinimum = syncPongSeen && syncCapsSeen && syncStatusSeen && syncSetupSeen &&
+            _firmwareCapabilities.value.protocolVersion < 5
+        if (legacyMinimum && (!syncVersionSeen || !syncIdentitySeen)) {
+            _sessionPhase.value = SessionPhase.READY_READ_ONLY
+            return
+        }
         if (!(syncPongSeen && syncVersionSeen && syncIdentitySeen &&
                 syncCapsSeen && syncStatusSeen && syncSetupSeen)) {
             _sessionPhase.value = SessionPhase.SYNCING
