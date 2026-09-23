@@ -14,6 +14,9 @@ class FirmwareCapabilitiesTest {
         assertEquals(80f,c.advanceMaxDeg)
         assertEquals(12,c.maxPulserPpr)
         assertTrue("FAN" in c.features)
+        assertTrue("OTA" in c.features)
+        assertEquals(32, c.maxRpmPoints)
+        assertEquals(16, c.maxLoadPoints)
     }
 
     @Test fun legacyFallbackStaysCompatible() {
