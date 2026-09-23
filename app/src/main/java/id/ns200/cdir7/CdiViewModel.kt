@@ -218,6 +218,12 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     private var preflightTimeoutJob: Job? = null
     private var lastTelemetryPacketAtMs = 0L
     private var setupSyncedThisConnection = false
+    private var syncPongSeen = false
+    private var syncVersionSeen = false
+    private var syncIdentitySeen = false
+    private var syncCapsSeen = false
+    private var syncStatusSeen = false
+    private var syncSetupSeen = false
 
     private var pendingTimeoutJob: Job? = null
 
@@ -368,6 +374,11 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     fun isSerialBound(serial: String): Boolean = _bindingRecord.value?.serial == serial
 
     fun confirmBinding(vehicleName: String? = null) {
+        if (!(syncPongSeen && syncVersionSeen && syncIdentitySeen &&
+                syncCapsSeen && syncStatusSeen && syncSetupSeen)) {
+            _sessionPhase.value = SessionPhase.SYNCING
+            return
+        }
         val currentSerial = _firmwareIdentity.value.serial
         if (!_isConnected.value || _sessionPhase.value == SessionPhase.SYNCING) {
             Toast.makeText(context, "Tunggu koneksi dan sinkronisasi IDENTITY selesai.", Toast.LENGTH_SHORT).show()
@@ -2321,6 +2332,12 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         _isConnected.value = connected
         if (connected) {
             setupSyncedThisConnection = false
+            syncPongSeen = false
+            syncVersionSeen = false
+            syncIdentitySeen = false
+            syncCapsSeen = false
+            syncStatusSeen = false
+            syncSetupSeen = false
             _mcuCapabilities.value = emptySet()
             _isSimulationMode.value = false
             _isRevving.value = false
@@ -2384,6 +2401,11 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 }
                 delay(300)
                 evaluateSessionPhaseAfterSync()
+                delay(5_000)
+                if (_isConnected.value && _sessionPhase.value == SessionPhase.SYNCING) {
+                    _sessionPhase.value = SessionPhase.DEGRADED
+                    appendLog("Sesi DEGRADED: respons wajib handshake belum lengkap.")
+                }
             }
         } else {
             _sessionPhase.value = SessionPhase.DISCONNECTED
@@ -2557,6 +2579,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         val f = value.split(',')
         when (f.firstOrNull()) {
             "PONG" -> {
+                syncPongSeen = true
+                evaluateSessionPhaseAfterSync()
                 preflightPingOk = true
                 updateQuickSetupPreflightProgress()
                 _quickSetupMessage.value = "PONG diterima dari MCU: $value (Komunikasi OK)"
@@ -2564,6 +2588,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             }
             "CAPS" -> {
                 val parsed = FirmwareCapabilities.parse(f)
+                syncCapsSeen = true
                 _firmwareCapabilities.value = parsed
                 _mcuCapabilities.value = parsed.features
                 rebuildLoadAxis(parsed.maxLoadPoints)
@@ -2571,6 +2596,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 _softRevLimiterRpm.value = _softRevLimiterRpm.value.coerceIn(parsed.rpmMin, parsed.rpmMax)
                 appendLog("MCU CAPS v${parsed.protocolVersion}: ${parsed.rpmMin}-${parsed.rpmMax} RPM, " +
                     "${parsed.advanceMinDeg}..${parsed.advanceMaxDeg}°, ${parsed.maxRpmPoints}x${parsed.maxLoadPoints}")
+                evaluateSessionPhaseAfterSync()
             }
             "TEMP" -> CdiProtocol.parseTemp(value)?.let { tempStatus ->
                 _firmwareTempStatus.value = tempStatus
@@ -2589,14 +2615,17 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             }
             "VERSION" -> CdiProtocol.parseVersion(value)?.let {
                 _firmwareVersionInfo.value = it
+                syncVersionSeen = true
                 when (it.platform.trim().uppercase()) {
                     "ESP32" -> _selectedPlatform.value = McuPlatform.ESP32_WROOM
                     "STM32", "STM32WB55" -> _selectedPlatform.value = McuPlatform.STM32WB55
                 }
                 appendLog("Firmware: ${it.displayLabel}")
+                evaluateSessionPhaseAfterSync()
             }
             "IDENTITY" -> CdiProtocol.parseIdentity(value)?.let {
                 _firmwareIdentity.value = it
+                syncIdentitySeen = true
                 _bindingRecord.value = loadBindingForSerial(it.serial)
                 appendLog("Device Identity: ${it.serial} [${it.bindingPolicy}]")
                 if (_isConnected.value && _sessionPhase.value != SessionPhase.SYNCING) {
@@ -2615,6 +2644,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 _adcReadings.value = it
             }
             "STATUS" -> if (f.size >= 9) {
+                syncStatusSeen = true
                 val slot = f[5].toIntOrNull()?.coerceIn(0, _firmwareCapabilities.value.mapSlots - 1) ?: _selectedMapSlot.value
                 _selectedMapSlot.value = slot
                 _telemetry.value = _telemetry.value.copy(
@@ -2627,6 +2657,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 f[8].toIntOrNull()?.let { _isProVoltageConfigured.value = it == 1 }
                 preflightStatusOk = true
                 updateQuickSetupPreflightProgress()
+                evaluateSessionPhaseAfterSync()
             }
             "META" -> if (f.size >= 10) {
                 _limiterType.value = if (f[3].toIntOrNull() == 1) "HARD" else "SOFT"
@@ -2686,6 +2717,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 }
             }
             "SETUP" -> if (f.size >= 14) {
+                syncSetupSeen = true
                 val firmwareStage = f[1].toIntOrNull()?.coerceIn(0, 4)
                     ?: _firmwareSetupStage.value
 
@@ -2771,6 +2803,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 )
                 preflightSetupOk = true
                 updateQuickSetupPreflightProgress()
+                evaluateSessionPhaseAfterSync()
             }
             "LEARN" -> CdiProtocol.oemLearnStatus(value)?.let { status ->
                 _isOemLearning.value = status.state == OemLearnState.ACTIVE
@@ -2785,6 +2818,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 clearSetupCommandPending()
                 val operation = f.getOrNull(1).orEmpty()
                 if (operation.startsWith("PONG")) {
+                    syncPongSeen = true
+                    evaluateSessionPhaseAfterSync()
                     preflightPingOk = true
                     updateQuickSetupPreflightProgress()
                     _quickSetupMessage.value = "MCU ACK: $operation (Komunikasi Aktif)"
