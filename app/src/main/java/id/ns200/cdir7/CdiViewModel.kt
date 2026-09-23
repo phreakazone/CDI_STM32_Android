@@ -455,7 +455,16 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     private val _firmwareTempStatus = MutableStateFlow(FirmwareTempStatus())
     val firmwareTempStatus: StateFlow<FirmwareTempStatus> = _firmwareTempStatus.asStateFlow()
 
+    private fun requireCapability(token: String, action: String): Boolean {
+        if (_isSimulationMode.value) return true
+        if (token in _mcuCapabilities.value) return true
+        Toast.makeText(context, "Firmware tidak mendukung $action ($token).", Toast.LENGTH_LONG).show()
+        appendLog("CAPS GUARD: $action ditolak; capability $token tidak tersedia")
+        return false
+    }
+
     fun toggleModuleInstalled(module: HardwareModule) {
+        if (!requireCapability("MODULE_STATUS", "status modul")) return
         val current = _moduleStatus.value
         val isCurrentlyInstalled = current.isInstalled(module)
         val targetOn = !isCurrentlyInstalled
@@ -508,7 +517,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     }
 
     fun installCoreOemRemoved() {
-        if (!requireMcuOrDemo("Pemasangan Core")) return
+        if (!requireMcuOrDemo("Pemasangan Core") ||
+            !requireCapability("QUICK_INSTALL", "Quick Install")) return
         if (!checkSetupWriteSafety("Pemasangan Core")) return
         if (bleClient.gattReady) {
             markSetupCommandPending()
@@ -524,7 +534,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     }
 
     fun installDualOemRemoved() {
-        if (!requireMcuOrDemo("Pemasangan Dual Coil")) return
+        if (!requireMcuOrDemo("Pemasangan Dual Coil") ||
+            !requireCapability("QUICK_INSTALL", "Quick Install")) return
         if (!checkSetupWriteSafety("Pemasangan Dual Coil")) return
         if (bleClient.gattReady) {
             markSetupCommandPending()
@@ -1958,6 +1969,12 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     // --- R8 Mode & Flow Controls ---
     fun setFirmwareMode(mode: FirmwareRunMode) {
         if (!requireMcuOrDemo("ganti mode")) return
+        val requiredCapability = when (mode) {
+            FirmwareRunMode.OEM_LEARN -> "OEM_LEARN"
+            FirmwareRunMode.MANUAL -> "MANUAL"
+            FirmwareRunMode.DIY -> "DIY"
+        }
+        if (!requireCapability(requiredCapability, "mode ${mode.name}")) return
         if (!checkSetupWriteSafety("Perubahan mode firmware")) return
         val (cPin, sPin) = if (selectedPlatform.value == McuPlatform.STM32WB55) Pair("PB3", "PB4") else Pair("GPIO16", "GPIO17")
         val mcuName = selectedPlatform.value.displayName
@@ -2004,7 +2021,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     }
 
     fun startOemLearn() {
-        if (!requireMcuOrDemo("start OEM Learn")) return
+        if (!requireMcuOrDemo("start OEM Learn") ||
+            !requireCapability("OEM_LEARN", "OEM Learn") ||
+            !checkSetupWriteSafety("Mulai OEM Learn")) return
         val (cPin, sPin) = if (selectedPlatform.value == McuPlatform.STM32WB55) Pair("PB3", "PB4") else Pair("GPIO16", "GPIO17")
         val mcuName = selectedPlatform.value.displayName
         // Catatan Keselamatan: OEM Learn mengecualikan blokir RPM > 0 karena mesin sengaja dihidupkan dengan CDI OEM!
@@ -2027,7 +2046,12 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     }
 
     fun stopOemLearn() {
-        if (!requireMcuOrDemo("stop OEM Learn")) return
+        if (!requireMcuOrDemo("stop OEM Learn") ||
+            !requireCapability("OEM_LEARN", "OEM Learn")) return
+        if (!_isSimulationMode.value && !canWrite()) {
+            Toast.makeText(context, "Binding/telemetri tidak siap untuk menghentikan OEM Learn.", Toast.LENGTH_LONG).show()
+            return
+        }
         val mcuName = selectedPlatform.value.displayName
         _isOemLearning.value = false
         demoOemPulseJob?.cancel()
@@ -2164,7 +2188,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     }
 
     fun setFanMode(mode: String) {
-        if (!requireMcuOrDemo("pengaturan kipas")) return
+        if (!requireMcuOrDemo("pengaturan kipas") ||
+            !requireCapability("FAN", "kontrol kipas") ||
+            !checkSetupWriteSafety("Pengaturan kipas")) return
         val normalized = ThermalFanPolicy.normalize(mode, _fanOnCdeg.value, _fanOffCdeg.value)
         _fanMode.value = normalized.mode
         _fanOnCdeg.value = normalized.onCdeg
@@ -2179,6 +2205,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     }
 
     fun setFanThresholds(onCdeg: Int, offCdeg: Int) {
+        if (!requireCapability("FAN", "kontrol kipas")) return
         val normalized = ThermalFanPolicy.normalize(_fanMode.value, onCdeg, offCdeg)
         _fanOnCdeg.value = normalized.onCdeg
         _fanOffCdeg.value = normalized.offCdeg
@@ -2208,7 +2235,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     }
 
     fun setEngineProfile(profile: EngineProfile) {
-        if (!requireMcuOrDemo("profil mesin") || !checkSetupWriteSafety("Profil mesin")) return
+        if (!requireMcuOrDemo("profil mesin") ||
+            !requireCapability("PROFILE", "profil mesin") ||
+            !checkSetupWriteSafety("Profil mesin")) return
         val safe = profile.clamped(_firmwareCapabilities.value)
         _engineProfile.value = safe
         _pulserPpr.value = safe.pulserPpr
@@ -2222,21 +2251,24 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     }
 
     fun beginDynoTune() {
-        if (!requireMcuOrDemo("live remap dyno") || !checkSetupWriteSafety("Mulai dyno")) return
+        if (!requireMcuOrDemo("live remap dyno") ||
+            !requireCapability("DYNO", "live remap dyno") ||
+            !checkSetupWriteSafety("Mulai dyno")) return
         _dynoActive.value = true
         _dynoTrimDeg.value = 0f
         if (bleClient.gattReady) bleClient.send("DYNO,BEGIN")
     }
 
     fun setDynoTrim(degrees: Float) {
-        if (!_dynoActive.value) return
+        if (!_dynoActive.value || !requireCapability("DYNO", "live remap dyno")) return
+        if (!_isSimulationMode.value && !canWrite()) return
         val trim = degrees.coerceIn(-10f, 10f)
         _dynoTrimDeg.value = trim
         if (bleClient.gattReady) bleClient.send("DYNO,TRIM,${(trim * 10f).roundToInt()}")
     }
 
     fun finishDynoTune(commit: Boolean) {
-        if (!_dynoActive.value) return
+        if (!_dynoActive.value || !requireCapability("DYNO", "live remap dyno")) return
         if (bleClient.gattReady) {
             if (!checkSetupWriteSafety(if (commit) "Commit dyno" else "Batalkan dyno")) return
             bleClient.send(if (commit) "DYNO,COMMIT" else "DYNO,ABORT")
