@@ -174,4 +174,37 @@ class CdiProtocolTest {
         val suppliedCrc = (packet[21].toInt() and 0xff) or ((packet[22].toInt() and 0xff) shl 8)
         assertEquals(CdiProtocol.crc16(packet, 21), suppliedCrc)
     }
+    @Test
+    fun parsesR9VersionIdentityModulesAndCommission() {
+        val version = CdiProtocol.parseVersion("VERSION,1,R9,9.2.0,20260923,ESP32,5,3")
+        assertEquals("ESP32", version?.platform)
+        assertEquals(5, version?.protocolVersion)
+        assertEquals(3, version?.telemetryVersion)
+
+        val identity = CdiProtocol.parseIdentity(
+            "IDENTITY,1,IGT-ESP32-001122334455,SERIAL_V1,LOCAL_APP,0"
+        )
+        assertEquals("IGT-ESP32-001122334455", identity?.serial)
+        assertFalse(identity?.firmwareEnforced ?: true)
+
+        val modules = CdiProtocol.parseModules("MODULES,1,31,27,31,0,2")
+        assertTrue(modules?.isInstalled(HardwareModule.SIDE) == true)
+        assertTrue(modules?.isInstalled(HardwareModule.THERMAL) == true)
+        assertEquals(2, modules?.coreProfile)
+
+        val commission = CdiProtocol.parseCommission("COMMISSION,1,5,6,0,4")
+        assertEquals(5, commission?.stage)
+        assertEquals(6, commission?.nextAction)
+        assertFalse(commission?.ready ?: true)
+        assertTrue(commission?.tpsAdvisory == true)
+    }
+
+    @Test
+    fun productionDefaultsNeverPretendRealHardware() {
+        assertEquals("UNAVAILABLE", FirmwareIdentityInfo().serial)
+        assertEquals("UNKNOWN", FirmwareVersionInfo().platform)
+        assertFalse(FirmwareTempStatus().valid)
+        assertEquals(0, ModuleStatus.defaultCore().installedMask)
+    }
+
 }
