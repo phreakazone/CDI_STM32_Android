@@ -52,7 +52,11 @@ fun MapsScreen(viewModel: CdiViewModel) {
 
     val currentMap = viewModel.mapPresets[selectedSlot.coerceIn(viewModel.mapPresets.indices)]
     val capabilities by viewModel.firmwareCapabilities.collectAsState()
+    val loadAxis by viewModel.customMapLoadAxis.collectAsState()
+    val selectedLoadIndex by viewModel.selectedCustomLoadIndex.collectAsState()
     val limiterMaxRpm = capabilities.rpmMax
+    val graphRpmSpan = (capabilities.rpmMax - capabilities.rpmMin).coerceAtLeast(1)
+    val advanceSpan = (capabilities.advanceMaxDeg - capabilities.advanceMinDeg).coerceAtLeast(1f)
 
     Column(
         modifier = Modifier
@@ -80,7 +84,11 @@ fun MapsScreen(viewModel: CdiViewModel) {
                     color = MotecOrange
                 )
                 Text(
-                    text = if (isCustomMapMode) "${customPoints.size} titik RPM • 4/8 baris TPS • ACK+CRC readback" else "4 slot firmware universal • 8x4 Normal / 16x8 PRO",
+                    text = if (isCustomMapMode) {
+                        "${customPoints.size} RPM × ${loadAxis.size} TPS • batas dari CAPS/PROFILE"
+                    } else {
+                        "${capabilities.mapSlots} slot firmware • maks ${capabilities.maxRpmPoints}×${capabilities.maxLoadPoints}"
+                    },
                     fontSize = 11.sp,
                     color = TextSecondary,
                     fontFamily = FontFamily.Monospace
@@ -313,7 +321,8 @@ fun MapsScreen(viewModel: CdiViewModel) {
                                 drawCircle(color = MotecOrange, radius = 4.dp.toPx(), center = Offset(x, y))
                             }
 
-                            val currentX = (telemetry.rpm / 12000f).coerceIn(0f, 1f) * w
+                            val currentX = ((telemetry.rpm - capabilities.rpmMin) / graphRpmSpan.toFloat())
+                                .coerceIn(0f, 1f) * w
                             drawLine(
                                 color = RaceRedline,
                                 start = Offset(currentX, 0f),
@@ -480,6 +489,45 @@ fun MapsScreen(viewModel: CdiViewModel) {
                 }
             }
 
+            // Pilih baris TPS yang sedang diedit; setiap baris disimpan terpisah.
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp)),
+                colors = CardDefaults.cardColors(containerColor = CardBackground),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "BARIS LOAD / TPS YANG DIEDIT",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ElectricCyan,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        loadAxis.forEachIndexed { index, load ->
+                            FilterChip(
+                                selected = selectedLoadIndex == index,
+                                onClick = { viewModel.selectCustomMapLoad(index) },
+                                label = {
+                                    Text(
+                                        "$load%",
+                                        fontSize = 9.sp,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
             // CUSTOM MAP GRAPH VISUALIZER
             Card(
                 modifier = Modifier
@@ -495,7 +543,7 @@ fun MapsScreen(viewModel: CdiViewModel) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "CUSTOM ADVANCE GRAPH (MAX 36.0° BTDC)",
+                            text = "ADVANCE ${capabilities.advanceMinDeg}°..${capabilities.advanceMaxDeg}° • TPS ${loadAxis.getOrNull(selectedLoadIndex) ?: 0}%",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = ElectricCyan,
@@ -535,8 +583,10 @@ fun MapsScreen(viewModel: CdiViewModel) {
                             // Draw Custom Curve
                             val path = Path()
                             customPoints.forEachIndexed { index, pt ->
-                                val x = (pt.rpm / 12000f).coerceIn(0f, 1f) * w
-                                val y = h - (pt.advanceDeg / 40f).coerceIn(0f, 1f) * h
+                                val x = ((pt.rpm - capabilities.rpmMin) / graphRpmSpan.toFloat())
+                                    .coerceIn(0f, 1f) * w
+                                val y = h - ((pt.advanceDeg - capabilities.advanceMinDeg) / advanceSpan)
+                                    .coerceIn(0f, 1f) * h
                                 if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
                             }
 
@@ -547,8 +597,10 @@ fun MapsScreen(viewModel: CdiViewModel) {
                             )
 
                             customPoints.forEach { pt ->
-                                val x = (pt.rpm / 12000f).coerceIn(0f, 1f) * w
-                                val y = h - (pt.advanceDeg / 40f).coerceIn(0f, 1f) * h
+                                val x = ((pt.rpm - capabilities.rpmMin) / graphRpmSpan.toFloat())
+                                    .coerceIn(0f, 1f) * w
+                                val y = h - ((pt.advanceDeg - capabilities.advanceMinDeg) / advanceSpan)
+                                    .coerceIn(0f, 1f) * h
                                 val isAggressive = pt.advanceDeg > 34.0f
                                 drawCircle(
                                     color = if (isAggressive) RaceRedline else MotecOrange,
@@ -600,7 +652,7 @@ fun MapsScreen(viewModel: CdiViewModel) {
                         Text(
                             text = "• Advance berlebihan (>34° pada RPM tinggi atau >18° idle) memicu detonasi/knocking ekstrem yang dapat melubangi piston!\n" +
                                     "• Simpan Flash ke MCU HANYA DAPAT DILAKUKAN saat mesin MATI (RPM = 0) dan tegangan HV kapasitor < 30V.\n" +
-                                    "• Firmware membatasi advance fisik maksimum 36.0° BTDC.",
+                                    "• Rentang firmware aktif: ${capabilities.advanceMinDeg}° sampai ${capabilities.advanceMaxDeg}°; tetap sesuaikan dengan mesin dan bahan bakar.",
                             fontSize = 10.sp,
                             lineHeight = 14.sp,
                             fontFamily = FontFamily.Monospace,
@@ -701,8 +753,8 @@ fun MapsScreen(viewModel: CdiViewModel) {
                             Slider(
                                 value = pt.advanceDeg,
                                 onValueChange = { viewModel.updateCustomAdvancePoint(index, it) },
-                                valueRange = 0.0f..36.0f,
-                                steps = 71, // 0.5 deg step
+                                valueRange = capabilities.advanceMinDeg..capabilities.advanceMaxDeg,
+                                steps = ((advanceSpan * 2f).toInt() - 1).coerceAtLeast(0), // 0,5°
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = SliderDefaults.colors(
                                     thumbColor = if (isAggressive) RaceRedline else MotecOrange,
