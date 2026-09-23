@@ -1,6 +1,14 @@
 package id.ns200.cdir7.ui.screens
 
+import android.Manifest
+import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
+import android.content.Context
+import android.content.pm.PackageManager
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
@@ -25,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -34,6 +43,7 @@ import id.ns200.cdir7.CdiViewModel
 import id.ns200.cdir7.EngineSound
 import id.ns200.cdir7.ui.components.MotecButton
 import id.ns200.cdir7.ui.theme.*
+import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.sin
 
@@ -46,7 +56,40 @@ fun SoundScreen(viewModel: CdiViewModel) {
     val isRevving by viewModel.isRevving.collectAsState()
     val demoThrottleSlider by viewModel.demoThrottleSlider.collectAsState()
     val demoEngineRunning by viewModel.demoEngineRunning.collectAsState()
+    val firmwareIdentity by viewModel.firmwareIdentity.collectAsState()
+    val context = LocalContext.current
     val scrollState = rememberScrollState()
+
+    val accessoryPrefs = remember {
+        context.getSharedPreferences("ignitra_audio_accessories", Context.MODE_PRIVATE)
+    }
+    val accessoryKey = "bt_audio_${firmwareIdentity.serial}"
+    var receiverConfigured by remember(accessoryKey) {
+        mutableStateOf(accessoryPrefs.getBoolean(accessoryKey, false))
+    }
+
+    data class AndroidAudioRoute(val a2dpConnected: Boolean, val routedToA2dp: Boolean)
+    val androidAudioRoute by produceState(
+        initialValue = AndroidAudioRoute(false, false),
+        key1 = context
+    ) {
+        while (true) {
+            val hasConnectPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) ==
+                PackageManager.PERMISSION_GRANTED
+            val adapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+            val connected = hasConnectPermission &&
+                runCatching {
+                    adapter?.getProfileConnectionState(BluetoothProfile.A2DP) ==
+                        BluetoothProfile.STATE_CONNECTED
+                }.getOrDefault(false)
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val routed = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+                .any { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP }
+            value = AndroidAudioRoute(connected, routed)
+            delay(2_000)
+        }
+    }
 
     var selectedCategoryFilter by remember { mutableStateOf("SEMUA") }
     val categories = listOf("SEMUA", "KAWASAKI", "MOGE CC BESAR", "SUPERSPORT & BALAP", "STANDAR & KUSTOM")
@@ -828,6 +871,37 @@ fun SoundScreen(viewModel: CdiViewModel) {
                     fontFamily = FontFamily.Monospace
                 )
 
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(SurfacePanel, RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "RECEIVER BT AUDIO EKSTERNAL DIPASANG",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            "Tersimpan lokal untuk serial CDI ini; tidak mengirim command firmware.",
+                            fontSize = 7.5.sp,
+                            color = TextMuted
+                        )
+                    }
+                    Switch(
+                        checked = receiverConfigured,
+                        onCheckedChange = {
+                            receiverConfigured = it
+                            accessoryPrefs.edit().putBoolean(accessoryKey, it).apply()
+                        }
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // Diagram Flow
@@ -839,8 +913,12 @@ fun SoundScreen(viewModel: CdiViewModel) {
                     ModuleBox(
                         title = "PHONE / APP",
                         desc = "A2DP Stream",
-                        status = if (soundEnabled) "TRANSMITTING" else "IDLE",
-                        color = if (soundEnabled) RacingLime else TextMuted
+                        status = when {
+                            !soundEnabled -> "IDLE"
+                            androidAudioRoute.routedToA2dp -> "AUDIO ROUTED"
+                            else -> "SPEAKER HP"
+                        },
+                        color = if (androidAudioRoute.routedToA2dp) RacingLime else if (soundEnabled) SensorAmber else TextMuted
                     )
 
                     Icon(
@@ -852,9 +930,13 @@ fun SoundScreen(viewModel: CdiViewModel) {
 
                     ModuleBox(
                         title = "MH-M18",
-                        desc = "Lossless BLE RX",
-                        status = "PAIRED",
-                        color = ElectricCyan
+                        desc = "Classic Bluetooth A2DP",
+                        status = when {
+                            !receiverConfigured -> "BELUM DIKONFIGURASI"
+                            androidAudioRoute.a2dpConnected -> "CONNECTED"
+                            else -> "TIDAK TERHUBUNG"
+                        },
+                        color = if (androidAudioRoute.a2dpConnected) ElectricCyan else TextMuted
                     )
 
                     Icon(
@@ -867,8 +949,8 @@ fun SoundScreen(viewModel: CdiViewModel) {
                     ModuleBox(
                         title = "PAM8610",
                         desc = "2x10W BTL",
-                        status = "STANDBY",
-                        color = MotecOrange
+                        status = if (receiverConfigured) "EKSTERNAL • TIDAK DAPAT DIVERIFIKASI APP" else "BELUM DIKONFIGURASI",
+                        color = if (receiverConfigured) MotecOrange else TextMuted
                     )
                 }
 
