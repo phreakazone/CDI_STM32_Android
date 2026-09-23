@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.*
 import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
@@ -11,6 +12,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.ParcelUuid
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -97,6 +99,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
     private var lastTelemetry = CdiProtocol.emptyTelemetry()
 
     private var scanTimer: Runnable? = null
+    private var fallbackScanTimer: Runnable? = null
     private var phaseTimer: Runnable? = null
     private var reconnectTimer: Runnable? = null
     private var commandTimer: Runnable? = null
@@ -572,8 +575,11 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
                 val parsed = CdiProtocol.response(frame)
 
                 if (parsed != null) {
-                    val abortTransaction = parsed.body.startsWith("ERR,")
-                    // Lepaskan activeCommand jika sequence cocok atau firmware merespons
+                    val optionalGetRejected =
+                        parsed.body.startsWith("ERR,") && activeCommand?.body?.startsWith("GET,") == true
+                    val abortTransaction = parsed.body.startsWith("ERR,") && !optionalGetRejected
+                    // Lepaskan activeCommand jika firmware merespons. ERR pada GET opsional
+                    // tidak boleh membuang sisa initial sync.
                     if (activeCommand != null) {
                         commandTimer?.let(main::removeCallbacks)
                         commandTimer = null
@@ -737,7 +743,23 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             .build()
 
         try {
-            scanner.startScan(null, settings, scannerCallback)
+            val serviceFilters = listOf(
+                ScanFilter.Builder().setServiceUuid(ParcelUuid(serviceUuid)).build()
+            )
+            if (discoveryOnly) {
+                scanner.startScan(null, settings, scannerCallback)
+            } else {
+                scanner.startScan(serviceFilters, settings, scannerCallback)
+                // Firmware/board lama kadang tidak memasukkan service UUID ke advertising.
+                // Setelah 6 detik tanpa kandidat, pindah ke scan nama sebagai fallback.
+                fallbackScanTimer = Runnable {
+                    if (_scanning.value && gatt == null && _devices.value.none { it.isCdiCandidate }) {
+                        runCatching { scanner.stopScan(scannerCallback) }
+                        runCatching { scanner.startScan(null, settings, scannerCallback) }
+                        listener.onState("UUID CDI belum terlihat • fallback pencarian nama NS200-CDI", false)
+                    }
+                }.also { main.postDelayed(it, 6_000) }
+            }
             // Timeout scan 12 detik agar memberikan waktu cukup untuk menangkap advertising interval
             scanTimer = Runnable {
                 stopScanInternal()
@@ -762,6 +784,8 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
     fun stopScanInternal() {
         scanTimer?.let(main::removeCallbacks)
         scanTimer = null
+        fallbackScanTimer?.let(main::removeCallbacks)
+        fallbackScanTimer = null
         _scanning.value = false
         try {
             adapter?.bluetoothLeScanner?.stopScan(scannerCallback)
@@ -899,8 +923,8 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
      */
     fun startOta(
         data: ByteArray,
-        platform: McuPlatform = McuPlatform.STM32WB55,
-        imageVersion: Long = CdiProtocol.OTA_IMAGE_VERSION
+        platform: McuPlatform,
+        imageVersion: Long
     ): Boolean {
         if (data.size !in CdiProtocol.OTA_MIN_IMAGE_SIZE..CdiProtocol.OTA_MAX_IMAGE_SIZE) {
             _otaState.value = OtaState.Error(
