@@ -345,26 +345,88 @@ private fun LayarPemasangan(
             colors = CardDefaults.cardColors(containerColor = SurfacePanel),
             border = BorderStroke(1.dp, BorderSubtle)
         ) {
-            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text(
-                    text = "HARDWARE TERPASANG",
-                    fontSize = 10.5.sp,
-                    fontWeight = FontWeight.Black,
-                    color = ElectricCyan,
-                    fontFamily = FontFamily.Monospace
-                )
+            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "HARDWARE TERPASANG",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Black,
+                        color = ElectricCyan,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    val moduleSafety = viewModel.checkModuleChangeSafety()
+                    Surface(
+                        shape = RoundedCornerShape(3.dp),
+                        color = if (moduleSafety.allowed) RacingLime.copy(alpha = 0.15f) else RaceRedline.copy(alpha = 0.15f),
+                        border = BorderStroke(0.5.dp, if (moduleSafety.allowed) RacingLime else RaceRedline)
+                    ) {
+                        Text(
+                            text = if (moduleSafety.allowed) "SIAP UBAH" else "TERKUNCI",
+                            fontSize = 7.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (moduleSafety.allowed) RacingLime else RaceRedline,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                        )
+                    }
+                }
+
                 Text(
                     text = "Aktifkan hanya modul fisik yang benar-benar dipasang. Setiap perubahan dikirim satu per satu dan diverifikasi ulang melalui MODULES.",
                     fontSize = 8.5.sp,
                     color = TextSecondary,
                     lineHeight = 11.sp
                 )
+
+                // Indikator Keselamatan Real-time untuk Perubahan Modul
+                val moduleSafety = viewModel.checkModuleChangeSafety()
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(4.dp),
+                    color = if (moduleSafety.allowed) RacingLime.copy(alpha = 0.1f) else RaceRedline.copy(alpha = 0.12f),
+                    border = BorderStroke(0.5.dp, if (moduleSafety.allowed) RacingLime else RaceRedline.copy(alpha = 0.7f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (moduleSafety.allowed) Icons.Default.CheckCircle else Icons.Default.Lock,
+                            contentDescription = "Safety Status",
+                            tint = if (moduleSafety.allowed) RacingLime else RaceRedline,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (moduleSafety.allowed) {
+                                "STATUS: AMAN • Terhubung & Sinkron • Binding ESP32 • RPM 0 • HV < 30V"
+                            } else {
+                                "SYARAT BELUM TERPENUHI: ${moduleSafety.reason}"
+                            },
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (moduleSafety.allowed) RacingLime else RaceRedline,
+                            fontFamily = FontFamily.Monospace,
+                            lineHeight = 10.5.sp
+                        )
+                    }
+                }
+
                 HardwareModule.entries.forEach { module ->
                     val installed = moduleStatus.isInstalled(module)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(CardBackground, RoundedCornerShape(4.dp))
+                            .clickable {
+                                viewModel.toggleModuleInstalledWithNotification(module)
+                            }
                             .padding(horizontal = 7.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -385,11 +447,13 @@ private fun LayarPemasangan(
                         }
                         Switch(
                             checked = installed,
-                            onCheckedChange = { viewModel.toggleModuleInstalled(module) },
-                            enabled = setupCanWrite,
+                            onCheckedChange = { viewModel.toggleModuleInstalledWithNotification(module) },
+                            enabled = true,
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = RacingLime,
-                                checkedTrackColor = RacingLime.copy(alpha = 0.35f)
+                                checkedTrackColor = RacingLime.copy(alpha = 0.35f),
+                                uncheckedThumbColor = if (moduleSafety.allowed) TextSecondary else TextMuted,
+                                uncheckedTrackColor = SurfacePanel
                             )
                         )
                     }

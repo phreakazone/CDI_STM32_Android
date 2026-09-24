@@ -18,6 +18,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -46,11 +47,13 @@ import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 import com.example.ui.screens.WiringWorkshopHubScreen
 import com.example.viewmodel.WiringViewModel
+import id.ns200.cdir7.CdiNotificationHelper
 import id.ns200.cdir7.CdiViewModel
 import id.ns200.cdir7.HardwareModule
 import id.ns200.cdir7.ui.components.MotecButton
 import id.ns200.cdir7.McuPlatform
 import id.ns200.cdir7.ScreenTab
+import id.ns200.cdir7.StatusBarAlert
 import id.ns200.cdir7.Telemetry
 import id.ns200.cdir7.ui.screens.*
 import id.ns200.cdir7.ui.theme.*
@@ -99,6 +102,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
+        CdiNotificationHelper.createNotificationChannel(this)
+
         setContent {
             CdiR7Theme {
                 MainAppScreen(
@@ -113,6 +118,16 @@ class MainActivity : ComponentActivity() {
         if (cdiViewModel.autoConnectOnStart.value && !cdiViewModel.savedDeviceMac.value.isNullOrBlank()) {
             cdiViewModel.connectDirectSaved()
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        cdiViewModel.onAppResume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        cdiViewModel.onAppPause()
     }
 
     private fun isLocationServiceEnabled(): Boolean {
@@ -213,6 +228,7 @@ fun MainAppScreen(
     val connectedDeviceName by cdiViewModel.connectedDeviceName.collectAsState()
     val selectedPlatform by cdiViewModel.selectedPlatform.collectAsState()
     val moduleStatus by cdiViewModel.moduleStatus.collectAsState()
+    val statusBarAlert by cdiViewModel.statusBarAlert.collectAsState()
     val isSideInstalled = moduleStatus.isInstalled(HardwareModule.DUAL_COIL)
     val isSideActive = moduleStatus.isActive(HardwareModule.DUAL_COIL) || telemetry.sideEnabled
     val isDualCoil = isSideInstalled || isSideActive
@@ -234,6 +250,8 @@ fun MainAppScreen(
                 isTelemetryStreaming = isTelemetryStreaming,
                 verificationProgress = verificationProgress,
                 connectedDeviceName = connectedDeviceName,
+                statusBarAlert = statusBarAlert,
+                onDismissAlert = { cdiViewModel.dismissStatusBarAlert() },
                 onConnectClick = {
                     if (isBleScanning || isBleBusy || isConnected) {
                         cdiViewModel.toggleConnect()
@@ -296,6 +314,8 @@ fun MotorsportTopBar(
     isTelemetryStreaming: Boolean = false,
     verificationProgress: Pair<Int, Int>,
     connectedDeviceName: String?,
+    statusBarAlert: StatusBarAlert? = null,
+    onDismissAlert: () -> Unit = {},
     onConnectClick: () -> Unit,
     onDemoClick: () -> Unit
 ) {
@@ -505,6 +525,69 @@ fun MotorsportTopBar(
                     value = if (isConnected || isSimulation) "${telemetry.rpm}" else "0",
                     color = if (telemetry.rpm >= 10000) RaceRedline else TextPrimary
                 )
+            }
+
+            // Status Bar Notification Banner
+            AnimatedVisibility(
+                visible = statusBarAlert != null,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                if (statusBarAlert != null) {
+                    val isErr = statusBarAlert.isError
+                    val bannerBorder = if (isErr) RaceRedline else RacingLime
+                    val bannerBg = if (isErr) RaceRedline.copy(alpha = 0.22f) else RacingLime.copy(alpha = 0.18f)
+                    val icon = if (isErr) Icons.Default.Warning else Icons.Default.CheckCircle
+
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp),
+                        shape = RoundedCornerShape(6.dp),
+                        color = bannerBg,
+                        border = BorderStroke(1.dp, bannerBorder)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    tint = bannerBorder,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = statusBarAlert.message,
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary,
+                                    fontFamily = FontFamily.Monospace,
+                                    lineHeight = 13.5.sp
+                                )
+                            }
+                            IconButton(
+                                onClick = onDismissAlert,
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Tutup",
+                                    tint = TextSecondary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }

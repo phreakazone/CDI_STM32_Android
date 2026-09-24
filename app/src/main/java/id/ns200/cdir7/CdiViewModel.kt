@@ -47,6 +47,17 @@ data class CustomAdvancePoint(
     val advanceDeg: Float
 )
 
+data class ModuleChangeSafetyResult(
+    val allowed: Boolean,
+    val reason: String
+)
+
+data class StatusBarAlert(
+    val message: String,
+    val isError: Boolean = false,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
 class CdiViewModel(application: Application) : AndroidViewModel(application), BleCdiClient.Listener {
 
     private val context: Context get() = getApplication<Application>().applicationContext
@@ -58,6 +69,38 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     val currentTab: StateFlow<ScreenTab> = _currentTab.asStateFlow()
 
     // Connection & Simulation
+    private val _statusBarAlert = MutableStateFlow<StatusBarAlert?>(null)
+    val statusBarAlert: StateFlow<StatusBarAlert?> = _statusBarAlert.asStateFlow()
+
+    fun dismissStatusBarAlert() {
+        _statusBarAlert.value = null
+    }
+
+    fun showStatusBarNotification(message: String, isError: Boolean = false) {
+        _statusBarAlert.value = StatusBarAlert(message, isError)
+        appendLog("STATUS BAR [${if (isError) "ALERT" else "INFO"}]: $message")
+        CdiNotificationHelper.showNotification(
+            context = context,
+            title = if (isError) "Peringatan Keselamatan CDI" else "Status IgniTra CDI",
+            message = message,
+            isAlert = isError
+        )
+        viewModelScope.launch {
+            delay(7000)
+            if (_statusBarAlert.value?.message == message) {
+                _statusBarAlert.value = null
+            }
+        }
+    }
+
+    fun onAppResume() {
+        bleClient.onAppResume()
+    }
+
+    fun onAppPause() {
+        bleClient.onAppPause()
+    }
+
     private val _connectionStatus = MutableStateFlow("BLE Disconnected • Scan atau Hubungkan CDI")
     val connectionStatus: StateFlow<String> = _connectionStatus.asStateFlow()
 
@@ -480,8 +523,166 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         return false
     }
 
+    /**
+     * Memeriksa seluruh syarat keselamatan sebelum firmware mengizinkan perubahan modul:
+     * 1. aplikasi sudah terhubung dan selesai sinkronisasi;
+     * 2. aplikasi sudah binding dengan serial ESP32;
+     * 3. RPM = 0;
+     * 4. HV Center < 30 V;
+     * 5. HV Side < 30 V;
+     * 6. tidak ada proses OTA atau kondisi keselamatan lain.
+     */
+    fun checkModuleChangeSafety(): ModuleChangeSafetyResult {
+        if (_isSimulationMode.value) {
+            val t = _telemetry.value
+            if (t.rpm > 0) {
+                return ModuleChangeSafetyResult(
+                    allowed = false,
+                    reason = "Mesin sedang berputar (${t.rpm} RPM). Matikan mesin terlebih dahulu (RPM harus 0)."
+                )
+            }
+            if (t.hvCenter >= 30 || t.hvSide >= 30) {
+                return ModuleChangeSafetyResult(
+                    allowed = false,
+                    reason = "Tegangan HV masih aktif (Center ${t.hvCenter}V, Side ${t.hvSide}V). Harus < 30 V."
+                )
+            }
+            return ModuleChangeSafetyResult(true, "Mode Simulasi: Syarat keselamatan terpenuhi")
+        }
+
+        // Syarat 1: Aplikasi sudah terhubung dan selesai sinkronisasi
+        if (!_isConnected.value || !bleClient.gattReady) {
+            return ModuleChangeSafetyResult(
+                allowed = false,
+                reason = "Aplikasi belum terhubung ke CDI. Sambungkan BLE terlebih dahulu."
+            )
+        }
+        if (_sessionPhase.value == SessionPhase.SYNCING) {
+            return ModuleChangeSafetyResult(
+                allowed = false,
+                reason = "Proses sinkronisasi firmware dengan CDI belum selesai."
+            )
+        }
+        if (_sessionPhase.value == SessionPhase.DISCONNECTED) {
+            return ModuleChangeSafetyResult(
+                allowed = false,
+                reason = "Koneksi ke CDI terputus."
+            )
+        }
+
+        // Syarat 2: Aplikasi sudah binding dengan serial ESP32
+        val serial = _firmwareIdentity.value.serial
+        if (serial == "UNAVAILABLE" || serial == "IGT-ESP32-UNKNOWN" || serial.isBlank()) {
+            return ModuleChangeSafetyResult(
+                allowed = false,
+                reason = "Nomor serial ESP32 belum terbaca dari firmware."
+            )
+        }
+        val bound = _bindingRecord.value
+        if (bound == null || bound.serial != serial) {
+            return ModuleChangeSafetyResult(
+                allowed = false,
+                reason = "Aplikasi belum binding dengan serial ESP32 [$serial]. Silakan lakukan binding di tab Perangkat."
+            )
+        }
+
+        // Syarat 3: RPM = 0
+        val t = _telemetry.value
+        if (t.rpm > 0) {
+            return ModuleChangeSafetyResult(
+                allowed = false,
+                reason = "Mesin sedang menyala (${t.rpm} RPM). Matikan mesin (RPM harus 0)."
+            )
+        }
+
+        // Syarat 4: HV Center < 30 V
+        if (t.hvCenter >= 30) {
+            return ModuleChangeSafetyResult(
+                allowed = false,
+                reason = "Tegangan HV Center masih aktif (${t.hvCenter} V >= 30 V). Tunggu kapasitor discharge < 30 V."
+            )
+        }
+
+        // Syarat 5: HV Side < 30 V
+        if (t.hvSide >= 30) {
+            return ModuleChangeSafetyResult(
+                allowed = false,
+                reason = "Tegangan HV Side masih aktif (${t.hvSide} V >= 30 V). Tunggu kapasitor discharge < 30 V."
+            )
+        }
+
+        // Syarat 6: Tidak ada proses OTA atau kondisi keselamatan lain
+        val ota = bleClient.otaState.value
+        if (ota is OtaState.Preparing || ota is OtaState.Transferring || ota is OtaState.Verifying) {
+            return ModuleChangeSafetyResult(
+                allowed = false,
+                reason = "Proses update firmware (OTA) sedang berjalan."
+            )
+        }
+        if (_isOemLearning.value) {
+            return ModuleChangeSafetyResult(
+                allowed = false,
+                reason = "Proses OEM Learn sedang merekam pulsa pengapian."
+            )
+        }
+        if (_strobeActive.value) {
+            return ModuleChangeSafetyResult(
+                allowed = false,
+                reason = "Mode strobo timing light sedang aktif."
+            )
+        }
+        if (_setupCommandPending.value || bleClient.isBusy.value) {
+            return ModuleChangeSafetyResult(
+                allowed = false,
+                reason = "Antrean perintah BLE sedang memproses permintaan sebelumnya. Tunggu respons selesai."
+            )
+        }
+        if (!isTelemetryFresh(3000L)) {
+            return ModuleChangeSafetyResult(
+                allowed = false,
+                reason = "Data telemetri terputus/kadaluarsa. Keamanan RPM dan tegangan HV tidak dapat diverifikasi."
+            )
+        }
+
+        return ModuleChangeSafetyResult(true, "Kondisi aman: Siap mengubah konfigurasi modul")
+    }
+
+    fun toggleModuleInstalledWithNotification(module: HardwareModule) {
+        val safety = checkModuleChangeSafety()
+        if (!safety.allowed) {
+            Toast.makeText(context, "Perubahan Modul Ditolak:\n${safety.reason}", Toast.LENGTH_LONG).show()
+            appendLog("MODUL DITOLAK [${module.title}]: ${safety.reason}")
+            showStatusBarNotification("Modul Ditolak: ${safety.reason}", isError = true)
+            return
+        }
+        val isCurrentlyInstalled = _moduleStatus.value.isInstalled(module)
+        toggleModuleInstalled(module)
+        val actionText = if (isCurrentlyInstalled) "Lepas" else "Pasang"
+        showStatusBarNotification("Perubahan Modul: $actionText ${module.title} dikirim ke CDI", isError = false)
+    }
+
+    fun setModuleActiveWithNotification(module: HardwareModule, active: Boolean) {
+        val safety = checkModuleChangeSafety()
+        if (!safety.allowed) {
+            Toast.makeText(context, "Aktivasi Modul Ditolak:\n${safety.reason}", Toast.LENGTH_LONG).show()
+            appendLog("AKTIVASI DITOLAK [${module.title}]: ${safety.reason}")
+            showStatusBarNotification("Modul Ditolak: ${safety.reason}", isError = true)
+            return
+        }
+        setModuleActive(module, active)
+        val actionText = if (active) "Aktifkan" else "Nonaktifkan"
+        showStatusBarNotification("Modul ${module.title}: $actionText dikirim ke CDI", isError = false)
+    }
+
     fun toggleModuleInstalled(module: HardwareModule) {
         if (!requireCapability("MODULE_STATUS", "status modul")) return
+        val safety = checkModuleChangeSafety()
+        if (!safety.allowed) {
+            Toast.makeText(context, "Perubahan Modul Ditolak:\n${safety.reason}", Toast.LENGTH_LONG).show()
+            appendLog("MODUL GUARD: Perubahan modul [${module.title}] ditolak: ${safety.reason}")
+            showStatusBarNotification("Modul Ditolak: ${safety.reason}", isError = true)
+            return
+        }
         val current = _moduleStatus.value
         val isCurrentlyInstalled = current.isInstalled(module)
         val targetOn = !isCurrentlyInstalled
@@ -513,6 +714,13 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         val current = _moduleStatus.value
         if (!current.isInstalled(module)) {
             appendLog("Modul [${module.title}] belum terpasang fisik!")
+            return
+        }
+        val safety = checkModuleChangeSafety()
+        if (!safety.allowed) {
+            Toast.makeText(context, "Aktivasi Modul Ditolak:\n${safety.reason}", Toast.LENGTH_LONG).show()
+            appendLog("MODUL GUARD: Aktivasi modul [${module.title}] ditolak: ${safety.reason}")
+            showStatusBarNotification("Modul Ditolak: ${safety.reason}", isError = true)
             return
         }
         if (_isSimulationMode.value) {

@@ -589,87 +589,170 @@ fun DashboardScreen(viewModel: CdiViewModel) {
         // HARDWARE MODULES STATUS (PAKET HARDWARE FISIK TAMBAHAN)
         HardwareModulesCard(viewModel)
 
-        // TELEMETRY METRICS ROW: ADVANCE ANGLE (°BTDC) & PULSER OFFSET
+        // TELEMETRY METRICS ROW: ADVANCE ANGLE (°BTDC) & TPS (J1.8) SENSORS (EQUAL SIZE & SYMMETRY)
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Max),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Advance Angle Card
+            // Left Card: IGNITION ADVANCE
             Card(
                 modifier = Modifier
                     .weight(1f)
+                    .fillMaxHeight()
                     .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp)),
                 colors = CardDefaults.cardColors(containerColor = CardBackground),
                 shape = RoundedCornerShape(14.dp)
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = "IGNITION ADVANCE",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = ElectricCyan,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "%.1f°".format(telemetry.advanceCdeg / 100f),
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Black,
-                        color = TextPrimary,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Text(
-                        text = "BTDC (Pulser: %+.1f°)".format(telemetry.triggerCdeg / 100f - 10f),
-                        fontSize = 11.sp,
-                        color = TextSecondary,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-            }
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "IGNITION ADVANCE",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ElectricCyan,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            Text(
+                                text = "%.1f°".format(telemetry.advanceCdeg / 100f),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        LinearProgressIndicator(
+                            progress = { (telemetry.advanceCdeg / 5000f).coerceIn(0f, 1f) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = ElectricCyan,
+                            trackColor = SurfacePanel
+                        )
+                    }
 
-            // Engine Sensors Card (TPS & Coolant Temp)
-            Card(
-                modifier = Modifier
-                    .weight(1f)
-                    .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp)),
-                colors = CardDefaults.cardColors(containerColor = CardBackground),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "TPS (J1.8)",
+                            text = "PULSER (TDC)",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MotecOrange,
+                            color = SensorAmber,
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
-                            text = "${(telemetry.tps / 10f).toInt()}%",
+                            text = "%+.1f°".format(telemetry.triggerCdeg / 100f - 10f),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary,
                             fontFamily = FontFamily.Monospace
                         )
                     }
-                    LinearProgressIndicator(
-                        progress = { (telemetry.tps / 1000f).coerceIn(0f, 1f) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp)),
-                        color = MotecOrange,
-                        trackColor = SurfacePanel
-                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "TIMING: BTDC",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ElectricCyan,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(3.dp),
+                            color = ElectricCyan.copy(alpha = 0.15f),
+                            border = BorderStroke(0.5.dp, ElectricCyan)
+                        ) {
+                            Text(
+                                text = "SPARK SYNC",
+                                fontSize = 7.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ElectricCyan,
+                                fontFamily = FontFamily.Monospace,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Right Card: Engine Sensors (TPS & Coolant Temp & Aki)
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp)),
+                colors = CardDefaults.cardColors(containerColor = CardBackground),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "TPS (J1.8)",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MotecOrange,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            Text(
+                                text = "${(telemetry.tps / 10f).toInt()}%",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        LinearProgressIndicator(
+                            progress = { (telemetry.tps / 1000f).coerceIn(0f, 1f) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = MotecOrange,
+                            trackColor = SurfacePanel
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = "COOLANT (J1.3)",
@@ -686,7 +769,9 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                             fontFamily = FontFamily.Monospace
                         )
                     }
+
                     Spacer(modifier = Modifier.height(6.dp))
+
                     val battVolt = telemetry.batteryCv / 100f
                     val (battStatus, battColor) = when {
                         battVolt >= 12.4f -> Pair("NORMAL / CHARGING", RacingLime)

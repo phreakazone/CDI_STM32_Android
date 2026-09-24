@@ -157,20 +157,16 @@ fun HardwareModulesCard(
                     },
                     active = sideActive,
                     statusColor = if (sideActive) RacingLime else if (sideInstalled) SensorAmber else TextMuted,
-                    demoAction = if (isDemo) {
-                        if (!sideInstalled) "Pasang" else if (!sideActive) "Aktifkan" else "Lepas"
-                    } else null,
-                    onDemoClick = if (isDemo) {
-                        {
-                            if (!sideInstalled) {
-                                viewModel.toggleModuleInstalled(HardwareModule.DUAL_COIL)
-                            } else if (!sideActive) {
-                                viewModel.setModuleActive(HardwareModule.DUAL_COIL, true)
-                            } else {
-                                viewModel.toggleModuleInstalled(HardwareModule.DUAL_COIL)
-                            }
+                    demoAction = if (!sideInstalled) "Pasang" else if (!sideActive) "Aktifkan" else "Lepas",
+                    onDemoClick = {
+                        if (!sideInstalled) {
+                            viewModel.toggleModuleInstalledWithNotification(HardwareModule.DUAL_COIL)
+                        } else if (!sideActive) {
+                            viewModel.setModuleActiveWithNotification(HardwareModule.DUAL_COIL, true)
+                        } else {
+                            viewModel.toggleModuleInstalledWithNotification(HardwareModule.DUAL_COIL)
                         }
-                    } else null
+                    }
                 )
 
                 // 3. Thermal / Fan
@@ -180,8 +176,8 @@ fun HardwareModulesCard(
                     status = if (!thermalInstalled) "Tidak Dipasang" else if (fanOn) "Kipas ON ($tempStr)" else "Kipas OFF ($tempStr)",
                     active = thermalInstalled,
                     statusColor = if (thermalInstalled) (if (fanOn) SensorAmber else RacingLime) else TextMuted,
-                    demoAction = if (isDemo) (if (thermalInstalled) "Lepas" else "Pasang") else null,
-                    onDemoClick = if (isDemo) { { viewModel.toggleModuleInstalled(HardwareModule.THERMAL_FAN) } } else null
+                    demoAction = if (thermalInstalled) "Lepas" else "Pasang",
+                    onDemoClick = { viewModel.toggleModuleInstalledWithNotification(HardwareModule.THERMAL_FAN) }
                 )
 
                 // 4. OEM Learn
@@ -195,18 +191,16 @@ fun HardwareModulesCard(
                     },
                     active = oemInstalled,
                     statusColor = if (isLearning) MotecOrange else if (oemInstalled) ElectricCyan else TextMuted,
-                    demoAction = if (isDemo && oemInstalled) (if (isLearning) "Stop" else "Rekam") else if (isDemo) "Pasang" else null,
-                    onDemoClick = if (isDemo) {
-                        {
-                            if (!oemInstalled) {
-                                viewModel.toggleModuleInstalled(HardwareModule.OEM_LEARN)
-                            } else if (isLearning) {
-                                viewModel.stopOemLearn()
-                            } else {
-                                viewModel.startOemLearn()
-                            }
+                    demoAction = if (oemInstalled) (if (isLearning) "Stop" else "Rekam") else "Pasang",
+                    onDemoClick = {
+                        if (!oemInstalled) {
+                            viewModel.toggleModuleInstalledWithNotification(HardwareModule.OEM_LEARN)
+                        } else if (isLearning) {
+                            viewModel.stopOemLearn()
+                        } else {
+                            viewModel.startOemLearn()
                         }
-                    } else null
+                    }
                 )
 
                 // 5. AUX (Strobe)
@@ -216,10 +210,10 @@ fun HardwareModulesCard(
                     status = if (!auxInstalled) "Tidak Dipasang" else if (strobeActive) "Strobo ON" else "Strobo OFF",
                     active = auxInstalled,
                     statusColor = if (strobeActive) ElectricCyan else if (auxInstalled) TextSecondary else TextMuted,
-                    demoAction = if (auxInstalled) (if (strobeActive) "Off" else "Test") else if (isDemo) "Pasang" else null,
+                    demoAction = if (auxInstalled) (if (strobeActive) "Off" else "Test") else "Pasang",
                     onDemoClick = {
-                        if (!auxInstalled && isDemo) {
-                            viewModel.toggleModuleInstalled(HardwareModule.AUX)
+                        if (!auxInstalled) {
+                            viewModel.toggleModuleInstalledWithNotification(HardwareModule.AUX)
                         } else {
                             viewModel.toggleStrobe(!strobeActive)
                         }
@@ -233,8 +227,8 @@ fun HardwareModulesCard(
                     status = if (tpsInstalled) "Gas ${(telemetry.tps / 10f).toInt()}%" else "Tidak Dipasang",
                     active = tpsInstalled,
                     statusColor = if (tpsInstalled) RacingLime else TextMuted,
-                    demoAction = if (isDemo) (if (tpsInstalled) "Lepas" else "Pasang") else null,
-                    onDemoClick = if (isDemo) { { viewModel.toggleModuleInstalled(HardwareModule.TPS_DIAG) } } else null
+                    demoAction = if (tpsInstalled) "Lepas" else "Pasang",
+                    onDemoClick = { viewModel.toggleModuleInstalledWithNotification(HardwareModule.TPS_DIAG) }
                 )
             }
         }

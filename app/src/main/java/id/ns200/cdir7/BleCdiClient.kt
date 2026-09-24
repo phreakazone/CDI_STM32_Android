@@ -821,7 +821,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
             phaseTimer = Runnable {
                 if (!gattReady && gatt != null) fail("Timeout connect")
-            }.also { main.postDelayed(it, 10_000) }
+            }.also { main.postDelayed(it, 8_000) }
         } catch (e: Exception) {
             reconnect("connectGatt: " + e.message)
         }
@@ -839,19 +839,69 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
 
     private fun reconnect(reason: String) {
         val device = lastDevice ?: return
-        if (manualStop || !autoReconnect) return
+        if (manualStop || !autoReconnect) {
+            _busy.value = false
+            return
+        }
         cancelReconnect()
         retryCount++
 
-        // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
-        val delayMs = min(30_000L, 1_000L * (1L shl min(retryCount - 1, 5)))
+        if (retryCount > 3) {
+            _busy.value = false
+            listener.onState("Gagal terhubung ($reason) • Ketuk KONEK untuk mencoba lagi", false)
+            return
+        }
+
+        // Exponential backoff: 1.5s, 3s, max 6s
+        val delayMs = min(6_000L, 1_500L * (1L shl min(retryCount - 1, 2)))
         _busy.value = true
-        listener.onState("$reason • reconnect ${delayMs / 1000}s (percobaan $retryCount)", false)
+        listener.onState("$reason • coba lagi ${delayMs / 1000}s (percobaan $retryCount/3)", false)
 
         reconnectTimer = Runnable {
             reconnectTimer = null
             open(device)
         }.also { main.postDelayed(it, delayMs) }
+    }
+
+    /**
+     * Dipanggil saat Activity kembali aktif dari background (onResume).
+     * Mencegah aplikasi macet pada status "MENGHUBUNGKAN..." setelah diminimalkan beberapa saat.
+     */
+    fun onAppResume() {
+        if (gattReady && gatt != null) {
+            send("PING")
+            return
+        }
+        if (_busy.value && !gattReady) {
+            cancelReconnect()
+            cancelPhase()
+            closeCurrent()
+            _busy.value = false
+            retryCount = 0
+            val dev = lastDevice
+            if (dev != null && autoReconnect && !manualStop) {
+                listener.onState("Memulihkan koneksi ${dev.name ?: dev.address}...", false)
+                open(dev)
+            } else {
+                listener.onState("OFFLINE • BLE SIAP", false)
+            }
+        } else if (!gattReady && !_scanning.value && autoReconnect && lastDevice != null && !manualStop) {
+            retryCount = 0
+            open(lastDevice!!)
+        }
+    }
+
+    /**
+     * Dipanggil saat Activity masuk ke background (onPause/onStop).
+     */
+    fun onAppPause() {
+        if (_busy.value && !gattReady && retryCount > 0) {
+            cancelReconnect()
+            cancelPhase()
+            closeCurrent()
+            _busy.value = false
+            listener.onState("Koneksi dijeda saat aplikasi tidak aktif", false)
+        }
     }
 
     private fun cancelReconnect() {
