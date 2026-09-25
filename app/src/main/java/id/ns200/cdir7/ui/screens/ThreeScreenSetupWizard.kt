@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.ns200.cdir7.CdiViewModel
@@ -83,13 +84,16 @@ fun ThreeScreenSetupWizard(viewModel: CdiViewModel) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = 52.dp, max = 66.dp)
                     .padding(horizontal = 10.dp, vertical = 4.dp),
                 color = RaceRedline.copy(alpha = 0.15f),
                 border = BorderStroke(1.dp, RaceRedline.copy(alpha = 0.8f)),
                 shape = RoundedCornerShape(6.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -105,13 +109,17 @@ fun ThreeScreenSetupWizard(viewModel: CdiViewModel) {
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Black,
                             color = RaceRedline,
-                            fontFamily = FontFamily.Monospace
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = writeBlockReason ?: "",
                             fontSize = 8.5.sp,
                             color = TextPrimary,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                     if (sessionPhase == SessionPhase.NEEDS_BINDING || sessionPhase == SessionPhase.READY_READ_ONLY) {
@@ -218,7 +226,9 @@ private fun ThreeScreenHeader(
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
                             color = if (isDemo) SensorAmber else TextSecondary,
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -252,7 +262,9 @@ private fun ThreeScreenHeader(
                                 fontSize = 9.sp,
                                 fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
                                 color = if (isSelected) Color.White else TextPrimary,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = FontFamily.Monospace,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = tab.subtitle,
@@ -291,7 +303,12 @@ private fun AuxVehicleQuickAccess(viewModel: CdiViewModel) {
                 fontSize = 8.5.sp,
                 color = TextSecondary
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
                 listOf(0 to "NS200", 1 to "UNIVERSAL MANUAL", 2 to "UNIVERSAL MATIC").forEach { (id, label) ->
                     FilterChip(
                         selected = aux.vehicleProfile == id && aux.enabled,
@@ -452,7 +469,10 @@ private fun LayarPemasangan(
                             fontWeight = FontWeight.Bold,
                             color = if (moduleSafety.allowed) RacingLime else RaceRedline,
                             fontFamily = FontFamily.Monospace,
-                            lineHeight = 10.5.sp
+                            lineHeight = 10.5.sp,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -475,13 +495,17 @@ private fun LayarPemasangan(
                                 text = module.title,
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (installed) RacingLime else TextPrimary
+                                color = if (installed) RacingLime else TextPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = module.pinInfo,
                                 fontSize = 7.5.sp,
                                 color = TextMuted,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = FontFamily.Monospace,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                         Switch(
@@ -1269,14 +1293,18 @@ private fun InspectionDataBox(
                 fontSize = 7.5.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextSecondary,
-                fontFamily = FontFamily.Monospace
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = value,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Black,
                 color = TextPrimary,
-                fontFamily = FontFamily.Monospace
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -1304,14 +1332,18 @@ private fun SafetyCheckBadge(
                 fontSize = 8.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (ok) RacingLime else RaceRedline,
-                fontFamily = FontFamily.Monospace
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = value,
                 fontSize = 10.5.sp,
                 fontWeight = FontWeight.Black,
                 color = TextPrimary,
-                fontFamily = FontFamily.Monospace
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
