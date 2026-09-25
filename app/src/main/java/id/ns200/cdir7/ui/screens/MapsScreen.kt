@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.ns200.cdir7.CdiViewModel
 import id.ns200.cdir7.CustomAdvancePoint
+import id.ns200.cdir7.HardwareModule
 import id.ns200.cdir7.TimingMode
 import id.ns200.cdir7.ui.components.MotecButton
 import id.ns200.cdir7.ui.theme.*
@@ -44,6 +45,7 @@ fun MapsScreen(viewModel: CdiViewModel) {
     val limiterType by viewModel.limiterType.collectAsState()
     val pendingCommands by viewModel.pendingCommands.collectAsState()
     val telemetry by viewModel.telemetry.collectAsState()
+    val moduleStatus by viewModel.moduleStatus.collectAsState()
     val customPoints by viewModel.customAdvancePoints.collectAsState()
     val scrollState = rememberScrollState()
 
@@ -797,8 +799,13 @@ fun MapsScreen(viewModel: CdiViewModel) {
                     if (telemetry.rpm > 0) {
                         safetyAlertText = "PERINGATAN KESELAMATAN: Mesin terdeteksi hidup (${telemetry.rpm} RPM)! Simpan Flash MCU hanya diizinkan saat mesin mati (RPM = 0)."
                         showSafetyDialog = true
-                    } else if (telemetry.hvCenter >= 30 || telemetry.hvSide >= 30) {
-                        safetyAlertText = "PERINGATAN KESELAMATAN: Tegangan kapasitor masih tinggi (CENTER: ${telemetry.hvCenter}V, SIDE: ${telemetry.hvSide}V)! Tunggu HV turun hingga < 30V."
+                    } else if (telemetry.hvCenter >= 30 ||
+                        ((moduleStatus.isObserved(HardwareModule.SIDE) ||
+                            moduleStatus.isInstalled(HardwareModule.SIDE)) && telemetry.hvSide >= 30)
+                    ) {
+                        val sideLabel = if (moduleStatus.isObserved(HardwareModule.SIDE) ||
+                            moduleStatus.isInstalled(HardwareModule.SIDE)) "${telemetry.hvSide}V" else "N/A"
+                        safetyAlertText = "PERINGATAN KESELAMATAN: Tegangan kapasitor masih tinggi (CENTER: ${telemetry.hvCenter}V, SIDE: $sideLabel)! Tunggu HV turun hingga < 30V."
                         showSafetyDialog = true
                     } else {
                         showSaveConfirmDialog = true
@@ -985,7 +992,7 @@ private fun IdleTimingModeCard(viewModel: CdiViewModel) {
                 height = 34.dp,
                 modifier = Modifier.fillMaxWidth().testTag("timing_mode_save")
             )
-            Text("Pola aktif hanya pada idle/rpm rendah dan TPS rendah; pengapian utama tetap memakai map yang dipilih.",
+            Text("Aktif hanya dalam rentang idle dan TPS ≤5%; tidak memutus spark. Di luar batas, firmware kembali ke map utama.",
                 fontSize = 8.5.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
         }
     }

@@ -154,15 +154,19 @@ Kontak mekanis ON dilaporkan sebagai sumber MECHANICAL. Sesi keyless dilaporkan 
 
 | Mode | Intensitas bawaan | Rentang bawaan | Fungsi firmware |
 |---|---:|---:|---|
-| STANDARD | 0/10 | 700–1800 RPM | Map utama tanpa pola tambahan |
-| SOFT | 3/10 | 750–1650 RPM | Retard tetap ringan |
-| RESPONSIVE | 4/10 | 900–2400 RPM | Advance ringan, tetap dibatasi PROFILE |
-| KUDA | 6/10 | 850–1650 RPM | Pola retard deterministik 8 langkah |
-| DRUMBAND | 7/10 | 900–1800 RPM | Pola 12 langkah dan aksen soft-cut terbatas |
-| FOMO | 8/10 | 950–2000 RPM | Pola 10 langkah agresif dan soft-cut terbatas |
-| CUSTOM | 5/10 | 850–1800 RPM | Pola 8 langkah dengan parameter pengguna |
+| STANDARD | 0/10 | 1150–1700 RPM | Map utama tanpa osilasi tambahan |
+| SOFT | 2/10 | 1250–1550 RPM | Retard ringan, maksimum 2° |
+| RESPONSIVE | 3/10 | 1200–1700 RPM | Advance ringan, maksimum 2° |
+| KUDA | 4/10 | 1200–1600 RPM | Ayunan timing bipolar 8 event |
+| DRUMBAND | 5/10 | 1200–1650 RPM | Ayunan timing bipolar 12 event |
+| FOMO | 6/10 | 1150–1700 RPM | Ayunan timing bipolar 10 event yang lebih tegas |
+| CUSTOM | 4/10 | 1200–1650 RPM | Ayunan bipolar 8 event dengan parameter pengguna |
 
-Memilih chip mode langsung memuat intensitas dan rentang bawaannya; nilai baru dikirim oleh `SET,TIMING` setelah tombol SIMPAN PRESET ditekan. Intensitas 0–10 dan rentang aktif 500–5000 RPM. Efek hanya bekerja pada TPS di bawah 20% dan tetap dijepit oleh map/PROFILE. Mode ini bukan pengganti map daya yang benar.
+Metode mengikuti prinsip lumpy-idle ECU: timing diayunkan maju–mundur pada event pengapian, bukan memutus spark. Semua preset bawaan hanya aktif pada TPS ≤5%, dibatasi ±8° dari map aktif, membatalkan retard dekat batas RPM bawah, membatalkan advance dekat batas atas, dan kembali ke map normal di luar jendela. Idle standar NS200 tetap 1350–1450 RPM; nama KUDA/DRUMBAND/FOMO adalah nama profil IgniTra, bukan standar timing universal. Angka preset adalah baseline konservatif yang wajib divalidasi pada prototipe kendaraan sebelum rilis produksi.
+
+Jika modul SIDE tidak terdeteksi, aplikasi menampilkan HV SIDE sebagai N/A dan mengeluarkannya dari Command Guard, Quick Setup, penyimpanan map, serta preflight OTA. Nilai ADC yang tidak memiliki modul tidak boleh dianggap sebagai tegangan nyata.
+
+Referensi baseline: [MaxxECU — Lumpy idle](https://www.maxxecu.com/webhelp/solutions_and_faq-lumpy_idle.html) untuk metode osilasi timing per event tanpa ignition/fuel cut, dan [Pulsar 200NS Service Manual](https://roadsafetymoris.org.in/ns200/bajaj_pulsar_200_nsServiceManual.pdf) untuk idle standar 1350–1450 RPM. Referensi ini tidak mendefinisikan nama KUDA/DRUMBAND/FOMO; ketiganya adalah profil IgniTra yang harus disahkan melalui uji prototipe.
 
 ## BLE dan pemulihan setelah background
 

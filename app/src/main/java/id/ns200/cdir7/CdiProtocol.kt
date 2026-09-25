@@ -52,7 +52,7 @@ enum class HardwareModule(
     SIDE(1, "SIDE", "Modul Koil Kedua (SIDE)", "Output kanal pengapian kedua bertingkat", "J1.6 (COIL_SIDE)"),
     THERMAL(2, "THERMAL", "Modul Sensor Suhu & Fan", "Sensor suhu NTC & kendali relay kipas", "J1.3 (NTC) & J1.7 (Relay)"),
     OEM_LEARN(4, "OEM_LEARN", "Modul Rekam OEM Learn", "Sadapan pasif pulsa optocoupler PC817", "GPIO16 & GPIO17"),
-    AUX(8, "AUX", "Modul AUX (Strobe)", "Lampu stroboskop sinkronis TDC (Audio reserved)", "GPIO27 (Strobe)"),
+    AUX(8, "AUX", "Modul AUX", "Strobo, audio PWM, keyless, dan starter melalui interlock OEM", "JMOD_AUX 2×6"),
     TPS_DIAG(16, "TPS_DIAG", "Modul TPS Diagnostic", "Memantau sinyal & referensi ADC TPS", "J1.4 & GPIO34 (TPS_REF)");
 
     companion object {
@@ -142,13 +142,13 @@ enum class TimingMode(
     val defaultMinRpm: Int,
     val defaultMaxRpm: Int
 ) {
-    STANDARD(0, "STANDARD", "Idle normal tanpa pola tambahan", 0, 700, 1800),
-    SOFT(1, "SOFT", "Retard tetap ringan sampai 4° untuk idle lebih lembut", 3, 750, 1650),
-    RESPONSIVE(2, "RESPONSIVE", "Advance ringan sampai 2° pada rpm rendah", 4, 900, 2400),
-    KUDA(3, "KUDA", "Rumble 8 langkah; retard bertingkat tanpa skip pada setelan bawaan", 6, 850, 1650),
-    DRUMBAND(4, "DRUMBAND", "Ritme 12 langkah dengan aksen soft-cut terbatas", 7, 900, 1800),
-    FOMO(5, "FOMO", "Ritme 10 langkah agresif dengan soft-cut terbatas", 8, 950, 2000),
-    CUSTOM(6, "CUSTOM", "Pola 8 langkah dengan intensitas dan rentang pilihan pengguna", 5, 850, 1800);
+    STANDARD(0, "STANDARD", "Map pengapian utama tanpa osilasi idle", 0, 1150, 1700),
+    SOFT(1, "SOFT", "Retard ringan maksimum 2° tanpa memutus spark", 2, 1250, 1550),
+    RESPONSIVE(2, "RESPONSIVE", "Advance ringan maksimum 2° tanpa memutus spark", 3, 1200, 1700),
+    KUDA(3, "KUDA", "Ayunan timing bipolar 8 event, ritme lambat", 4, 1200, 1600),
+    DRUMBAND(4, "DRUMBAND", "Ayunan timing bipolar 12 event, ritme rapat", 5, 1200, 1650),
+    FOMO(5, "FOMO", "Ayunan bipolar 10 event lebih tegas, tetap tanpa spark-cut", 6, 1150, 1700),
+    CUSTOM(6, "CUSTOM", "Ayunan bipolar 8 event dengan intensitas/rentang pengguna", 4, 1200, 1650);
 
     companion object {
         fun fromCode(code: Int) = entries.firstOrNull { it.code == code } ?: STANDARD
@@ -159,8 +159,8 @@ data class TimingStatus(
     val schema: Int = 2,
     val mode: TimingMode = TimingMode.STANDARD,
     val intensity: Int = 0,
-    val minRpm: Int = 900,
-    val maxRpm: Int = 1800
+    val minRpm: Int = 1150,
+    val maxRpm: Int = 1700
 )
 
 data class AuxStatus(
@@ -539,8 +539,8 @@ object CdiProtocol {
             schema = f[1].toIntOrNull() ?: 1,
             mode = TimingMode.fromCode(f[2].toIntOrNull() ?: 0),
             intensity = (f[3].toIntOrNull() ?: 0).coerceIn(0, 10),
-            minRpm = (f[4].toIntOrNull() ?: 900).coerceIn(500, 4000),
-            maxRpm = (f[5].toIntOrNull() ?: 1800).coerceIn(600, 5000)
+            minRpm = (f[4].toIntOrNull() ?: 1150).coerceIn(500, 4000),
+            maxRpm = (f[5].toIntOrNull() ?: 1700).coerceIn(600, 5000)
         )
     }
 
