@@ -104,7 +104,6 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
     private var reconnectTimer: Runnable? = null
     private var commandTimer: Runnable? = null
     private var resumeRecoveryTimer: Runnable? = null
-    private var appPausedAtMs = 0L
 
     // OTA upload variables
     private val _otaState = MutableStateFlow<OtaState>(OtaState.Idle)
@@ -916,7 +915,6 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
      * Dipanggil saat Activity masuk ke background (onPause/onStop).
      */
     fun onAppPause() {
-        appPausedAtMs = SystemClock.elapsedRealtime()
         /* Jangan membatalkan reconnect atau GATT sehat saat background.
          * Pemutusan di sini adalah penyebab utama state “Menghubungkan...”
          * tanpa callback ketika Activity dibuka kembali. */
