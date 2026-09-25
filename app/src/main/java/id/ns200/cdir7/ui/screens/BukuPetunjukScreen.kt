@@ -534,8 +534,8 @@ private fun HarnessJ1ChapterSection() {
             title = "KEYLESS + STARTER DENGAN MODUL AUX",
             color = RacingLime,
             content = "J1.1 menerima pulsa +12 V hanya melalui input KEYLESS_REQ yang terproteksi; jangan sambungkan ke GPIO. " +
-                "Relay K1 AUX memparalel jalur kontak menggunakan COM dari +12 V aki bersekring dan NO menuju jalur ignition kendaraan. " +
-                "J1.5 tetap membaca kontak mekanis asli dan tidak boleh dijumper ke ground. " +
+                "Relay K1 AUX memparalel jalur kontak menggunakan COM dari +12 V aki bersekring dan NO menuju jalur ignition/VIN_PROT downstream kendaraan. " +
+                "Keluaran K1 tidak boleh dikembalikan ke J1.5; J1.5 tetap khusus membaca kontak mekanis asli dan tidak boleh dijumper ke ground. " +
                 "J1.8 adalah permintaan starter dry-contact/open-collector ke GND_LOGIC; K2 AUX hanya memparalel tombol atau coil relay starter OEM, " +
                 "bukan arus dinamo starter. Pertahankan sekring, relay starter, rem/kopling, standar samping, dan interlock OEM."
         )
@@ -829,7 +829,7 @@ private fun DiagnosisChapterSection() {
             Pair("Core Hidup, SIDE Belum Aktif", "Pastikan modul hardware SIDE terpasang dan ulangi uji First Start untuk mengaktifkan koil kedua."),
             Pair("TPS Nol / Angka Terbalik", "Tukar kabel positif dan ground pada soket sensor TPS, lalu ulangi kalibrasi gas tertutup dan terbuka."),
             Pair("Suhu Menampilkan 'Invalid'", "Periksa kabel sensor NTC J1.3. Jika kabel terlepas, sistem otomatis mengaktifkan kipas demi proteksi."),
-            Pair("BLE Berhenti di 'Menghubungkan...'", "Aktifkan Bluetooth, kembali ke aplikasi dan tunggu watchdog 8 detik. Jika belum pulih, ketuk Putus lalu Hubungkan; jangan hapus binding firmware."),
+            Pair("BLE Berhenti di 'Menghubungkan...'", "Aktifkan Bluetooth dan kembali ke aplikasi. Percobaan GATT yang masih aktif dipertahankan sampai 12 detik; sesi stale dipulihkan otomatis. Jika tetap macet, ketuk KONEK sekali untuk fresh reconnect—force-close aplikasi atau mematikan MCU tidak diperlukan."),
             Pair("Kontak Mekanis Tidak Terbaca", "Periksa J1.5 dan blok RIGN_IN/QIGN_SENSE ke U7 P3. K1 AUX wajib masuk ke VIN_PROT, bukan kembali ke J1.5."),
             Pair("Starter Ditolak", "Pastikan AUX aktif, aki 9.5–16V, RPM <300, tidak ada fault, dan untuk profil MANUAL J1.9/NEUTRAL_IN aktif.")
         )
