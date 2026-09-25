@@ -9,6 +9,8 @@ plugins {
   alias(libs.plugins.google.services)
 }
 
+val localDebugKeystore = rootProject.file("debug.keystore")
+
 android {
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
@@ -24,17 +26,23 @@ android {
   }
 
   signingConfigs {
-    create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
+    if (localDebugKeystore.exists()) {
+      create("debugConfig") {
+        storeFile = localDebugKeystore
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
+      }
     }
   }
 
   buildTypes {
     debug {
-      signingConfig = signingConfigs.getByName("debugConfig")
+      // Developer machines may keep a project-local keystore. CI does not:
+      // leaving signingConfig unset makes AGP generate/use its standard debug key.
+      if (localDebugKeystore.exists()) {
+        signingConfig = signingConfigs.getByName("debugConfig")
+      }
     }
     release {
       isCrunchPngs = false
