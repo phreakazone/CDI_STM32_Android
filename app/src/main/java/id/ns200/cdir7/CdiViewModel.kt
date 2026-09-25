@@ -1136,8 +1136,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             .putInt("setup_stage", 0)
             .apply()
 
-        appendLog("DEMO RESET: Seluruh simulasi commissioning direset ke Tahap 1 (Pemasangan). Dual Coil & 5 modul aktif.")
-        Toast.makeText(context, "Simulasi Demo & Wizard Setup berhasil direset ke awal!", Toast.LENGTH_SHORT).show()
+        appendLog("DEMO RESET: Core standby, mesin mati, modul opsional kosong, commissioning NEW (0).")
+        Toast.makeText(context, "Demo direset: Core baru, mesin mati, belum dipasang", Toast.LENGTH_SHORT).show()
     }
 
     // Maps State - 4 Flash Memory Slots (ECO, STREET, RAIN, PRO) with two flash pages & CRC32
@@ -2258,7 +2258,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             appendLog("BLE Send: SETUP,PICKUP,CONFIRM")
         } else {
             appendLog("Pickup dikonfirmasi (PPR=${_pulserPpr.value}, Gate=${_gateDurationUs.value}µs). Lanjut ke TDC.")
-            _commissionStatus.value = _commissionStatus.value.copy(stage = 2, nextAction = 3, advisoryMask = 0)
+            _commissionStatus.value = _commissionStatus.value.copy(stage = 1, nextAction = 3, advisoryMask = 0)
             advanceSetupStage(SetupStage.TDC.code)
         }
         Toast.makeText(context, if (bleClient.gattReady) "Konfirmasi pickup masuk antrean" else "Pickup terverifikasi di Demo", Toast.LENGTH_SHORT).show()
@@ -2273,7 +2273,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             appendLog("BLE Send: SETUP,SAVE_TDC (TDC Strobo disimpan ke Flash)")
         } else {
             appendLog("TDC Strobo disimpan ke Flash A/B. Lanjut ke TPS.")
-            _commissionStatus.value = _commissionStatus.value.copy(stage = 3, nextAction = 4, advisoryMask = 0)
+            _commissionStatus.value = _commissionStatus.value.copy(stage = 2, nextAction = 4, advisoryMask = 0)
             advanceSetupStage(SetupStage.TPS_CAL.code)
         }
         _flashSaved.value = !bleClient.gattReady
@@ -2292,7 +2292,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             appendLog("BLE Send: SETUP,MANUAL_TDC,$triggerCdeg,CONFIRM")
         } else {
             appendLog("TDC Manual Terukur ${clamped}° BTDC disimpan tanpa strobo. Lanjut ke TPS.")
-            _commissionStatus.value = _commissionStatus.value.copy(stage = 3, nextAction = 4, advisoryMask = 0)
+            _commissionStatus.value = _commissionStatus.value.copy(stage = 2, nextAction = 4, advisoryMask = 0)
             advanceSetupStage(SetupStage.TPS_CAL.code)
         }
         triggerEditBaseCdeg = triggerCdeg
@@ -2310,7 +2310,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             appendLog("BLE Send: SETUP,TPS,CLOSED (Simpan Gas Tertutup 0%)")
         } else {
             _tpsClosedAdc.value = 820
-            _commissionStatus.value = _commissionStatus.value.copy(stage = 3, nextAction = 4)
+            _commissionStatus.value = _commissionStatus.value.copy(stage = 2, nextAction = 4)
             appendLog("TPS Gas Tertutup (0%) Disimpan.")
         }
         Toast.makeText(context, if (bleClient.gattReady) "TPS CLOSED masuk antrean" else "TPS CLOSED tersimpan di Demo", Toast.LENGTH_SHORT).show()
@@ -2325,7 +2325,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             appendLog("BLE Send: SETUP,TPS,OPEN (Simpan Gas Penuh 100%)")
         } else {
             _tpsOpenAdc.value = 3940
-            _commissionStatus.value = _commissionStatus.value.copy(stage = 4, nextAction = 5, advisoryMask = 0)
+            _commissionStatus.value = _commissionStatus.value.copy(stage = 2, nextAction = 5, advisoryMask = 0)
             appendLog("TPS Gas Terbuka Penuh (100%) Disimpan. Lanjut ke FIRST START.")
             advanceSetupStage(SetupStage.FIRST_START.code)
         }
@@ -2341,7 +2341,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             appendLog("BLE Send: SETUP,FIRST_START (Mode Aman: 220V, CENTER saja, Max 10° Adv, Limiter 3.000 RPM, Otomatis simpan setelah 3 detik)")
         } else {
             appendLog("Mode FIRST START Siap (220V, CENTER saja, Limiter 3.000 RPM, Otomatis 3 detik)")
-            _commissionStatus.value = _commissionStatus.value.copy(stage = 4, nextAction = 6, advisoryMask = 0)
+            _commissionStatus.value = _commissionStatus.value.copy(stage = 3, nextAction = 6, advisoryMask = 0)
             advanceSetupStage(SetupStage.FIRST_START.code)
         }
         Toast.makeText(context, if (bleClient.gattReady) "FIRST START aktif. Hidupkan mesin 3 detik untuk simpan otomatis." else "FIRST START aktif di Demo", Toast.LENGTH_LONG).show()
@@ -2366,7 +2366,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 activeMask = curMod.activeMask and HardwareModule.SIDE.bitMask.inv()
             )
             _commissionStatus.value = CommissionStatus(
-                stage = 5,
+                stage = 4,
                 nextAction = 7,
                 ready = true,
                 advisoryMask = 0
@@ -2405,7 +2405,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 activeMask = curMod.activeMask or HardwareModule.SIDE.bitMask
             )
             _commissionStatus.value = CommissionStatus(
-                stage = 5,
+                stage = 4,
                 nextAction = 7,
                 ready = true,
                 advisoryMask = 0
@@ -2437,7 +2437,10 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         val (cPin, sPin) = if (selectedPlatform.value == McuPlatform.STM32WB55) Pair("PB3", "PB4") else Pair("GPIO16", "GPIO17")
         val mcuName = selectedPlatform.value.displayName
 
-        if (mode == FirmwareRunMode.DIY && !_isOemUnpluggedConfirmed.value) {
+        if (mode == FirmwareRunMode.DIY &&
+            !_isOemUnpluggedConfirmed.value &&
+            !_installationConfirmed.value
+        ) {
             Toast.makeText(
                 context,
                 "Mode Independen aktif otomatis setelah KONFIRMASI PASANG CORE/DUAL. Selesaikan pemasangan langsung dahulu.",
@@ -3171,8 +3174,13 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             "MODE" -> CdiProtocol.firmwareMode(value)?.let { status ->
                 _firmwareMode.value = status.mode
                 _isOemUnpluggedConfirmed.value = status.diyUnplugged
-                _installationConfirmed.value =
-                    status.mode == FirmwareRunMode.DIY && status.diyUnplugged
+                // GET,MODE dapat berubah ke metode commissioning opsional setelah
+                // ACK INSTALL. Perubahan metode tidak berarti hardware dicabut.
+                // Karena itu hanya konfirmasi positif DIY yang boleh menaikkan
+                // status pemasangan; reset eksplisit/disconnect yang menurunkannya.
+                if (status.mode == FirmwareRunMode.DIY && status.diyUnplugged) {
+                    _installationConfirmed.value = true
+                }
                 _isProVoltageConfigured.value = status.proEnabled
                 if (status.mode != FirmwareRunMode.OEM_LEARN) {
                     _isOemLearning.value = false
