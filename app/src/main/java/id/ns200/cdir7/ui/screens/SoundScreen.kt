@@ -81,7 +81,7 @@ fun SoundScreen(viewModel: CdiViewModel) {
             val connected = hasConnectPermission &&
                 runCatching {
                     adapter?.getProfileConnectionState(BluetoothProfile.A2DP) ==
-                        BluetoothProfile.STATE_CONNECTED
+                        android.bluetooth.BluetoothAdapter.STATE_CONNECTED
                 }.getOrDefault(false)
             val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
             val routed = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
