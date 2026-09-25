@@ -9,7 +9,7 @@ Dokumen ini adalah satu-satunya dokumentasi repository aplikasi. Spesifikasi fir
 | Item | Nilai |
 |---|---|
 | Target firmware | IgniTra R9 ESP32 |
-| Firmware acuan | 9.6.0, build 20260925 |
+| Firmware acuan | 9.6.3, build 20260925 |
 | Protocol | 5 |
 | Telemetry | v3, 20 byte |
 | Android minimum | sesuai `app/build.gradle.kts` |
@@ -85,6 +85,10 @@ GET,AUX
 
 Query tambahan yang tidak didukung firmware lama ditandai unsupported, bukan dianggap sebagai putus koneksi. Tombol tulis hanya aktif ketika sesi READY_FULL, binding cocok, data masih segar, capability tersedia, dan Command Guard mengizinkan.
 
+## Mode Demo realistis
+
+Demo dimulai dari Core baru dalam kondisi standby: mesin mati, aki 12,6 V, HV 0 V, optional module belum terpasang, dan Setup belum selesai. Pengguna dapat memasang modul secara virtual, menjalankan seluruh alur Setup, menyalakan/mematikan mesin, menguji throttle, suara, serta profil timing idle. Stage Demo memakai enum firmware yang sama (`NEW=0`, `PICKUP=1`, `TDC=2`, `FIRST_START=3`, `READY=4`). STANDARD, SOFT, RESPONSIVE, KUDA, DRUMBAND, FOMO, dan CUSTOM benar-benar mengubah osilasi RPM dan advance simulasi sesuai intensitas/rentangnya; bukan hanya mengganti label. State Demo tidak pernah disalin menjadi status perangkat nyata.
+
 ## Setup pertama
 
 ### 1. Pemasangan
@@ -100,6 +104,17 @@ Perintah:
 SETUP,INSTALL,CORE,OEM_REMOVED
 SETUP,INSTALL,DUAL,OEM_REMOVED
 ```
+
+Status Layar 1 tidak memakai stage pickup sebagai tanda pemasangan. Aplikasi hanya menghijaukan pemasangan setelah `ACK,INSTALL_CORE`/`ACK,INSTALL_DUAL` atau setelah `GET,MODE` mengonfirmasi mode Independen dengan OEM dilepas. Pemilihan metode commissioning opsional sesudahnya tidak memalsukan seolah hardware kembali tercabut. `ERR` dan timeout tidak pernah menaikkan progres; alasan penolakan ditampilkan dalam bahasa pengguna.
+
+Metode commissioning bersifat opsional:
+
+- **Quick Install Core/Dual**: jalur utama; langsung pasang IgniTra dan lanjut pemeriksaan.
+- **OEM Learn**: opsional dan memerlukan modul OEM Learn untuk merekam karakter CDI bawaan.
+- **Manual**: opsional untuk kalibrasi pickup/TDC langsung tanpa merekam CDI OEM.
+- **Independen**: mode operasi normal yang aktif otomatis setelah Quick Install mengonfirmasi CDI OEM dilepas.
+
+Tab berikutnya tetap dapat dibuka sebagai pratinjau, tetapi berwarna amber dan tombol yang membutuhkan prasyarat tetap terkunci. TPS dan modul opsional dapat dikonfigurasi kemudian tanpa membatalkan Setup Core.
 
 ### 2. Pemeriksaan
 

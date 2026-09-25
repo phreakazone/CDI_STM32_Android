@@ -12,9 +12,9 @@ enum class SetupStage(val code: Int, val label: String, val desc: String) {
 }
 
 enum class FirmwareRunMode(val code: String, val label: String, val desc: String) {
-    OEM_LEARN("OEM_LEARN", "OEM LEARN", "Membaca timing CDI OEM secara pasif melalui optocoupler"),
-    MANUAL("MANUAL", "MANUAL", "Setup darurat strobo/TDC saat CDI OEM mati"),
-    DIY("DIY", "DIY INDEPENDENT", "Operasi mandiri penuh setelah CDI OEM dicabut fisik");
+    OEM_LEARN("OEM_LEARN", "OEM LEARN", "Opsional: rekam timing CDI bawaan memakai modul OEM Learn"),
+    MANUAL("MANUAL", "MANUAL", "Opsional: kalibrasi pickup dan TDC langsung tanpa merekam CDI OEM"),
+    DIY("DIY", "INDEPENDEN", "Mode operasi normal setelah CDI OEM dilepas dan IgniTra dipasang langsung");
 
     companion object {
         fun fromFirmwareCode(code: Int): FirmwareRunMode? = when (code) {
@@ -25,6 +25,17 @@ enum class FirmwareRunMode(val code: String, val label: String, val desc: String
         }
     }
 }
+
+enum class SetupCommandOutcome {
+    IDLE, PENDING, SUCCESS, REJECTED, TIMEOUT
+}
+
+data class SetupCommandFeedback(
+    val outcome: SetupCommandOutcome = SetupCommandOutcome.IDLE,
+    val action: String = "Belum ada perintah setup",
+    val detail: String = "Pilih konfigurasi pemasangan lalu tunggu jawaban MCU.",
+    val rawResponse: String? = null
+)
 
 enum class OemLearnState(val code: Int) {
     IDLE(0), ACTIVE(1), COMPLETE(2), ERROR(3);

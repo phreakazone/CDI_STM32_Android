@@ -343,12 +343,8 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: M
         }
 
         StageCard(
-            title = "KONTROL MODE FIRMWARE",
-            subtitle = if (selectedPlatform == McuPlatform.STM32WB55) {
-                "Pilih alur kerja CDI STM32. Mode DIY mandiri hanya aktif setelah konfirmasi OEM_UNPLUGGED (tidak ada takeover otomatis)."
-            } else {
-                "Pilih alur kerja CDI ESP32. Mode DIY mandiri hanya aktif setelah konfirmasi OEM_UNPLUGGED (tidak ada takeover otomatis)."
-            }
+            title = "METODE COMMISSIONING • OPSIONAL",
+            subtitle = "Quick Install Core/Dual sudah cukup untuk penggunaan normal. OEM Learn merekam CDI bawaan dengan modul, Manual mengkalibrasi langsung, dan Independen aktif otomatis setelah pemasangan langsung."
         ) {
             // Mode selector tabs
             Row(
@@ -358,7 +354,7 @@ private fun BaruStage(viewModel: CdiViewModel, t: Telemetry, selectedPlatform: M
                 listOf(
                     FirmwareRunMode.OEM_LEARN to "OEM LEARN",
                     FirmwareRunMode.MANUAL to "MANUAL",
-                    FirmwareRunMode.DIY to "DIY"
+                    FirmwareRunMode.DIY to "INDEPENDEN"
                 ).forEach { (m, label) ->
                     val isSelected = fwMode == m
                     Surface(
