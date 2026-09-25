@@ -170,7 +170,9 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         blePrefs.edit().putBoolean("auto_connect_start", enabled).apply()
     }
 
+    @SuppressLint("MissingPermission")
     fun applyConnectionPriority() {
+        if (!hasConnectPermission()) return
         try {
             val priority = if (_powerSaveMode.value) {
                 BluetoothGatt.CONNECTION_PRIORITY_BALANCED
@@ -185,7 +187,9 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
      * Memaksa Bluetooth GATT untuk beralih ke CONNECTION_PRIORITY_HIGH (interval 11.25ms - 15ms)
      * untuk responsivitas telemetri maksimum dan latensi minimal.
      */
+    @SuppressLint("MissingPermission")
     fun requestHighPriority(): Boolean {
+        if (!hasConnectPermission()) return false
         return try {
             gatt?.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH) ?: false
         } catch (_: Exception) {
@@ -196,7 +200,9 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
     /**
      * Permintaan negosiasi MTU GATT (misal 247 byte) untuk paket transfer data yang lebih besar dan efisien.
      */
+    @SuppressLint("MissingPermission")
     fun requestMtu(mtu: Int = 247): Boolean {
+        if (!hasConnectPermission()) return false
         return try {
             gatt?.requestMtu(mtu) ?: false
         } catch (_: Exception) {
@@ -225,8 +231,13 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         listener.onState("Modul CDI tersimpan telah dihapus", false)
     }
 
+    @SuppressLint("MissingPermission")
     fun isBluetoothEnabled(): Boolean {
-        return adapter?.isEnabled == true
+        return if (hasConnectPermission()) {
+            try { adapter?.isEnabled == true } catch (_: SecurityException) { false }
+        } else {
+            false
+        }
     }
 
     fun hasPermissions(): Boolean {
@@ -378,6 +389,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             }
         }
 
+        @SuppressLint("MissingPermission")
         override fun onMtuChanged(owner: BluetoothGatt, mtu: Int, status: Int) {
             if (owner !== gatt) return
             cancelPhase()
@@ -793,7 +805,12 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         } catch (_: Exception) {}
     }
 
+    @SuppressLint("MissingPermission")
     fun connectDeviceExplicit(device: BluetoothDevice) {
+        if (!hasConnectPermission()) {
+            listener.onState("Izin BLUETOOTH_CONNECT belum diizinkan", false)
+            return
+        }
         stopScanInternal()
         manualStop = false
         lastDevice = device
