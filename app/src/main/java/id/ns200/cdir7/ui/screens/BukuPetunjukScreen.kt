@@ -519,9 +519,9 @@ private fun HarnessJ1ChapterSection() {
         StageBox(
             title = "ORIENTASI KONEKTOR — WAJIB CEK SEBELUM CRIMP",
             color = SensorAmber,
-            content = "Lihat J1 dari sisi masuk terminal harness dengan pengunci konektor di atas. " +
-                "Kolom kiri adalah pin 1–6 dari atas ke bawah; kolom kanan pin 7–12 dari atas ke bawah. " +
-                "Nomor pada housing/datasheet konektor tetap menjadi acuan akhir. Jangan memakai warna kabel sebagai acuan."
+            content = "J1 mengikuti referensi Core: kolom kiri pin 1–6 dan kolom kanan pin 7–12. " +
+                "Sebelum crimp, cocokkan tanda pin-1 pada PCB, nomor cavity housing, dan datasheet konektor yang benar; " +
+                "tampilan sisi mating dan sisi masuk kabel saling tercermin. Jangan menebak dari posisi pengunci atau warna kabel."
         )
         StageBox(
             title = "CORE 1 COIL / NS200 UJI",
