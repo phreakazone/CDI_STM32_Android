@@ -922,7 +922,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         identity: FirmwareIdentityInfo
     ): String? {
         if (!connected && !isSim) {
-            return if (bleClient.isBusy.value) {
+            return if (isBusy) {
                 "BLE sedang memulihkan sesi • tunggu status CONNECTED; jangan tekan ulang perintah."
             } else {
                 "CDI belum terhubung. Hubungkan BLE atau aktifkan Mode Simulasi."
