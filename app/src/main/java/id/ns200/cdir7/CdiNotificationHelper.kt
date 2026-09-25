@@ -1,5 +1,6 @@
 package id.ns200.cdir7
 
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
@@ -55,6 +56,7 @@ object CdiNotificationHelper {
             ) == PackageManager.PERMISSION_GRANTED
     }
 
+    @SuppressLint("MissingPermission")
     fun showEngineStatus(context: Context, running: Boolean, rpm: Int) {
         try {
             if (!notificationsAllowed(context)) return
@@ -68,11 +70,12 @@ object CdiNotificationHelper {
                 .setOngoing(running)
                 .setAutoCancel(!running)
             NotificationManagerCompat.from(context).notify(ENGINE_NOTIFICATION_ID, builder.build())
-        } catch (_: Exception) {
-            // Izin notifikasi dapat berubah di pengaturan sistem.
+        } catch (_: SecurityException) {
+            // Izin notifikasi dapat dicabut ketika aplikasi sedang berjalan.
         }
     }
 
+    @SuppressLint("MissingPermission")
     fun showSafetyAlert(context: Context, message: String) {
         try {
             if (!notificationsAllowed(context)) return
@@ -84,8 +87,8 @@ object CdiNotificationHelper {
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setAutoCancel(true)
             NotificationManagerCompat.from(context).notify(ALERT_NOTIFICATION_ID, builder.build())
-        } catch (_: Exception) {
-            // Izin notifikasi dapat berubah di pengaturan sistem.
+        } catch (_: SecurityException) {
+            // Izin notifikasi dapat dicabut ketika aplikasi sedang berjalan.
         }
     }
 }
