@@ -344,7 +344,17 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
                     }
                 }, 400)
             } else {
-                val reason = if (status == 8) "GATT 8 / timeout link" else "status $status"
+                val commandContext = activeCommand?.body?.take(40)
+                val reasonBase = when (status) {
+                    BluetoothGatt.GATT_SUCCESS -> "peer menutup link / MCU reset"
+                    8 -> "GATT 8 / supervision timeout"
+                    19 -> "GATT 19 / peer mengakhiri link"
+                    22 -> "GATT 22 / local host mengakhiri link"
+                    133 -> "GATT 133 / Android stack"
+                    else -> "GATT status $status"
+                }
+                val reason = if (commandContext.isNullOrBlank()) reasonBase
+                    else "$reasonBase setelah $commandContext"
                 closeCurrent()
                 if (!manualStop && autoReconnect && lastDevice != null) {
                     reconnect(reason)
@@ -973,7 +983,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
                         listener.onState("OFFLINE • BLE SIAP", false)
                     }
                 }
-            }.also { main.postDelayed(it, 4_000L) }
+            }.also { main.postDelayed(it, 8_000L) }
             return
         }
         if (_busy.value && !gattReady) {
