@@ -602,6 +602,17 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         return false
     }
 
+    /** HV SIDE hanya sah bila modul SIDE benar-benar terdeteksi/didaftarkan. */
+    private fun isSideModulePresent(): Boolean {
+        val status = _moduleStatus.value
+        return status.isObserved(HardwareModule.SIDE) || status.isInstalled(HardwareModule.SIDE)
+    }
+
+    private fun sideHvForSafety(t: Telemetry): Int = if (isSideModulePresent()) t.hvSide else 0
+
+    private fun sideHvSafetyLabel(t: Telemetry): String =
+        if (isSideModulePresent()) "${t.hvSide}V" else "N/A (modul tidak terpasang)"
+
     /**
      * Memeriksa seluruh syarat keselamatan sebelum firmware mengizinkan perubahan modul:
      * 1. aplikasi sudah terhubung dan selesai sinkronisasi;
@@ -620,10 +631,10 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     reason = "Mesin sedang berputar (${t.rpm} RPM). Matikan mesin terlebih dahulu (RPM harus 0)."
                 )
             }
-            if (t.hvCenter >= 30 || t.hvSide >= 30) {
+            if (t.hvCenter >= 30 || sideHvForSafety(t) >= 30) {
                 return ModuleChangeSafetyResult(
                     allowed = false,
-                    reason = "Tegangan HV masih aktif (Center ${t.hvCenter}V, Side ${t.hvSide}V). Harus < 30 V."
+                    reason = "Tegangan HV masih aktif (Center ${t.hvCenter}V, Side ${sideHvSafetyLabel(t)}). Harus < 30 V."
                 )
             }
             return ModuleChangeSafetyResult(true, "Mode Simulasi: Syarat keselamatan terpenuhi")
@@ -683,7 +694,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         }
 
         // Syarat 5: HV Side < 30 V
-        if (t.hvSide >= 30) {
+        if (sideHvForSafety(t) >= 30) {
             return ModuleChangeSafetyResult(
                 allowed = false,
                 reason = "Tegangan HV Side masih aktif (${t.hvSide} V >= 30 V). Tunggu kapasitor discharge < 30 V."
@@ -918,8 +929,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (t.rpm > 0 && !learning) {
             return "Mesin sedang menyala (${t.rpm} RPM). Matikan mesin (RPM 0) demi aturan keselamatan setup_can_write()!"
         }
-        if (connected && !isSim && (t.hvEnabled || t.hvCenter >= 30 || t.hvSide >= 30)) {
-            return "Tegangan HV masih aktif (Center ${t.hvCenter}V, Side ${t.hvSide}V). Tunggu kapasitor discharge di bawah 30V."
+        if (connected && !isSim && (t.hvEnabled || t.hvCenter >= 30 || sideHvForSafety(t) >= 30)) {
+            return "Tegangan HV masih aktif (Center ${t.hvCenter}V, Side ${sideHvSafetyLabel(t)}). Tunggu kapasitor discharge di bawah 30V."
         }
         if (learning) {
             return "Proses OEM Learn sedang aktif. Selesaikan atau simpan pembelajaran terlebih dahulu."
@@ -1559,8 +1570,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         }
         val t = _telemetry.value
         if (t.rpm > 0) return "Simpan map ditolak: mesin harus mati (RPM 0)."
-        if ((t.hvEnabled || t.hvCenter >= 30 || t.hvSide >= 30) && _isConnected.value)
-            return "Simpan map ditolak: charger OFF dan kedua bank HV harus <30 V."
+        if ((t.hvEnabled || t.hvCenter >= 30 || sideHvForSafety(t) >= 30) && _isConnected.value)
+            return "Simpan map ditolak: charger OFF dan semua bank HV yang terpasang harus <30 V."
         if (!bleClient.gattReady) return "CDI belum terhubung. Map tidak diklaim tersimpan ke MCU."
 
         val caps = _firmwareCapabilities.value
@@ -1661,7 +1672,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         val preset = mapPresets[bounded]
         if (bleClient.gattReady) {
             val t = _telemetry.value
-            if (t.rpm != 0 || t.hvEnabled || t.hvCenter >= 30 || t.hvSide >= 30) {
+            if (t.rpm != 0 || t.hvEnabled || t.hvCenter >= 30 || sideHvForSafety(t) >= 30) {
                 Toast.makeText(context, "LOAD ditolak: mesin harus mati dan HV < 30 V", Toast.LENGTH_LONG).show()
                 return
             }
@@ -1705,7 +1716,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
         if (bleClient.gattReady) {
             val t = _telemetry.value
-            if (t.rpm != 0 || t.hvEnabled || t.hvCenter >= 30 || t.hvSide >= 30) {
+            if (t.rpm != 0 || t.hvEnabled || t.hvCenter >= 30 || sideHvForSafety(t) >= 30) {
                 Toast.makeText(context, "SYNC ditolak: mesin harus mati dan HV < 30 V", Toast.LENGTH_LONG).show()
                 return
             }
@@ -1895,8 +1906,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             t.rpm > 0 -> failQuickSetupPreflight(
                 "RPM masih ${t.rpm}. Matikan mesin; tahap awal hanya diperiksa saat RPM 0."
             )
-            t.hvCenter >= 30 || t.hvSide >= 30 -> failQuickSetupPreflight(
-                "HV belum aman: CENTER ${t.hvCenter} V, SIDE ${t.hvSide} V. Matikan kontak/kill switch dan tunggu <30 V."
+            t.hvCenter >= 30 || sideHvForSafety(t) >= 30 -> failQuickSetupPreflight(
+                "HV belum aman: CENTER ${t.hvCenter} V, SIDE ${sideHvSafetyLabel(t)}. Matikan kontak/kill switch dan tunggu <30 V."
             )
             else -> {
                 preflightTimeoutJob?.cancel()
@@ -2446,7 +2457,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (t.rpm > 0) return "Mesin masih berputar (${t.rpm} RPM)! Matikan mesin (RPM = 0)."
         if (t.armed) return "Output pengapian masih diizinkan. Nonaktifkan output sebelum OTA."
         if (t.hvEnabled) return "Charger HV masih aktif. Nonaktifkan charger sebelum OTA."
-        if (t.hvCenter >= 30 || t.hvSide >= 30) return "Tegangan HV masih tinggi (Center: ${t.hvCenter}V, Side: ${t.hvSide}V)! Tunggu hingga < 30V."
+        if (t.hvCenter >= 30 || sideHvForSafety(t) >= 30) return "Tegangan HV masih tinggi (Center: ${t.hvCenter}V, Side: ${sideHvSafetyLabel(t)})! Tunggu hingga < 30V."
         return null
     }
 
