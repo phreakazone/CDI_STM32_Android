@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelUuid
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -105,6 +106,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
     private var commandTimer: Runnable? = null
     private var resumeRecoveryTimer: Runnable? = null
     private var resumeProbePending = false
+    private var connectionAttemptStartedAtMs = 0L
 
     // OTA upload variables
     private val _otaState = MutableStateFlow<OtaState>(OtaState.Idle)
@@ -484,6 +486,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             gattReady = true
             _busy.value = false
             retryCount = 0
+            connectionAttemptStartedAtMs = 0L
             val deviceName = try {
                 lastDevice?.name
             } catch (_: SecurityException) {
@@ -845,6 +848,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         cancelPhase()
         closeCurrent()
         retryCount = 0
+        connectionAttemptStartedAtMs = SystemClock.elapsedRealtime()
         _busy.value = true
         listener.onState(message, false)
         reconnectTimer = Runnable {
@@ -873,6 +877,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
     private fun open(device: BluetoothDevice) {
         cancelReconnect()
         closeCurrent()
+        connectionAttemptStartedAtMs = SystemClock.elapsedRealtime()
         _busy.value = true
 
         val displayName = try { device.name } catch (_: Exception) { null } ?: device.address
@@ -915,6 +920,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
         }
 
         // Exponential backoff: 1.5s, 3s, max 6s
+        connectionAttemptStartedAtMs = SystemClock.elapsedRealtime()
         val delayMs = min(6_000L, 1_500L * (1L shl min(retryCount - 1, 2)))
         _busy.value = true
         listener.onState("$reason • coba lagi ${delayMs / 1000}s (percobaan $retryCount/3)", false)
@@ -971,6 +977,15 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             return
         }
         if (_busy.value && !gattReady) {
+            val ageMs = if (connectionAttemptStartedAtMs == 0L) Long.MAX_VALUE
+                else SystemClock.elapsedRealtime() - connectionAttemptStartedAtMs
+            val attemptStillActive = ageMs < 12_000L &&
+                (gatt != null || phaseTimer != null || reconnectTimer != null)
+            if (attemptStillActive) {
+                // onResume dapat terpanggil berkali-kali. Jangan menutup connectGatt
+                // yang masih sah karena itu membuat status MENGHUBUNGKAN berulang.
+                return
+            }
             val dev = lastDevice
             if (dev != null && autoReconnect && !manualStop) {
                 val displayName = try {
@@ -1313,6 +1328,13 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             return
         }
 
+        val commandTimeoutMs = when {
+            item.body.startsWith("SETUP,") ||
+                item.body.startsWith("MAP,COMMIT") ||
+                item.body.startsWith("SET,TIMING") ||
+                item.body.startsWith("AUX,CONFIG") -> 6_000L
+            else -> 2_500L
+        }
         commandTimer = Runnable {
             val current = activeCommand ?: return@Runnable
             activeCommand = null
@@ -1328,7 +1350,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
                 // Tidak memutuskan koneksi BLE karena link radio dan telemetri tetap sehat
                 main.postDelayed({ writeNextCommand() }, 50)
             }
-        }.also { main.postDelayed(it, 2_500) }
+        }.also { main.postDelayed(it, commandTimeoutMs) }
     }
 
     private fun updatePending() {
