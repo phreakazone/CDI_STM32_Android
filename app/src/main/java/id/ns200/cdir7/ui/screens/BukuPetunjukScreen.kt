@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.ns200.cdir7.CdiViewModel
@@ -86,7 +87,10 @@ fun BukuPetunjukScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Box(
                             modifier = Modifier
                                 .size(28.dp)
@@ -103,19 +107,23 @@ fun BukuPetunjukScreen(
                             )
                         }
                         Spacer(modifier = Modifier.width(10.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "BUKU PETUNJUK PENGGUNA",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Black,
                                 fontFamily = FontFamily.Monospace,
-                                color = TextPrimary
+                                color = TextPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = "Firmware ${firmwareVersion.release} v${firmwareVersion.semver} • Build ${firmwareVersion.buildId}",
                                 fontSize = 9.5.sp,
                                 fontFamily = FontFamily.Monospace,
-                                color = ElectricCyan
+                                color = ElectricCyan,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -128,7 +136,9 @@ fun BukuPetunjukScreen(
                         color = SensorAmber,
                         height = 28.dp,
                         fontSize = 10.sp,
-                        modifier = Modifier.testTag("guide_open_setup_btn")
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .testTag("guide_open_setup_btn")
                     )
                 }
 
@@ -145,6 +155,7 @@ fun BukuPetunjukScreen(
                         val isSelected = selectedChapter == chapter
                         Surface(
                             modifier = Modifier
+                                .widthIn(min = 112.dp, max = 168.dp)
                                 .clip(RoundedCornerShape(4.dp))
                                 .clickable { selectedChapter = chapter }
                                 .border(
@@ -171,7 +182,9 @@ fun BukuPetunjukScreen(
                                     fontSize = 10.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                     fontFamily = FontFamily.Monospace,
-                                    color = if (isSelected) Color.White else TextSecondary
+                                    color = if (isSelected) Color.White else TextSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -183,7 +196,7 @@ fun BukuPetunjukScreen(
         // Chapter Body Content
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .weight(1f)
                 .verticalScroll(scrollState)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
@@ -247,19 +260,23 @@ private fun StepByStepGuideSection(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "LANGKAH PEMASANGAN STEP-BY-STEP",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Black,
                         fontFamily = FontFamily.Monospace,
-                        color = MotecOrange
+                        color = MotecOrange,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = "Ikuti 8 langkah baku sebelum menyalakan mesin untuk pertama kali",
                         fontSize = 9.5.sp,
                         color = TextSecondary,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -275,7 +292,8 @@ private fun StepByStepGuideSection(
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
                         color = if (completedCount == 8) RacingLime else SensorAmber,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        maxLines = 1
                     )
                 }
             }
