@@ -125,7 +125,7 @@ fun DashboardScreen(viewModel: CdiViewModel) {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Over-voltage warning is driven by firmware telemetry; target follows the active profile.
-            if (telemetry.isHvOverLimitWarning) {
+            if (telemetry.hvCenter >= 360 || (isDualCoil && telemetry.hvSide >= 360)) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
