@@ -28,6 +28,7 @@ import id.ns200.cdir7.FirmwareRunMode
 import id.ns200.cdir7.HardwareModule
 import id.ns200.cdir7.ScreenTab
 import id.ns200.cdir7.SessionPhase
+import id.ns200.cdir7.SetupCommandOutcome
 import id.ns200.cdir7.ui.components.MotecButton
 import id.ns200.cdir7.ui.theme.*
 
@@ -47,6 +48,9 @@ fun ThreeScreenSetupWizard(viewModel: CdiViewModel) {
     val sessionPhase by viewModel.sessionPhase.collectAsState()
     val isSimulationMode by viewModel.isSimulationMode.collectAsState()
     val firmwareVersion by viewModel.firmwareVersionInfo.collectAsState()
+    val installationConfirmed by viewModel.installationConfirmed.collectAsState()
+    val commandFeedback by viewModel.setupCommandFeedback.collectAsState()
+    val inspectionComplete = commissionStatus.stage >= 2
 
     // Tab state: default matches commissionStatus stage if available
     var selectedTab by remember { mutableStateOf(SetupWizardTab.PEMASANGAN) }
@@ -72,6 +76,8 @@ fun ThreeScreenSetupWizard(viewModel: CdiViewModel) {
         ThreeScreenHeader(
             selectedTab = selectedTab,
             commissionStage = commissionStatus.stage,
+            installationConfirmed = installationConfirmed,
+            inspectionComplete = inspectionComplete,
             isReady = commissionStatus.ready,
             isDemo = isSimulationMode,
             firmwareLabel = "FW ${firmwareVersion.release} v${firmwareVersion.semver}",
@@ -79,13 +85,41 @@ fun ThreeScreenSetupWizard(viewModel: CdiViewModel) {
             onSelectTab = { selectedTab = it }
         )
 
-        // Slot selalu 66 dp agar perubahan status realtime tidak mendorong
-        // layar Pemasangan/Pemeriksaan/Ready naik-turun.
+        // Slot tetap agar status realtime/ACK tidak mendorong layar naik-turun.
         val commandGuardBlocked = !setupCanWrite
         val commandGuardNeedsBinding =
             sessionPhase == SessionPhase.NEEDS_BINDING || sessionPhase == SessionPhase.READY_READ_ONLY
-        val commandGuardColor = if (commandGuardBlocked) RaceRedline else RacingLime
+        val previewWarning = when (selectedTab) {
+            SetupWizardTab.PEMASANGAN -> null
+            SetupWizardTab.PEMERIKSAAN ->
+                if (!installationConfirmed) "PRATINJAU • Pemasangan belum diterima MCU. Anda boleh melihat langkah ini, tetapi selesaikan Layar 1 sebelum menyimpan kalibrasi." else null
+            SetupWizardTab.FIRST_START_READY -> when {
+                !installationConfirmed -> "PRATINJAU • Pemasangan belum diterima MCU."
+                !inspectionComplete -> "PRATINJAU • Pickup dan TDC belum selesai. First Start belum dapat dikirim."
+                else -> null
+            }
+        }
+        val feedbackVisible = commandFeedback.outcome != SetupCommandOutcome.IDLE
+        val commandGuardColor = when {
+            previewWarning != null -> SensorAmber
+            feedbackVisible && commandFeedback.outcome == SetupCommandOutcome.SUCCESS -> RacingLime
+            feedbackVisible && commandFeedback.outcome == SetupCommandOutcome.PENDING -> ElectricCyan
+            feedbackVisible -> RaceRedline
+            commandGuardBlocked -> RaceRedline
+            else -> RacingLime
+        }
+        val commandGuardTitle = when {
+            previewWarning != null -> "ALUR SETUP • LANGKAH SEBELUMNYA BELUM SELESAI"
+            feedbackVisible && commandFeedback.outcome == SetupCommandOutcome.SUCCESS -> "PERINTAH DITERIMA • ${commandFeedback.action}"
+            feedbackVisible && commandFeedback.outcome == SetupCommandOutcome.PENDING -> "MENUNGGU MCU • ${commandFeedback.action}"
+            feedbackVisible && commandFeedback.outcome == SetupCommandOutcome.REJECTED -> "PERINTAH DITOLAK • ${commandFeedback.action}"
+            feedbackVisible && commandFeedback.outcome == SetupCommandOutcome.TIMEOUT -> "MCU TIDAK MENJAWAB • ${commandFeedback.action}"
+            commandGuardBlocked -> "COMMAND GUARD • PERINTAH DIBLOKIR"
+            else -> "COMMAND GUARD • SIAP MENULIS"
+        }
         val commandGuardDetail = when {
+            previewWarning != null -> previewWarning
+            feedbackVisible -> commandFeedback.detail
             commandGuardBlocked && !writeBlockReason.isNullOrBlank() -> writeBlockReason.orEmpty()
             commandGuardBlocked -> "Menunggu sinkronisasi RPM, HV, binding, dan status keselamatan"
             else -> "Perintah setup diizinkan • binding, RPM, HV, dan status firmware aman"
@@ -111,7 +145,12 @@ fun ThreeScreenSetupWizard(viewModel: CdiViewModel) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = if (commandGuardBlocked) Icons.Default.Warning else Icons.Default.CheckCircle,
+                        imageVector = if (
+                            previewWarning != null ||
+                            commandGuardBlocked ||
+                            commandFeedback.outcome == SetupCommandOutcome.REJECTED ||
+                            commandFeedback.outcome == SetupCommandOutcome.TIMEOUT
+                        ) Icons.Default.Warning else Icons.Default.CheckCircle,
                         contentDescription = null,
                         tint = commandGuardColor,
                         modifier = Modifier.size(18.dp)
@@ -119,11 +158,7 @@ fun ThreeScreenSetupWizard(viewModel: CdiViewModel) {
                     Spacer(modifier = Modifier.width(8.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = if (commandGuardBlocked) {
-                                "COMMAND GUARD • PERINTAH DIBLOKIR"
-                            } else {
-                                "COMMAND GUARD • SIAP MENULIS"
-                            },
+                            text = commandGuardTitle,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Black,
                             color = commandGuardColor,
@@ -176,6 +211,8 @@ fun ThreeScreenSetupWizard(viewModel: CdiViewModel) {
 private fun ThreeScreenHeader(
     selectedTab: SetupWizardTab,
     commissionStage: Int,
+    installationConfirmed: Boolean,
+    inspectionComplete: Boolean,
     isReady: Boolean,
     isDemo: Boolean,
     firmwareLabel: String,
@@ -211,7 +248,12 @@ private fun ThreeScreenHeader(
                         color = if (isReady) RacingLime.copy(alpha = 0.2f) else SensorAmber.copy(alpha = 0.2f)
                     ) {
                         Text(
-                            text = if (isReady) "READY (FLASH TERKUNCI)" else "TAHAP $commissionStage",
+                            text = when {
+                                isReady -> "READY • SELESAI"
+                                inspectionComplete -> "PEMERIKSAAN SELESAI"
+                                installationConfirmed -> "PEMASANGAN SELESAI"
+                                else -> "BELUM DISETUP"
+                            },
                             fontSize = 8.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
@@ -259,27 +301,45 @@ private fun ThreeScreenHeader(
             ) {
                 SetupWizardTab.entries.forEach { tab ->
                     val isSelected = tab == selectedTab
+                    val completed = when (tab) {
+                        SetupWizardTab.PEMASANGAN -> installationConfirmed
+                        SetupWizardTab.PEMERIKSAAN -> inspectionComplete
+                        SetupWizardTab.FIRST_START_READY -> isReady
+                    }
+                    val aheadOfProgress = when (tab) {
+                        SetupWizardTab.PEMASANGAN -> false
+                        SetupWizardTab.PEMERIKSAAN -> !installationConfirmed
+                        SetupWizardTab.FIRST_START_READY -> !inspectionComplete
+                    }
+                    val tabColor = when {
+                        completed -> RacingLime
+                        aheadOfProgress -> SensorAmber
+                        isSelected -> MotecOrange
+                        else -> BorderSubtle
+                    }
                     Surface(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(3.dp))
                             .clickable { onSelectTab(tab) },
-                        color = if (isSelected) MotecOrange.copy(alpha = 0.22f) else CardBackground,
+                        color = if (isSelected) tabColor.copy(alpha = 0.22f) else CardBackground,
                         shape = RoundedCornerShape(3.dp),
-                        border = BorderStroke(
-                            1.dp,
-                            if (isSelected) MotecOrange else BorderSubtle
-                        )
+                        border = BorderStroke(1.dp, tabColor)
                     ) {
                         Column(
                             modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = tab.title,
+                                text = if (completed) "✓ ${tab.title}" else tab.title,
                                 fontSize = 9.sp,
-                                fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
-                                color = if (isSelected) Color.White else TextPrimary,
+                                fontWeight = if (isSelected || completed) FontWeight.Black else FontWeight.Bold,
+                                color = when {
+                                    completed -> RacingLime
+                                    aheadOfProgress -> SensorAmber
+                                    isSelected -> Color.White
+                                    else -> TextPrimary
+                                },
                                 fontFamily = FontFamily.Monospace,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -287,7 +347,12 @@ private fun ThreeScreenHeader(
                             Text(
                                 text = tab.subtitle,
                                 fontSize = 7.5.sp,
-                                color = if (isSelected) MotecOrange else TextMuted,
+                                color = when {
+                                    completed -> RacingLime
+                                    aheadOfProgress -> SensorAmber
+                                    isSelected -> MotecOrange
+                                    else -> TextMuted
+                                },
                                 fontFamily = FontFamily.Monospace,
                                 maxLines = 1
                             )
@@ -355,6 +420,8 @@ private fun LayarPemasangan(
     val commissionStatus by viewModel.commissionStatus.collectAsState()
     val setupCanWrite by viewModel.setupCanWrite.collectAsState()
     val firmwareMode by viewModel.firmwareMode.collectAsState()
+    val installationConfirmed by viewModel.installationConfirmed.collectAsState()
+    val commandFeedback by viewModel.setupCommandFeedback.collectAsState()
 
     var oemRemovedChecked by remember { mutableStateOf(false) }
 
@@ -588,7 +655,7 @@ private fun LayarPemasangan(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(6.dp),
             colors = CardDefaults.cardColors(containerColor = SurfacePanel),
-            border = BorderStroke(1.dp, if (commissionStatus.stage >= 1 && moduleStatus.coreProfile == 0) RacingLime else BorderSubtle)
+            border = BorderStroke(1.dp, if (installationConfirmed && moduleStatus.coreProfile == 0) RacingLime else BorderSubtle)
         ) {
             Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(
@@ -623,11 +690,16 @@ private fun LayarPemasangan(
                     lineHeight = 12.sp
                 )
                 MotecButton(
-                    text = "KONFIRMASI PASANG CORE 1-COIL",
+                    text = when {
+                        commandFeedback.outcome == SetupCommandOutcome.PENDING -> "MENUNGGU JAWABAN MCU..."
+                        installationConfirmed && moduleStatus.coreProfile == 0 -> "✓ CORE 1-COIL DITERIMA MCU"
+                        else -> "KONFIRMASI PASANG CORE 1-COIL"
+                    },
                     onClick = {
                         viewModel.installCoreOemRemoved()
                     },
-                    enabled = oemRemovedChecked && setupCanWrite,
+                    enabled = oemRemovedChecked && setupCanWrite &&
+                        commandFeedback.outcome != SetupCommandOutcome.PENDING,
                     color = ElectricCyan,
                     height = 36.dp,
                     modifier = Modifier.fillMaxWidth()
@@ -641,7 +713,7 @@ private fun LayarPemasangan(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(6.dp),
             colors = CardDefaults.cardColors(containerColor = SurfacePanel),
-            border = BorderStroke(1.dp, if (commissionStatus.stage >= 1 && moduleStatus.coreProfile == 1) RacingLime else BorderSubtle)
+            border = BorderStroke(1.dp, if (installationConfirmed && moduleStatus.coreProfile in 1..2) RacingLime else BorderSubtle)
         ) {
             Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(
@@ -687,11 +759,16 @@ private fun LayarPemasangan(
                 }
 
                 MotecButton(
-                    text = "KONFIRMASI PASANG DUAL COIL",
+                    text = when {
+                        commandFeedback.outcome == SetupCommandOutcome.PENDING -> "MENUNGGU JAWABAN MCU..."
+                        installationConfirmed && moduleStatus.coreProfile in 1..2 -> "✓ DUAL COIL DITERIMA MCU"
+                        else -> "KONFIRMASI PASANG DUAL COIL"
+                    },
                     onClick = {
                         viewModel.installDualOemRemoved()
                     },
-                    enabled = oemRemovedChecked && isSideInstalled && setupCanWrite,
+                    enabled = oemRemovedChecked && isSideInstalled && setupCanWrite &&
+                        commandFeedback.outcome != SetupCommandOutcome.PENDING,
                     color = MotecOrange,
                     height = 36.dp,
                     modifier = Modifier.fillMaxWidth()
@@ -708,14 +785,14 @@ private fun LayarPemasangan(
         ) {
             Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    text = "3. SETUP LANJUTAN (OEM LEARN / MANUAL / DIY)",
+                    text = "OPSIONAL • METODE COMMISSIONING",
                     fontSize = 10.5.sp,
                     fontWeight = FontWeight.Black,
                     color = SparkAmber,
                     fontFamily = FontFamily.Monospace
                 )
                 Text(
-                    text = "Pilih mode kerja firmware jika Anda ingin merekam CDI bawaan motor atau konfigurasi tuning mandiri.",
+                    text = "Quick Install Core/Dual di atas sudah cukup untuk memakai IgniTra. Pilihan ini hanya untuk cara kalibrasi: OEM Learn membutuhkan modul, Manual memakai pickup/TDC langsung, dan Independen aktif otomatis setelah pemasangan langsung.",
                     fontSize = 9.sp,
                     color = TextSecondary
                 )
@@ -745,6 +822,13 @@ private fun LayarPemasangan(
                                     fontWeight = FontWeight.Bold,
                                     color = if (isModeSelected) Color.White else TextPrimary
                                 )
+                                Text(
+                                    text = mode.desc,
+                                    fontSize = 7.sp,
+                                    color = TextMuted,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                         }
                     }
@@ -754,9 +838,13 @@ private fun LayarPemasangan(
 
         // Navigation button to Layar 2
         MotecButton(
-            text = "LANJUT KE LAYAR 2: PEMERIKSAAN SENSOR",
+            text = if (installationConfirmed) {
+                "✓ LANJUT KE LAYAR 2: PEMERIKSAAN SENSOR"
+            } else {
+                "LIHAT LAYAR 2 • PEMASANGAN BELUM SELESAI"
+            },
             onClick = onNextScreen,
-            color = RacingLime,
+            color = if (installationConfirmed) RacingLime else SensorAmber,
             icon = Icons.AutoMirrored.Filled.ArrowForward,
             height = 38.dp,
             modifier = Modifier.fillMaxWidth()
@@ -781,6 +869,8 @@ private fun LayarPemeriksaan(
     val tpsClosedAdc by viewModel.tpsClosedAdc.collectAsState()
     val tpsOpenAdc by viewModel.tpsOpenAdc.collectAsState()
     val setupCanWrite by viewModel.setupCanWrite.collectAsState()
+    val installationConfirmed by viewModel.installationConfirmed.collectAsState()
+    val inspectionComplete = commissionStatus.stage >= 2
 
     var manualOffsetInput by remember { mutableStateOf(pulserOffsetDeg) }
     val tpsSpan = tpsOpenAdc - tpsClosedAdc
@@ -793,6 +883,22 @@ private fun LayarPemeriksaan(
             .padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        if (!installationConfirmed) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = SensorAmber.copy(alpha = 0.14f),
+                border = BorderStroke(1.dp, SensorAmber),
+                shape = RoundedCornerShape(6.dp)
+            ) {
+                Text(
+                    "PRATINJAU: Pemasangan Core/Dual belum diterima MCU. Anda boleh membaca langkah ini, tetapi kembali ke Layar 1 sebelum menyimpan pickup atau TDC.",
+                    modifier = Modifier.padding(9.dp),
+                    color = SensorAmber,
+                    fontSize = 9.sp,
+                    lineHeight = 12.sp
+                )
+            }
+        }
         // -------------------------------------------------------------
         // KARTU 1: PICKUP PULSER
         // -------------------------------------------------------------
@@ -866,7 +972,7 @@ private fun LayarPemeriksaan(
                             val newEdge = if (pickupEdge.equals("FALLING", ignoreCase = true)) "RISING" else "FALLING"
                             viewModel.setPulserEdge(newEdge)
                         },
-                        enabled = setupCanWrite,
+                        enabled = setupCanWrite && installationConfirmed,
                         color = SensorAmber,
                         height = 34.dp,
                         modifier = Modifier.weight(1f)
@@ -874,7 +980,7 @@ private fun LayarPemeriksaan(
                     MotecButton(
                         text = "SIMPAN PICKUP",
                         onClick = viewModel::confirmPulserPickup,
-                        enabled = setupCanWrite,
+                        enabled = setupCanWrite && installationConfirmed,
                         color = RacingLime,
                         height = 34.dp,
                         modifier = Modifier.weight(1f)
@@ -973,7 +1079,7 @@ private fun LayarPemeriksaan(
                     MotecButton(
                         text = "AKTIFKAN STROBO (AUX)",
                         onClick = { viewModel.sendRawCommand("SETUP,STROBE,ON") },
-                        enabled = setupCanWrite,
+                        enabled = setupCanWrite && installationConfirmed,
                         color = SparkAmber,
                         height = 34.dp,
                         modifier = Modifier.weight(1f)
@@ -981,7 +1087,7 @@ private fun LayarPemeriksaan(
                     MotecButton(
                         text = "SIMPAN STROBO",
                         onClick = viewModel::saveTdcStrobe,
-                        enabled = setupCanWrite,
+                        enabled = setupCanWrite && installationConfirmed,
                         color = ElectricCyan,
                         height = 34.dp,
                         modifier = Modifier.weight(1f)
@@ -991,7 +1097,7 @@ private fun LayarPemeriksaan(
                 MotecButton(
                     text = "SIMPAN TDC MANUAL (${manualOffsetInput}° BTDC)",
                     onClick = { viewModel.saveManualTdc(manualOffsetInput) },
-                    enabled = setupCanWrite,
+                    enabled = setupCanWrite && installationConfirmed,
                     color = RacingLime,
                     height = 34.dp,
                     modifier = Modifier.fillMaxWidth()
@@ -1066,7 +1172,7 @@ private fun LayarPemeriksaan(
                     MotecButton(
                         text = "SET TUTUP (0%)",
                         onClick = viewModel::calibrateTpsClosed,
-                        enabled = setupCanWrite,
+                        enabled = setupCanWrite && installationConfirmed,
                         color = SparkAmber,
                         height = 34.dp,
                         modifier = Modifier.weight(1f)
@@ -1074,7 +1180,7 @@ private fun LayarPemeriksaan(
                     MotecButton(
                         text = "SET BUKA (100%)",
                         onClick = viewModel::calibrateTpsOpen,
-                        enabled = setupCanWrite,
+                        enabled = setupCanWrite && installationConfirmed,
                         color = RacingLime,
                         height = 34.dp,
                         modifier = Modifier.weight(1f)
@@ -1085,9 +1191,13 @@ private fun LayarPemeriksaan(
 
         // Navigation button to Layar 3
         MotecButton(
-            text = "LANJUT KE LAYAR 3: FIRST START & READY",
+            text = if (inspectionComplete) {
+                "✓ LANJUT KE LAYAR 3: FIRST START & READY"
+            } else {
+                "LIHAT LAYAR 3 • PICKUP/TDC BELUM SELESAI"
+            },
             onClick = onNextScreen,
-            color = RacingLime,
+            color = if (inspectionComplete) RacingLime else SensorAmber,
             icon = Icons.AutoMirrored.Filled.ArrowForward,
             height = 38.dp,
             modifier = Modifier.fillMaxWidth()
@@ -1106,14 +1216,17 @@ private fun LayarFirstStartReady(
     val commissionStatus by viewModel.commissionStatus.collectAsState()
     val moduleStatus by viewModel.moduleStatus.collectAsState()
     val setupCanWrite by viewModel.setupCanWrite.collectAsState()
+    val installationConfirmed by viewModel.installationConfirmed.collectAsState()
     val isReady = commissionStatus.ready
+    val calibrationComplete = commissionStatus.stage >= 2
 
     val isEngineStopped = telemetry.rpm == 0
     val isSidePresent = moduleStatus.isObserved(HardwareModule.SIDE) ||
         moduleStatus.isInstalled(HardwareModule.SIDE)
     val sideHvForSafety = if (isSidePresent) telemetry.hvSide else 0
     val isHvDischarged = telemetry.hvCenter < 30 && sideHvForSafety < 30
-    val canTriggerFirstStart = isEngineStopped && isHvDischarged && setupCanWrite
+    val canTriggerFirstStart = installationConfirmed && calibrationComplete &&
+        isEngineStopped && isHvDischarged && setupCanWrite
 
     Column(
         modifier = Modifier
@@ -1122,6 +1235,25 @@ private fun LayarFirstStartReady(
             .padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        if (!installationConfirmed || !calibrationComplete) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = SensorAmber.copy(alpha = 0.14f),
+                border = BorderStroke(1.dp, SensorAmber),
+                shape = RoundedCornerShape(6.dp)
+            ) {
+                Text(
+                    if (!installationConfirmed) {
+                        "PRATINJAU: Selesaikan konfirmasi pemasangan pada Layar 1 sebelum First Start."
+                    } else {
+                        "PRATINJAU: Pickup dan TDC pada Layar 2 belum selesai. Tombol First Start tetap dikunci."
+                    },
+                    modifier = Modifier.padding(9.dp),
+                    color = SensorAmber,
+                    fontSize = 9.sp
+                )
+            }
+        }
         // Syarat Keselamatan Awal
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -1210,7 +1342,9 @@ private fun LayarFirstStartReady(
         }
 
         // Langkah 3: Matikan Mesin & Kunci Komisi Final
-        val canFinalizeReady = isEngineStopped && isHvDischarged && setupCanWrite
+        val firstStartProven = telemetry.firstStartSeconds >= 3 || commissionStatus.stage >= 4
+        val canFinalizeReady = installationConfirmed && calibrationComplete && firstStartProven &&
+            isEngineStopped && isHvDischarged && setupCanWrite
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(6.dp),
@@ -1226,7 +1360,11 @@ private fun LayarFirstStartReady(
                     fontFamily = FontFamily.Monospace
                 )
                 Text(
-                    text = "Matikan mesin terlebih dahulu hingga RPM 0 dan HV <30V. Kemudian pilih tombol komisi sesuai konfigurasi koil:",
+                    text = if (firstStartProven) {
+                        "Uji hidup minimal 3 detik tercatat. Matikan mesin hingga RPM 0 dan HV <30V, lalu simpan Ready."
+                    } else {
+                        "Belum dapat disimpan: aktifkan First Start, hidupkan mesin stabil minimal 3 detik, lalu matikan mesin."
+                    },
                     fontSize = 9.sp,
                     color = TextSecondary
                 )
