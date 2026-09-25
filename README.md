@@ -9,7 +9,7 @@ Dokumen ini adalah satu-satunya dokumentasi repository aplikasi. Spesifikasi fir
 | Item | Nilai |
 |---|---|
 | Target firmware | IgniTra R9 ESP32 |
-| Firmware acuan | 9.5.0, build 20260925 |
+| Firmware acuan | 9.6.0, build 20260925 |
 | Protocol | 5 |
 | Telemetry | v3, 20 byte |
 | Android minimum | sesuai `app/build.gradle.kts` |
@@ -31,6 +31,13 @@ Firmware lama tetap dapat masuk jalur read-only/legacy jika query tambahan tidak
 - BLE OTA dengan status transfer dan verifikasi firmware.
 - Suara mesin virtual berbasis RPM melalui receiver A2DP eksternal.
 - Buku Petunjuk di dalam aplikasi untuk pemasangan, setup dan troubleshooting.
+- User agreement tuning lanjutan bersifat peringatan dan pencatatan persetujuan; tidak mengunci map berdasarkan tipe motor.
+
+## Prinsip lintas kendaraan dan kebebasan tuning
+
+Nama produk tetap **IgniTra CDI R9**. NS200 dipertahankan sebagai preset awal dan kendaraan uji, bukan batas arsitektur. Kendaraan lain memakai profil kendaraan tersendiri; transmisi MANUAL/MATIC dan siklus mesin 2T/4T adalah atribut terpisah. Pickup, PPR 1–12, gate 40–150 µs, TDC, limiter, map, live timing, dan profil idle wajib mengikuti mesin nyata. Dashboard selalu menampilkan PPR dan gate yang benar-benar aktif.
+
+Pengguna tetap dapat memakai seluruh rentang yang diiklankan CAPS. Aplikasi hanya memberi peringatan knocking/panas/kickback sebelum tuning; penolakan otomatis dibatasi pada keadaan yang dapat merusak elektronik atau membuat transaksi tidak konsisten, seperti flash saat mesin hidup/HV aktif, FAULT_N, koneksi belum sinkron, dan starter tanpa interlock yang dikonfigurasi.
 
 ## Alur aplikasi
 
@@ -128,6 +135,10 @@ Modul adalah lima bit independen dan dapat dipasang bersamaan.
 
 Perubahan modul hanya diizinkan saat RPM 0 dan HVC/HVS di bawah 30 V. Setelah perubahan, aplikasi membaca ulang MODULES, SETUP, TEMP dan STATUS.
 
+## Uji ESP32 tanpa Core
+
+Uji koneksi BLE dengan ESP32 saja diperbolehkan untuk memeriksa protokol dan tampilan. Nilai aki/HV/sensor dapat tidak valid karena pembagi tegangan dan pull-down berada pada Core; kondisi itu **bukan** alasan aplikasi memutus GATT. Konfirmasi `SETUP,INSTALL` diproses firmware di worker terpisah dari callback NimBLE agar commit NVS tidak memutus BLE. Untuk komisioning listrik, pengukuran HV, coil, fan, keyless, dan starter, Core/modul fisik tetap wajib terpasang.
+
 ## Kontak fisik, keyless dan starter
 
 ### Profil kendaraan
@@ -135,8 +146,8 @@ Perubahan modul hanya diizinkan saat RPM 0 dan HVC/HVS di bawah 30 V. Setelah pe
 | Profil | J1.9 | Aturan starter |
 |---|---|---|
 | NS200 | MODE_REQ/interlock OEM | Interlock OEM tetap dipakai |
-| UNIVERSAL_MANUAL | NEUTRAL_IN aktif-rendah | Netral wajib sebelum starter |
-| UNIVERSAL_MATIC | MODE_REQ/tidak dipakai | Netral tidak diwajibkan; interlock rem/standar OEM tetap dianjurkan |
+| MANUAL | NEUTRAL_IN aktif-rendah | Netral wajib sebelum starter |
+| MATIC | MODE_REQ/tidak dipakai | Netral tidak diwajibkan; interlock rem/standar OEM tetap dipertahankan |
 
 ### Tombol mesin tunggal
 

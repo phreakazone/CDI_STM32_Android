@@ -344,7 +344,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     private val _fanOffCdeg = MutableStateFlow(8500)
     val fanOffCdeg: StateFlow<Int> = _fanOffCdeg.asStateFlow()
 
-    private val _engineProfile = MutableStateFlow(EngineProfile.universal())
+    private val _engineProfile = MutableStateFlow(EngineProfile.ns200())
     val engineProfile: StateFlow<EngineProfile> = _engineProfile.asStateFlow()
 
     private val _dynoActive = MutableStateFlow(false)
@@ -360,6 +360,18 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     val autoConnectOnStart: StateFlow<Boolean> = bleClient.autoConnectOnStart
 
     private val cdiPrefs = context.getSharedPreferences("cdi_r8_prefs", Context.MODE_PRIVATE)
+
+    private val _advancedTuningAcknowledged = MutableStateFlow(
+        cdiPrefs.getBoolean("advanced_tuning_ack_v1", false)
+    )
+    val advancedTuningAcknowledged: StateFlow<Boolean> =
+        _advancedTuningAcknowledged.asStateFlow()
+
+    fun acknowledgeAdvancedTuningRisk() {
+        _advancedTuningAcknowledged.value = true
+        cdiPrefs.edit().putBoolean("advanced_tuning_ack_v1", true).apply()
+        appendLog("USER AGREEMENT: tuning lanjutan dipahami; kontrol tetap tidak dikunci.")
+    }
 
     private val _selectedPlatform = MutableStateFlow(
         McuPlatform.fromId(cdiPrefs.getString("mcu_platform", McuPlatform.ESP32_WROOM.id))
@@ -1169,7 +1181,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     // Console logs
     private val _terminalLogs = MutableStateFlow<List<String>>(
         listOf(
-            "NS200-CDI System Initialized.",
+            "IgniTra CDI R9 System Initialized.",
             "MoTeC / AIM Telemetry Protocol Engine Ready.",
             "Firmware Engine: 32x16 3D Map, Dyno Live Trim, Dual-Core Safety.",
             "Hardware Target: ${_selectedPlatform.value.displayName}."
@@ -1353,7 +1365,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (_isSimulationMode.value) {
             if (bleClient.gattReady || bleClient.isBusy.value) bleClient.disconnect()
             _firmwareCapabilities.value = FirmwareCapabilities.demoR9()
-            _engineProfile.value = EngineProfile.universal()
+            _engineProfile.value = EngineProfile.ns200()
             _connectionStatus.value = "SIMULASI AKTIF • Telemetry 20Hz (MoTeC Mode)"
             _isConnected.value = true
             // Default simulasi: Mesin hidup stasioner idle ~1.420 RPM layaknya motor hidup normal
@@ -2129,7 +2141,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             bleClient.send("SETUP,PICKUP,CONFIRM")
             appendLog("BLE Send: SETUP,PICKUP,CONFIRM")
         } else {
-            appendLog("Pulser Pick-up Dikonfirmasi (PPR=1, Gate=80µs). Lanjut ke TDC.")
+            appendLog("Pickup dikonfirmasi (PPR=${_pulserPpr.value}, Gate=${_gateDurationUs.value}µs). Lanjut ke TDC.")
             _commissionStatus.value = _commissionStatus.value.copy(stage = 2, nextAction = 3, advisoryMask = 0)
             advanceSetupStage(SetupStage.TDC.code)
         }

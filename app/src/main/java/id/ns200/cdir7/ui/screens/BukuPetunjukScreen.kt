@@ -509,10 +509,42 @@ private fun HarnessJ1ChapterSection() {
             Pair("J1.6", "COIL_SIDE • Output pemantik koil kedua (HANYA jika Modul SIDE aktif)."),
             Pair("J1.7", "FAN_RELAY • Output kendali relay kipas (Active-Low / pembumian relay)."),
             Pair("J1.8", "START_REQ • Dry-contact/open-collector ke GND_LOGIC; tidak boleh diberi +12V."),
-            Pair("J1.9", "MODE_REQ / NEUTRAL_IN • Dry-contact ke GND_LOGIC. UNIVERSAL_MANUAL wajib netral; MATIC tidak."),
+            Pair("J1.9", "MODE_REQ / NEUTRAL_IN • Dry-contact ke GND_LOGIC. Profil transmisi MANUAL wajib netral; MATIC tidak."),
             Pair("J1.10", "PULSER_IN • Masukan sinyal pulser / pick-up coil dari kruk as."),
             Pair("J1.11", "POWER_GND • Ground utama daya tinggi ke rangka dan terminal negatif aki."),
             Pair("J1.12", "COIL_CENTER • Output pemantik koil utama (Paket Core 1-Coil).")
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+        StageBox(
+            title = "ORIENTASI KONEKTOR — WAJIB CEK SEBELUM CRIMP",
+            color = SensorAmber,
+            content = "J1 mengikuti referensi Core: kolom kiri pin 1–6 dan kolom kanan pin 7–12. " +
+                "Sebelum crimp, cocokkan tanda pin-1 pada PCB, nomor cavity housing, dan datasheet konektor yang benar; " +
+                "tampilan sisi mating dan sisi masuk kabel saling tercermin. Jangan menebak dari posisi pengunci atau warna kabel."
+        )
+        StageBox(
+            title = "CORE 1 COIL / NS200 UJI",
+            color = ElectricCyan,
+            content = "Pasang aki/kontak ke J1.5 melalui sekring, pickup ke J1.10, ground daya ke J1.11, " +
+                "dan koil utama ke J1.12. J1.6 wajib kosong dan terisolasi. Pada harness NS200 standar, " +
+                "J1.1, J1.8, dan J1.9 tetap NC sampai fitur tambahannya benar-benar dipasang."
+        )
+        StageBox(
+            title = "KEYLESS + STARTER DENGAN MODUL AUX",
+            color = RacingLime,
+            content = "J1.1 menerima pulsa +12 V hanya melalui input KEYLESS_REQ yang terproteksi; jangan sambungkan ke GPIO. " +
+                "Relay K1 AUX memparalel jalur kontak menggunakan COM dari +12 V aki bersekring dan NO menuju jalur ignition/VIN_PROT downstream kendaraan. " +
+                "Keluaran K1 tidak boleh dikembalikan ke J1.5; J1.5 tetap khusus membaca kontak mekanis asli dan tidak boleh dijumper ke ground. " +
+                "J1.8 adalah permintaan starter dry-contact/open-collector ke GND_LOGIC; K2 AUX hanya memparalel tombol atau coil relay starter OEM, " +
+                "bukan arus dinamo starter. Pertahankan sekring, relay starter, rem/kopling, standar samping, dan interlock OEM."
+        )
+        StageBox(
+            title = "MANUAL DAN MATIC",
+            color = MotecOrange,
+            content = "MANUAL: J1.9 dipakai sebagai NEUTRAL_IN aktif-rendah dan starter aplikasi hanya diizinkan saat netral. " +
+                "MATIC: J1.9 tidak diwajibkan oleh IgniTra, tetapi rangkaian rem/standar samping OEM tetap harus seri pada jalur starter. " +
+                "Kontak mekanis tetap dapat ON/OFF tanpa aplikasi; aplikasi hanya mengikuti status OFF, MECHANICAL, atau KEYLESS."
         )
 
         pinout.forEach { (pin, desc) ->
@@ -797,9 +829,9 @@ private fun DiagnosisChapterSection() {
             Pair("Core Hidup, SIDE Belum Aktif", "Pastikan modul hardware SIDE terpasang dan ulangi uji First Start untuk mengaktifkan koil kedua."),
             Pair("TPS Nol / Angka Terbalik", "Tukar kabel positif dan ground pada soket sensor TPS, lalu ulangi kalibrasi gas tertutup dan terbuka."),
             Pair("Suhu Menampilkan 'Invalid'", "Periksa kabel sensor NTC J1.3. Jika kabel terlepas, sistem otomatis mengaktifkan kipas demi proteksi."),
-            Pair("BLE Berhenti di 'Menghubungkan...'", "Aktifkan Bluetooth, kembali ke aplikasi dan tunggu watchdog 8 detik. Jika belum pulih, ketuk Putus lalu Hubungkan; jangan hapus binding firmware."),
+            Pair("BLE Berhenti di 'Menghubungkan...'", "Aktifkan Bluetooth dan kembali ke aplikasi. Percobaan GATT yang masih aktif dipertahankan sampai 12 detik; sesi stale dipulihkan otomatis. Jika tetap macet, ketuk KONEK sekali untuk fresh reconnect—force-close aplikasi atau mematikan MCU tidak diperlukan."),
             Pair("Kontak Mekanis Tidak Terbaca", "Periksa J1.5 dan blok RIGN_IN/QIGN_SENSE ke U7 P3. K1 AUX wajib masuk ke VIN_PROT, bukan kembali ke J1.5."),
-            Pair("Starter Ditolak", "Pastikan AUX aktif, aki 9.5–16V, RPM <300, tidak ada fault, dan untuk UNIVERSAL_MANUAL J1.9/NEUTRAL_IN aktif.")
+            Pair("Starter Ditolak", "Pastikan AUX aktif, aki 9.5–16V, RPM <300, tidak ada fault, dan untuk profil MANUAL J1.9/NEUTRAL_IN aktif.")
         )
 
         issues.forEach { (prob, sol) ->
