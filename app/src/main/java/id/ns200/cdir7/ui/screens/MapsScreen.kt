@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.ns200.cdir7.CdiViewModel
 import id.ns200.cdir7.CustomAdvancePoint
+import id.ns200.cdir7.TimingMode
 import id.ns200.cdir7.ui.components.MotecButton
 import id.ns200.cdir7.ui.theme.*
 
@@ -71,6 +72,7 @@ fun MapsScreen(viewModel: CdiViewModel) {
     ) {
         EngineProfileCard(viewModel)
         DynoLiveTuneCard(viewModel)
+        IdleTimingModeCard(viewModel)
 
         // Section Header
         Row(
@@ -910,5 +912,64 @@ fun MapsScreen(viewModel: CdiViewModel) {
             shape = RoundedCornerShape(3.dp),
             tonalElevation = 6.dp
         )
+    }
+}
+
+@Composable
+private fun IdleTimingModeCard(viewModel: CdiViewModel) {
+    val status by viewModel.timingStatus.collectAsState()
+    var selected by remember(status.mode) { mutableStateOf(status.mode) }
+    var intensity by remember(status.intensity) { mutableFloatStateOf(status.intensity.toFloat()) }
+    var minRpm by remember(status.minRpm) { mutableFloatStateOf(status.minRpm.toFloat()) }
+    var maxRpm by remember(status.maxRpm) { mutableFloatStateOf(status.maxRpm.toFloat()) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth().border(1.dp, BorderSubtle, RoundedCornerShape(14.dp)),
+        colors = CardDefaults.cardColors(containerColor = CardBackground),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("IDLE RUMBLE / TIMING PRESET", fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                color = MotecOrange, fontFamily = FontFamily.Monospace)
+            Text(selected.description, fontSize = 9.5.sp, color = TextSecondary,
+                fontFamily = FontFamily.Monospace)
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                TimingMode.entries.forEach { mode ->
+                    FilterChip(
+                        selected = selected == mode,
+                        onClick = { selected = mode },
+                        label = { Text(mode.label, fontSize = 9.sp, fontFamily = FontFamily.Monospace) }
+                    )
+                }
+            }
+            Text("Intensitas ${intensity.toInt()} / 10", fontSize = 9.5.sp, color = ElectricCyan)
+            Slider(value = intensity, onValueChange = { intensity = it }, valueRange = 0f..10f, steps = 9)
+            Text("Rentang ${minRpm.toInt()}–${maxRpm.toInt()} RPM", fontSize = 9.5.sp, color = ElectricCyan)
+            Slider(
+                value = minRpm,
+                onValueChange = { minRpm = it.coerceAtMost(maxRpm - 100f) },
+                valueRange = 500f..4000f
+            )
+            Slider(
+                value = maxRpm,
+                onValueChange = { maxRpm = it.coerceAtLeast(minRpm + 100f) },
+                valueRange = 600f..5000f
+            )
+            MotecButton(
+                text = "SIMPAN PRESET",
+                onClick = {
+                    viewModel.setTimingMode(selected, intensity.toInt(), minRpm.toInt(), maxRpm.toInt())
+                },
+                color = RacingLime,
+                icon = Icons.Default.Save,
+                height = 34.dp,
+                modifier = Modifier.fillMaxWidth().testTag("timing_mode_save")
+            )
+            Text("Pola aktif hanya pada idle/rpm rendah dan TPS rendah; pengapian utama tetap memakai map yang dipilih.",
+                fontSize = 8.5.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
+        }
     }
 }
