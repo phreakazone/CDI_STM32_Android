@@ -12,7 +12,7 @@ enum class SetupStage(val code: Int, val label: String, val desc: String) {
 }
 
 enum class FirmwareRunMode(val code: String, val label: String, val desc: String) {
-    OEM_LEARN("OEM_LEARN", "OEM LEARN", "Membaca timing CDI OEM secara pasif via optocoupler (PB3/PB4 STM32 atau GPIO16/17 ESP32)"),
+    OEM_LEARN("OEM_LEARN", "OEM LEARN", "Membaca timing CDI OEM secara pasif melalui optocoupler"),
     MANUAL("MANUAL", "MANUAL", "Setup darurat strobo/TDC saat CDI OEM mati"),
     DIY("DIY", "DIY INDEPENDENT", "Operasi mandiri penuh setelah CDI OEM dicabut fisik");
 
@@ -121,7 +121,57 @@ data class FirmwareVersionInfo(
     val protocolVersion: Int = 0,
     val telemetryVersion: Int = 0
 ) {
-    val displayLabel: String get() = "IgniTra $release v$semver ($platform) • Build $buildId"
+    val displayLabel: String get() = "Firmware $release v$semver • Build $buildId"
+}
+
+enum class ContactSource(val code: Int, val label: String) {
+    OFF(0, "Kontak OFF"),
+    MECHANICAL(1, "Kontak Mekanis"),
+    KEYLESS(2, "Keyless");
+
+    companion object {
+        fun fromCode(code: Int) = entries.firstOrNull { it.code == code } ?: OFF
+    }
+}
+
+enum class TimingMode(val code: Int, val label: String, val description: String) {
+    STANDARD(0, "STANDARD", "Idle normal tanpa pola tambahan"),
+    SOFT(1, "SOFT", "Idle lembut dengan variasi ringan"),
+    RESPONSIVE(2, "RESPONSIVE", "Respons gas lebih tegas"),
+    KUDA(3, "KUDA", "Pola idle rumble kuda"),
+    DRUMBAND(4, "DRUMBAND", "Pola ritmis drumband"),
+    FOMO(5, "FOMO", "Pola agresif terkontrol"),
+    CUSTOM(6, "CUSTOM", "Rentang dan intensitas pilihan pengguna");
+
+    companion object {
+        fun fromCode(code: Int) = entries.firstOrNull { it.code == code } ?: STANDARD
+    }
+}
+
+data class TimingStatus(
+    val schema: Int = 2,
+    val mode: TimingMode = TimingMode.STANDARD,
+    val intensity: Int = 0,
+    val minRpm: Int = 900,
+    val maxRpm: Int = 1800
+)
+
+data class AuxStatus(
+    val schema: Int = 3,
+    val keylessOn: Boolean = false,
+    val starterOn: Boolean = false,
+    val present: Boolean = false,
+    val enabled: Boolean = false,
+    val vehicleProfile: Int = 0,
+    val requestMask: Int = 0,
+    val requestIoOk: Boolean = false,
+    val mechanicalOn: Boolean = false,
+    val contactSource: ContactSource = ContactSource.OFF,
+    val engineRunning: Boolean = false,
+    val ignitionAllowed: Boolean = false
+) {
+    val contactOn: Boolean get() = contactSource != ContactSource.OFF ||
+        mechanicalOn || keylessOn || ignitionAllowed
 }
 
 data class FirmwareIdentityInfo(
@@ -472,6 +522,39 @@ object CdiProtocol {
             platform = f.getOrNull(5)?.trim() ?: "ESP32",
             protocolVersion = f.getOrNull(6)?.toIntOrNull() ?: 5,
             telemetryVersion = f.getOrNull(7)?.toIntOrNull() ?: 3
+        )
+    }
+
+    fun parseTiming(body: String): TimingStatus? {
+        val f = body.split(',')
+        if (f.size < 6 || f[0] != "TIMING") return null
+        return TimingStatus(
+            schema = f[1].toIntOrNull() ?: 1,
+            mode = TimingMode.fromCode(f[2].toIntOrNull() ?: 0),
+            intensity = (f[3].toIntOrNull() ?: 0).coerceIn(0, 10),
+            minRpm = (f[4].toIntOrNull() ?: 900).coerceIn(500, 4000),
+            maxRpm = (f[5].toIntOrNull() ?: 1800).coerceIn(600, 5000)
+        )
+    }
+
+    fun parseAux(body: String): AuxStatus? {
+        val f = body.split(',')
+        if (f.size < 9 || f[0] != "AUX") return null
+        val schema = f[1].toIntOrNull() ?: 2
+        return AuxStatus(
+            schema = schema,
+            keylessOn = f[2] == "1",
+            starterOn = f[3] == "1",
+            present = f[4] == "1",
+            enabled = f[5] == "1",
+            vehicleProfile = f[6].toIntOrNull() ?: 0,
+            requestMask = f[7].toIntOrNull() ?: 0,
+            requestIoOk = f[8] == "1",
+            mechanicalOn = schema >= 3 && f.getOrNull(9) == "1",
+            contactSource = if (schema >= 3) ContactSource.fromCode(f.getOrNull(10)?.toIntOrNull() ?: 0) else
+                if (f[2] == "1") ContactSource.KEYLESS else ContactSource.OFF,
+            engineRunning = schema >= 3 && f.getOrNull(11) == "1",
+            ignitionAllowed = schema >= 3 && f.getOrNull(12) == "1"
         )
     }
 
