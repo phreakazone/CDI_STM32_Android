@@ -1,6 +1,7 @@
 package id.ns200.cdir7.ui.screens
 
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -46,6 +47,7 @@ fun MapsScreen(viewModel: CdiViewModel) {
     val pendingCommands by viewModel.pendingCommands.collectAsState()
     val telemetry by viewModel.telemetry.collectAsState()
     val moduleStatus by viewModel.moduleStatus.collectAsState()
+    val advancedTuningAcknowledged by viewModel.advancedTuningAcknowledged.collectAsState()
     val customPoints by viewModel.customAdvancePoints.collectAsState()
     val scrollState = rememberScrollState()
 
@@ -72,6 +74,40 @@ fun MapsScreen(viewModel: CdiViewModel) {
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = if (advancedTuningAcknowledged)
+                    RacingLime.copy(alpha = 0.08f) else MotecOrange.copy(alpha = 0.10f)
+            ),
+            border = BorderStroke(1.dp, if (advancedTuningAcknowledged) RacingLime else MotecOrange),
+            shape = RoundedCornerShape(6.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    "TUNING UNIVERSAL • KONTROL PENGGUNA",
+                    color = if (advancedTuningAcknowledged) RacingLime else MotecOrange,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp
+                )
+                Text(
+                    "Map, limiter, live timing, dan profil idle tidak dikunci berdasarkan tipe motor. Nilai yang salah dapat menyebabkan knocking, panas berlebih, kickback, atau kerusakan mesin. Batas listrik Core dan FAULT_N tetap aktif.",
+                    color = TextSecondary,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 9.sp
+                )
+                if (!advancedTuningAcknowledged) {
+                    MotecButton(
+                        text = "SAYA PAHAM • TETAP BEBAS TUNING",
+                        onClick = viewModel::acknowledgeAdvancedTuningRisk,
+                        color = MotecOrange,
+                        height = 34.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
         EngineProfileCard(viewModel)
         DynoLiveTuneCard(viewModel)
         IdleTimingModeCard(viewModel)
@@ -877,7 +913,7 @@ fun MapsScreen(viewModel: CdiViewModel) {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = "Anda akan mengantrekan ${customPoints.size} titik pada seluruh baris TPS, menyimpan slot, lalu membaca kembali map MCU.",
+                        text = "Anda akan mengantrekan ${customPoints.size} titik pada seluruh baris TPS, menyimpan slot, lalu membaca kembali map MCU. Dengan melanjutkan, Anda menyetujui bahwa map dipilih dan menjadi tanggung jawab pengguna.",
                         fontSize = 12.sp,
                         fontFamily = FontFamily.Monospace,
                         color = TextPrimary
