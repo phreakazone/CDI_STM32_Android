@@ -104,6 +104,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
     private var reconnectTimer: Runnable? = null
     private var commandTimer: Runnable? = null
     private var resumeRecoveryTimer: Runnable? = null
+    private var resumeProbePending = false
 
     // OTA upload variables
     private val _otaState = MutableStateFlow<OtaState>(OtaState.Idle)
@@ -427,6 +428,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
 
         @Deprecated("Android 10-12 callback")
         override fun onCharacteristicChanged(owner: BluetoothGatt, c: BluetoothGattCharacteristic) {
+            if (owner !== gatt) return
             @Suppress("DEPRECATION")
             consume(c.uuid, c.value ?: ByteArray(0))
         }
@@ -436,6 +438,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             c: BluetoothGattCharacteristic,
             value: ByteArray
         ) {
+            if (owner !== gatt) return
             consume(c.uuid, value)
         }
     }
@@ -539,6 +542,13 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
     }
 
     private fun consume(uuid: UUID, bytes: ByteArray) = main.post {
+        if (bytes.isNotEmpty()) {
+            if (resumeProbePending) {
+                resumeProbePending = false
+                resumeRecoveryTimer?.let(main::removeCallbacks)
+                resumeRecoveryTimer = null
+            }
+        }
         if (uuid == telemetryUuid) {
             listener.onRawPacket(bytes)
             val value = CdiProtocol.telemetry(bytes, lastTelemetry)
@@ -821,8 +831,42 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             device.address
         }
         saveLastDevice(device.address, displayName)
-        listener.onState("Menghubungkan $displayName...", false)
-        open(device)
+        scheduleFreshOpen(device, "Menghubungkan $displayName...")
+    }
+
+    /**
+     * Menutup sesi GATT lama, memberi Android waktu melepas native client,
+     * kemudian membuka sesi baru. Ini juga dipakai tombol MENGHUBUNGKAN agar
+     * pengguna tidak perlu force-close aplikasi atau mematikan MCU.
+     */
+    @SuppressLint("MissingPermission")
+    private fun scheduleFreshOpen(device: BluetoothDevice, message: String, delayMs: Long = 600L) {
+        cancelReconnect()
+        cancelPhase()
+        closeCurrent()
+        retryCount = 0
+        _busy.value = true
+        listener.onState(message, false)
+        reconnectTimer = Runnable {
+            reconnectTimer = null
+            if (!manualStop && autoReconnect) open(device)
+            else _busy.value = false
+        }.also { main.postDelayed(it, delayMs) }
+    }
+
+    fun restartConnection(): Boolean {
+        if (!hasConnectPermission()) {
+            _busy.value = false
+            listener.onState("Izin BLUETOOTH_CONNECT belum diizinkan", false)
+            return false
+        }
+        manualStop = false
+        val device = lastDevice
+        if (device != null) {
+            scheduleFreshOpen(device, "Mereset sesi BLE lama lalu menghubungkan ulang...")
+            return true
+        }
+        return connectSavedDevice()
     }
 
     @SuppressLint("MissingPermission")
@@ -889,21 +933,44 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
     fun onAppResume() {
         resumeRecoveryTimer?.let(main::removeCallbacks)
         resumeRecoveryTimer = null
+        resumeProbePending = false
         if (!hasConnectPermission()) {
             _busy.value = false
             listener.onState("Izin BLUETOOTH_CONNECT belum diizinkan", false)
             return
         }
         if (gattReady && gatt != null) {
-            send("PING")
+            val owner = gatt
+            resumeProbePending = true
+            val queued = send("PING")
+            if (!queued) {
+                resumeProbePending = false
+                val device = lastDevice
+                if (device != null && autoReconnect && !manualStop) {
+                    scheduleFreshOpen(device, "Health-check BLE gagal • membuka sesi baru...")
+                }
+                return
+            }
+            /* Telemetri atau respons apa pun membatalkan timer ini. Objek GATT
+             * yang masih berstatus ready tetapi link-nya mati tidak boleh
+             * mempertahankan UI pada MENGHUBUNGKAN tanpa batas. */
+            resumeRecoveryTimer = Runnable {
+                resumeRecoveryTimer = null
+                if (resumeProbePending && gatt === owner && gattReady) {
+                    resumeProbePending = false
+                    val device = lastDevice
+                    if (device != null && autoReconnect && !manualStop) {
+                        scheduleFreshOpen(device, "BLE tidak merespons setelah resume • menghubungkan ulang...")
+                    } else {
+                        closeCurrent()
+                        _busy.value = false
+                        listener.onState("OFFLINE • BLE SIAP", false)
+                    }
+                }
+            }.also { main.postDelayed(it, 4_000L) }
             return
         }
         if (_busy.value && !gattReady) {
-            cancelReconnect()
-            cancelPhase()
-            closeCurrent()
-            _busy.value = false
-            retryCount = 0
             val dev = lastDevice
             if (dev != null && autoReconnect && !manualStop) {
                 val displayName = try {
@@ -911,31 +978,14 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
                 } catch (_: SecurityException) {
                     "IGNITRA CDI"
                 }
-                listener.onState("Memulihkan koneksi $displayName...", false)
-                open(dev)
+                scheduleFreshOpen(dev, "Memulihkan koneksi $displayName...")
             } else {
+                closeCurrent()
+                _busy.value = false
                 listener.onState("OFFLINE • BLE SIAP", false)
             }
         } else if (!gattReady && !_scanning.value && autoReconnect && lastDevice != null && !manualStop) {
-            retryCount = 0
-            open(lastDevice!!)
-        }
-        /* Android kadang tidak mengirim callback GATT akhir setelah proses
-         * berada di background. Watchdog ini memutus attempt basi, lalu membuka
-         * satu koneksi baru sehingga UI tidak menetap di “Menghubungkan...”. */
-        if (!gattReady && lastDevice != null && autoReconnect && !manualStop) {
-            resumeRecoveryTimer = Runnable {
-                resumeRecoveryTimer = null
-                if (!gattReady && !_scanning.value && lastDevice != null && !manualStop) {
-                    cancelReconnect()
-                    cancelPhase()
-                    closeCurrent()
-                    _busy.value = false
-                    retryCount = 0
-                    listener.onState("Memulihkan BLE setelah aplikasi aktif kembali...", false)
-                    open(lastDevice!!)
-                }
-            }.also { main.postDelayed(it, 8_000L) }
+            scheduleFreshOpen(lastDevice!!, "Memulihkan BLE setelah aplikasi aktif kembali...")
         }
     }
 
@@ -967,6 +1017,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
     private fun closeCurrent() {
         resumeRecoveryTimer?.let(main::removeCallbacks)
         resumeRecoveryTimer = null
+        resumeProbePending = false
         cancelPhase()
         commandTimer?.let(main::removeCallbacks)
         commandTimer = null
