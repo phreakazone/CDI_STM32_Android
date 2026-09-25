@@ -4,7 +4,7 @@ import java.util.zip.CRC32
 
 enum class SetupStage(val code: Int, val label: String, val desc: String) {
     BARU(0, "BARU", "Cek catu daya & BLE; kill switch OFF -> ON. HV <30V. Charger & koil OFF"),
-    PULSER(1, "PULSER", "Uji input pulser J1.10; PPR=1; gate 80µs; quality >=10"),
+    PULSER(1, "PULSER", "Uji pickup J1.10; atur edge, PPR 1–12, sudut trigger, dan gate 40–150µs"),
     TDC(2, "TDC", "Strobo PB9/GPIO27; sejajarkan tanda 'T'; SAVE TDC ke flash"),
     TPS_CAL(3, "TPS", "Simpan gas tertutup (0%) dan terbuka penuh (100%)"),
     FIRST_START(4, "FIRST START", "Mode aman 220V, CENTER saja, advance <=10°, limiter 3.000 RPM (Otomatis simpan 3s)"),
