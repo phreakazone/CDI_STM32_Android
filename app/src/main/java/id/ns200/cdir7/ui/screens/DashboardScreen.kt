@@ -69,6 +69,8 @@ fun DashboardScreen(viewModel: CdiViewModel) {
     val firmwareIdentity by viewModel.firmwareIdentity.collectAsState()
     val auxStatus by viewModel.auxStatus.collectAsState()
     val engineAction by viewModel.enginePrimaryAction.collectAsState()
+    val pulserPpr by viewModel.pulserPpr.collectAsState()
+    val gateDurationUs by viewModel.gateDurationUs.collectAsState()
     val scrollState = rememberScrollState()
 
     val isSideInstalled = moduleStatus.isInstalled(HardwareModule.DUAL_COIL)
@@ -1322,7 +1324,7 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                         TechDataRow("MODE FIRMWARE", "${fwMode.name} (${if (fwMode == FirmwareRunMode.DIY) "MANDIRI" else if (fwMode == FirmwareRunMode.OEM_LEARN) oemPinsLabel else "MANUAL"})", ElectricCyan)
                         TechDataRow("TARGET TEGANGAN HV", "$targetHv V (${if (isPro) "PRO 345V" else "NORMAL 285V"})", RacingLime)
                         TechDataRow("OUTPUT KOIL", if (isDualCoil) "CTR: ${if (telemetry.centerEnabled) "ON" else "OFF"} | SIDE: ${if (telemetry.sideEnabled) "ON" else "OFF"}" else "CORE J1.12: ${if (telemetry.centerEnabled) "ON" else "OFF"} (1 KOIL)", RacingLime)
-                        TechDataRow("PULSER QUALITY", "${telemetry.pickupQuality} / 100 (PPR=1 Gate=80µs)", if (telemetry.pickupQuality >= 10) RacingLime else RaceRedline)
+                        TechDataRow("PULSER QUALITY", "${telemetry.pickupQuality} / 100 (PPR=$pulserPpr Gate=${gateDurationUs}µs)", if (telemetry.pickupQuality >= 10) RacingLime else RaceRedline)
                         TechDataRow("TRIGGER TIMING", "%.1f° BTDC".format(telemetry.triggerCdeg / 100f), ElectricCyan)
                         TechDataRow("FAN RELAY (J1.7)", if (telemetry.fanEnabled) fanPinLabel else "OFF (LOW)", if (telemetry.fanEnabled) SensorAmber else TextMuted)
                         TechDataRow("FAULT BITS", if (telemetry.faults == 0) "0x0000 (NO FAULT)" else "0x%04X".format(telemetry.faults), if (telemetry.faults == 0) RacingLime else RaceRedline)
