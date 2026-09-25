@@ -79,15 +79,29 @@ fun ThreeScreenSetupWizard(viewModel: CdiViewModel) {
             onSelectTab = { selectedTab = it }
         )
 
-        // Command Guard safety warning banner
-        if (!setupCanWrite && writeBlockReason != null) {
+        // Slot selalu 66 dp agar perubahan status realtime tidak mendorong
+        // layar Pemasangan/Pemeriksaan/Ready naik-turun.
+        val commandGuardBlocked = !setupCanWrite
+        val commandGuardNeedsBinding =
+            sessionPhase == SessionPhase.NEEDS_BINDING || sessionPhase == SessionPhase.READY_READ_ONLY
+        val commandGuardColor = if (commandGuardBlocked) RaceRedline else RacingLime
+        val commandGuardDetail = when {
+            commandGuardBlocked && !writeBlockReason.isNullOrBlank() -> writeBlockReason.orEmpty()
+            commandGuardBlocked -> "Menunggu sinkronisasi RPM, HV, binding, dan status keselamatan"
+            else -> "Perintah setup diizinkan • binding, RPM, HV, dan status firmware aman"
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(66.dp)
+                .padding(horizontal = 10.dp, vertical = 4.dp)
+        ) {
             Surface(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 52.dp, max = 66.dp)
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-                color = RaceRedline.copy(alpha = 0.15f),
-                border = BorderStroke(1.dp, RaceRedline.copy(alpha = 0.8f)),
+                    .fillMaxSize(),
+                color = commandGuardColor.copy(alpha = 0.15f),
+                border = BorderStroke(1.dp, commandGuardColor.copy(alpha = 0.8f)),
                 shape = RoundedCornerShape(6.dp)
             ) {
                 Row(
@@ -97,24 +111,28 @@ fun ThreeScreenSetupWizard(viewModel: CdiViewModel) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Warning,
+                        imageVector = if (commandGuardBlocked) Icons.Default.Warning else Icons.Default.CheckCircle,
                         contentDescription = null,
-                        tint = RaceRedline,
+                        tint = commandGuardColor,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "COMMAND GUARD • setup_can_write() DIBLOKIR",
+                            text = if (commandGuardBlocked) {
+                                "COMMAND GUARD • PERINTAH DIBLOKIR"
+                            } else {
+                                "COMMAND GUARD • SIAP MENULIS"
+                            },
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Black,
-                            color = RaceRedline,
+                            color = commandGuardColor,
                             fontFamily = FontFamily.Monospace,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = writeBlockReason ?: "",
+                            text = commandGuardDetail,
                             fontSize = 8.5.sp,
                             color = TextPrimary,
                             fontWeight = FontWeight.Medium,
@@ -122,7 +140,7 @@ fun ThreeScreenSetupWizard(viewModel: CdiViewModel) {
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    if (sessionPhase == SessionPhase.NEEDS_BINDING || sessionPhase == SessionPhase.READY_READ_ONLY) {
+                    if (commandGuardNeedsBinding) {
                         Spacer(modifier = Modifier.width(6.dp))
                         MotecButton(
                             text = "BINDING",
@@ -296,12 +314,16 @@ private fun AuxVehicleQuickAccess(viewModel: CdiViewModel) {
                 fontSize = 9.5.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (aux.present) RacingLime else SensorAmber,
-                fontFamily = FontFamily.Monospace
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 "Pilih profil: MANUAL wajib NEUTRAL_IN J1.9; MATIC tidak. NS200 mempertahankan interlock OEM.",
                 fontSize = 8.5.sp,
-                color = TextSecondary
+                color = TextSecondary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
             Row(
                 modifier = Modifier
