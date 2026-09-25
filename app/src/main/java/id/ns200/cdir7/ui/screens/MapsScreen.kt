@@ -85,7 +85,7 @@ fun MapsScreen(viewModel: CdiViewModel) {
         ) {
             Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    "TUNING UNIVERSAL • KONTROL PENGGUNA",
+                    "TUNING LINTAS MESIN • KONTROL PENGGUNA",
                     color = if (advancedTuningAcknowledged) RacingLime else MotecOrange,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
