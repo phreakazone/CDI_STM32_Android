@@ -237,6 +237,19 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     private val _setupCommandPending = MutableStateFlow(false)
     val setupCommandPending: StateFlow<Boolean> = _setupCommandPending.asStateFlow()
 
+    private val _setupCommandFeedback = MutableStateFlow(SetupCommandFeedback())
+    val setupCommandFeedback: StateFlow<SetupCommandFeedback> =
+        _setupCommandFeedback.asStateFlow()
+    private var pendingSetupAction = "Perintah setup"
+
+    /*
+     * Pemasangan bukan stage firmware. Stage 1 berarti PICKUP_OK, sehingga ACK
+     * INSTALL dan MODE DIY disimpan terpisah agar Layar 1 tidak memberi status
+     * palsu maupun tetap abu-abu setelah MCU menerima pemasangan.
+     */
+    private val _installationConfirmed = MutableStateFlow(false)
+    val installationConfirmed: StateFlow<Boolean> = _installationConfirmed.asStateFlow()
+
     // Tahap mentah yang benar-benar tersimpan di firmware: 0..4.
     private val _firmwareSetupStage = MutableStateFlow(0)
     val firmwareSetupStage: StateFlow<Int> = _firmwareSetupStage.asStateFlow()
@@ -274,14 +287,25 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     private var pendingTimeoutJob: Job? = null
 
-    private fun markSetupCommandPending() {
+    private fun markSetupCommandPending(action: String = "Perintah setup") {
+        pendingSetupAction = action
         _setupCommandPending.value = true
+        _setupCommandFeedback.value = SetupCommandFeedback(
+            outcome = SetupCommandOutcome.PENDING,
+            action = action,
+            detail = "Perintah dikirim • menunggu ACK atau alasan penolakan dari MCU."
+        )
         pendingTimeoutJob?.cancel()
         pendingTimeoutJob = viewModelScope.launch {
             delay(5000)
             if (_setupCommandPending.value) {
                 _setupCommandPending.value = false
-                appendLog("Timeout menunggu respons MCU")
+                _setupCommandFeedback.value = SetupCommandFeedback(
+                    outcome = SetupCommandOutcome.TIMEOUT,
+                    action = action,
+                    detail = "Tidak ada jawaban MCU dalam 5 detik. Status tidak diubah; periksa BLE lalu coba lagi."
+                )
+                appendLog("Timeout menunggu respons MCU untuk: $action")
             }
         }
     }
@@ -289,6 +313,33 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     private fun clearSetupCommandPending() {
         _setupCommandPending.value = false
         pendingTimeoutJob?.cancel()
+    }
+
+    private fun setupOperationLabel(operation: String): String = when (operation) {
+        "INSTALL_CORE" -> "Pemasangan Core 1-coil"
+        "INSTALL_DUAL" -> "Pemasangan Dual Coil"
+        "PICKUP_OK" -> "Pemeriksaan pickup"
+        "TDC_SAVED", "TDC_MANUAL_SAVED" -> "Kalibrasi TDC"
+        "TPS", "TPS_CLOSED", "TPS_OPEN" -> "Kalibrasi TPS"
+        "FIRST_START" -> "Aktivasi First Start"
+        "READY_CENTER" -> "Finalisasi Ready Core"
+        "READY_DUAL", "READY_THREE" -> "Finalisasi Ready Dual"
+        "MODE" -> "Pilihan metode commissioning"
+        "MODULE_SET", "MODULE_ON", "MODULE_OFF" -> "Konfigurasi modul"
+        else -> pendingSetupAction
+    }
+
+    private fun humanizeMcuError(code: String): String = when (code) {
+        "STOP_ENGINE_WAIT_HV_LT30" -> "Mesin harus mati dan seluruh HV yang terpasang harus di bawah 30 V."
+        "CALIBRATION_REQUIRED" -> "Pickup dan TDC harus dikalibrasi sebelum mode independen diaktifkan."
+        "CONFIRM_OEM_UNPLUGGED" -> "Konfirmasi bahwa CDI OEM sudah dilepas sebelum mengaktifkan mode independen."
+        "PICKUP_OR_HV_ACTIVE" -> "Pickup belum disahkan, mesin masih berputar, atau HV belum aman."
+        "TDC_OR_HV_ACTIVE" -> "TDC belum tersimpan, mesin masih berputar, atau HV belum aman."
+        "STOP_ENGINE_FOR_TPS" -> "Matikan mesin sebelum menyimpan TPS."
+        "TPS_RANGE" -> "Rentang TPS tidak valid; simpan posisi tertutup lalu posisi terbuka."
+        "MODULE_NOT_PRESENT" -> "Modul belum terdeteksi pada konektor hardware."
+        "FLASH" -> "Penyimpanan flash gagal; perubahan tidak diterapkan."
+        else -> code.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }
     }
 
     private fun resetBleStatistics() {
@@ -584,6 +635,17 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         val safeMin = minRpm.coerceIn(500, 4000)
         val safeMax = maxRpm.coerceIn(maxOf(600, safeMin + 100), 5000)
         val safeIntensity = intensity.coerceIn(0, 10)
+        if (_isSimulationMode.value) {
+            _timingStatus.value = TimingStatus(
+                mode = mode,
+                intensity = safeIntensity,
+                minRpm = safeMin,
+                maxRpm = safeMax
+            )
+            appendLog("Demo timing: ${mode.label}, intensitas $safeIntensity, $safeMin-$safeMax RPM")
+            Toast.makeText(context, "Demo ${mode.label} aktif • perubahan terlihat pada RPM dan advance", Toast.LENGTH_SHORT).show()
+            return
+        }
         bleClient.send("SET,TIMING,${mode.code},$safeIntensity,$safeMin,$safeMax")
         viewModelScope.launch {
             delay(180)
@@ -599,6 +661,22 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             2 -> "MATIC"
             else -> "NS200"
         }
+        if (_isSimulationMode.value) {
+            _auxStatus.value = _auxStatus.value.copy(
+                present = true,
+                enabled = true,
+                vehicleProfile = profile,
+                requestIoOk = true
+            )
+            val modules = _moduleStatus.value
+            _moduleStatus.value = modules.copy(
+                installedMask = modules.installedMask or HardwareModule.AUX.bitMask,
+                activeMask = modules.activeMask or HardwareModule.AUX.bitMask,
+                observedMask = modules.observedMask or HardwareModule.AUX.bitMask
+            )
+            appendLog("Demo AUX: profil $name aktif")
+            return
+        }
         bleClient.send("AUX,CONFIG,$name,ON")
         viewModelScope.launch {
             delay(180)
@@ -609,8 +687,16 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     private fun requireCapability(token: String, action: String): Boolean {
         if (_isSimulationMode.value) return true
         if (token in _mcuCapabilities.value) return true
-        Toast.makeText(context, "Firmware tidak mendukung $action ($token).", Toast.LENGTH_LONG).show()
-        appendLog("CAPS GUARD: $action ditolak; capability $token tidak tersedia")
+        /*
+         * R9 protocol v5 sudah mengimplementasikan MODE MANUAL/DIY. Firmware
+         * 9.6.2 dan lebih lama lupa mengiklankan dua token tersebut di CAPS.
+         */
+        val protocolModeBuiltIn =
+            token in setOf("MANUAL", "DIY") &&
+                _firmwareVersionInfo.value.protocolVersion >= 5
+        if (protocolModeBuiltIn) return true
+        Toast.makeText(context, "Fitur $action tidak tersedia pada firmware ini ($token).", Toast.LENGTH_LONG).show()
+        appendLog("CAPS GUARD: $action tidak tersedia; capability $token tidak diumumkan")
         return false
     }
 
@@ -848,16 +934,25 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             !requireCapability("QUICK_INSTALL", "Quick Install")) return
         if (!checkSetupWriteSafety("Pemasangan Core")) return
         if (bleClient.gattReady) {
-            markSetupCommandPending()
+            markSetupCommandPending("Pemasangan Core 1-coil")
             bleClient.send("SETUP,INSTALL,CORE,OEM_REMOVED")
             appendLog("BLE Send: SETUP,INSTALL,CORE,OEM_REMOVED")
+            Toast.makeText(context, "Pemasangan Core dikirim • menunggu jawaban MCU", Toast.LENGTH_SHORT).show()
         } else {
             val cur = _moduleStatus.value
             _moduleStatus.value = cur.copy(coreProfile = 0)
-            _commissionStatus.value = _commissionStatus.value.copy(stage = 1, nextAction = 2)
-            appendLog("Demo: Pemasangan Core (1 Coil) tersimpan. Lanjut ke Pemeriksaan Pickup.")
+            _firmwareMode.value = FirmwareRunMode.DIY
+            _isOemUnpluggedConfirmed.value = true
+            _installationConfirmed.value = true
+            _setupCommandFeedback.value = SetupCommandFeedback(
+                SetupCommandOutcome.SUCCESS,
+                "Pemasangan Core 1-coil",
+                "DEMO ACK • Core diterima. Berikutnya periksa pickup dan TDC.",
+                "ACK,INSTALL_CORE"
+            )
+            appendLog("Demo ACK,INSTALL_CORE: pemasangan Core diterima.")
+            Toast.makeText(context, "DEMO ACK • Core 1-coil terpasang", Toast.LENGTH_SHORT).show()
         }
-        Toast.makeText(context, if (bleClient.gattReady) "Perintah Pasang Core dikirim" else "Core terpasang di Demo", Toast.LENGTH_SHORT).show()
     }
 
     fun installDualOemRemoved() {
@@ -865,19 +960,30 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             !requireCapability("QUICK_INSTALL", "Quick Install")) return
         if (!checkSetupWriteSafety("Pemasangan Dual Coil")) return
         if (bleClient.gattReady) {
-            markSetupCommandPending()
+            markSetupCommandPending("Pemasangan Dual Coil")
             bleClient.send("SETUP,INSTALL,DUAL,OEM_REMOVED")
             appendLog("BLE Send: SETUP,INSTALL,DUAL,OEM_REMOVED")
+            Toast.makeText(context, "Pemasangan Dual dikirim • menunggu jawaban MCU", Toast.LENGTH_SHORT).show()
         } else {
             val cur = _moduleStatus.value
             _moduleStatus.value = cur.copy(
                 installedMask = cur.installedMask or HardwareModule.SIDE.bitMask,
-                coreProfile = 1
+                activeMask = cur.activeMask or HardwareModule.SIDE.bitMask,
+                observedMask = cur.observedMask or HardwareModule.SIDE.bitMask,
+                coreProfile = 2
             )
-            _commissionStatus.value = _commissionStatus.value.copy(stage = 1, nextAction = 2)
-            appendLog("Demo: Pemasangan Dual Coil tersimpan. Lanjut ke Pemeriksaan Pickup.")
+            _firmwareMode.value = FirmwareRunMode.DIY
+            _isOemUnpluggedConfirmed.value = true
+            _installationConfirmed.value = true
+            _setupCommandFeedback.value = SetupCommandFeedback(
+                SetupCommandOutcome.SUCCESS,
+                "Pemasangan Dual Coil",
+                "DEMO ACK • Core + SIDE diterima. Berikutnya periksa pickup dan TDC.",
+                "ACK,INSTALL_DUAL"
+            )
+            appendLog("Demo ACK,INSTALL_DUAL: pemasangan Dual diterima.")
+            Toast.makeText(context, "DEMO ACK • Dual Coil terpasang", Toast.LENGTH_SHORT).show()
         }
-        Toast.makeText(context, if (bleClient.gattReady) "Perintah Pasang Dual dikirim" else "Dual Coil terpasang di Demo", Toast.LENGTH_SHORT).show()
     }
 
     fun confirmReadyDual(sideOffsetCdeg: Int = 0) {
@@ -981,8 +1087,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     }
 
     /**
-     * Mereset seluruh simulasi commissioning dan status demo dari awal (Tahap 1: Pemasangan).
-     * Memastikan mode demo kembali ke kondisi bawaan: Dual Coil aktif & seluruh modul disimulasikan terpasang.
+     * Reset demo ke kondisi yang benar-benar mungkin ditemui: unit Core menyala,
+     * mesin mati, optional module belum dipasang, dan commissioning masih baru.
      */
     fun resetDemoCommissioning() {
         resetDemoState()
@@ -992,13 +1098,16 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             rpm = 0,
             tps = 0,
             advanceCdeg = 0,
+            batteryCv = 1260,
             hvCenter = 0,
             hvSide = 0,
+            tempCdeg = Short.MIN_VALUE.toInt(),
             setupStage = 0,
             flags = 0,
-            outputFlags = 0x03, // Dual coil ready di demo
+            outputFlags = 0,
             limiter = 0,
-            pickupQuality = 95
+            pickupQuality = 0,
+            firstStartSeconds = 0
         )
 
         _commissionStatus.value = CommissionStatus(
@@ -1008,17 +1117,17 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             advisoryMask = 0
         )
 
-        // Reset modul ke default demo: Seluruh 5 modul terpasang & Dual Coil aktif
-        _moduleStatus.value = ModuleStatus(
-            installedMask = 31, // Seluruh modul: SIDE=1, THERMAL=2, OEM_LEARN=4, AUX=8, TPS_DIAG=16
-            activeMask = 27,    // SIDE, THERMAL, AUX, TPS_DIAG aktif
-            observedMask = 31,
-            faultMask = 0,
-            coreProfile = 2     // Dual Coil (Core + SIDE)
+        _moduleStatus.value = ModuleStatus.defaultCore()
+        _auxStatus.value = AuxStatus()
+        _firmwareMode.value = FirmwareRunMode.MANUAL
+        _isOemUnpluggedConfirmed.value = false
+        _installationConfirmed.value = false
+        _setupCommandFeedback.value = SetupCommandFeedback(
+            detail = "Demo dimulai dari Core baru. Konfirmasi pemasangan untuk melanjutkan."
         )
-
-        _tpsClosedAdc.value = 820
-        _tpsOpenAdc.value = 3940
+        _timingStatus.value = TimingStatus()
+        _tpsClosedAdc.value = 0
+        _tpsOpenAdc.value = 0
         _pulserOffsetDeg.value = 0f
         _quickSetupPage.value = 0
         _quickSetupUnlockedStage.value = 0
@@ -1369,17 +1478,20 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (_isSimulationMode.value) {
             if (bleClient.gattReady || bleClient.isBusy.value) bleClient.disconnect()
             _firmwareCapabilities.value = FirmwareCapabilities.demoR9()
+            _firmwareVersionInfo.value = FirmwareVersionInfo(
+                release = "R9",
+                semver = "9.6.3",
+                buildId = "DEMO",
+                platform = "ESP32",
+                protocolVersion = 5,
+                telemetryVersion = 3
+            )
             _engineProfile.value = EngineProfile.ns200()
-            _connectionStatus.value = "SIMULASI AKTIF • Telemetry 20Hz (MoTeC Mode)"
+            resetDemoCommissioning()
+            _connectionStatus.value = "SIMULASI AKTIF • Core standby • mesin mati"
             _isConnected.value = true
-            // Default simulasi: Mesin hidup stasioner idle ~1.420 RPM layaknya motor hidup normal
-            _demoEngineRunning.value = true
-            _isRevving.value = false
-            _demoThrottleSlider.value = 0f
-            simRpm = 1420f
-            simTps = 0.02f
-            appendLog("Demo simulation mode activated (Mesin: Hidup Idle ~1.420 RPM).")
-            Toast.makeText(context, "Mode Simulasi Aktif: Mesin Hidup Idle ~1.420 RPM", Toast.LENGTH_SHORT).show()
+            appendLog("Demo aktif: Core baru, mesin mati, optional module belum terpasang.")
+            Toast.makeText(context, "Mode Demo aktif • mulai dari kondisi Core baru", Toast.LENGTH_SHORT).show()
         } else {
             _demoEngineRunning.value = false
             _isRevving.value = false
@@ -2312,57 +2424,49 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         Toast.makeText(context, if (bleClient.gattReady) "READY Dual Coil masuk antrean; tunggu ACK" else "READY Dual Coil aktif di Demo (Komisi Selesai)", Toast.LENGTH_LONG).show()
     }
 
-    // --- R8 Mode & Flow Controls ---
+    // Metode commissioning bersifat opsional; Quick Install tetap jalur utama.
     fun setFirmwareMode(mode: FirmwareRunMode) {
-        if (!requireMcuOrDemo("ganti mode")) return
+        if (!requireMcuOrDemo("ganti metode commissioning")) return
         val requiredCapability = when (mode) {
             FirmwareRunMode.OEM_LEARN -> "OEM_LEARN"
             FirmwareRunMode.MANUAL -> "MANUAL"
             FirmwareRunMode.DIY -> "DIY"
         }
-        if (!requireCapability(requiredCapability, "mode ${mode.name}")) return
-        if (!checkSetupWriteSafety("Perubahan mode firmware")) return
+        if (!requireCapability(requiredCapability, "metode ${mode.label}")) return
+        if (!checkSetupWriteSafety("Perubahan metode commissioning")) return
         val (cPin, sPin) = if (selectedPlatform.value == McuPlatform.STM32WB55) Pair("PB3", "PB4") else Pair("GPIO16", "GPIO17")
         val mcuName = selectedPlatform.value.displayName
-        _firmwareMode.value = mode
-        when (mode) {
-            FirmwareRunMode.OEM_LEARN -> {
-                if (bleClient.gattReady) {
-                    markSetupCommandPending()
-                    bleClient.send("MODE,OEM_LEARN")
-                    bleClient.send("GET,MODE")
-                    appendLog("BLE Send: MODE,OEM_LEARN ($cPin/$sPin)")
-                } else {
-                    appendLog("Mode: OEM_LEARN aktif di Demo ($cPin/$sPin pada $mcuName)")
-                }
-                Toast.makeText(context, "Mode OEM LEARN Aktif (baca CDI OEM via $cPin/$sPin pada $mcuName)", Toast.LENGTH_SHORT).show()
+
+        if (mode == FirmwareRunMode.DIY && !_isOemUnpluggedConfirmed.value) {
+            Toast.makeText(
+                context,
+                "Mode Independen aktif otomatis setelah KONFIRMASI PASANG CORE/DUAL. Selesaikan pemasangan langsung dahulu.",
+                Toast.LENGTH_LONG
+            ).show()
+            _setupCommandFeedback.value = SetupCommandFeedback(
+                SetupCommandOutcome.REJECTED,
+                "Mode Independen",
+                "Belum diterapkan • konfirmasi CDI OEM sudah dilepas melalui pemasangan Core/Dual."
+            )
+            return
+        }
+
+        if (bleClient.gattReady) {
+            markSetupCommandPending("Metode ${mode.label}")
+            when (mode) {
+                FirmwareRunMode.OEM_LEARN -> bleClient.send("MODE,OEM_LEARN")
+                FirmwareRunMode.MANUAL -> bleClient.send("MODE,MANUAL")
+                FirmwareRunMode.DIY -> bleClient.send("MODE,DIY,OEM_UNPLUGGED")
             }
-            FirmwareRunMode.MANUAL -> {
-                if (bleClient.gattReady) {
-                    markSetupCommandPending()
-                    bleClient.send("MODE,MANUAL")
-                    bleClient.send("GET,MODE")
-                    appendLog("BLE Send: MODE,MANUAL")
-                } else {
-                    appendLog("Mode: MANUAL aktif di Demo ($mcuName)")
-                }
-                Toast.makeText(context, "Mode MANUAL Aktif (Strobo/TDC darurat)", Toast.LENGTH_SHORT).show()
-            }
-            FirmwareRunMode.DIY -> {
-                if (!_isOemUnpluggedConfirmed.value) {
-                    Toast.makeText(context, "Peringatan: Konfirmasi OEM_UNPLUGGED dahulu sebelum aktifkan DIY!", Toast.LENGTH_LONG).show()
-                    return
-                }
-                if (bleClient.gattReady) {
-                    markSetupCommandPending()
-                    bleClient.send("MODE,DIY,OEM_UNPLUGGED")
-                    bleClient.send("GET,MODE")
-                    appendLog("BLE Send: MODE,DIY,OEM_UNPLUGGED")
-                } else {
-                    appendLog("Mode: DIY aktif di Demo (OEM terlepas, $mcuName mandiri)")
-                }
-                Toast.makeText(context, "Mode DIY Aktif (CDI mandiri)", Toast.LENGTH_SHORT).show()
-            }
+            appendLog("BLE Send mode: ${mode.code}")
+        } else {
+            _firmwareMode.value = mode
+            _setupCommandFeedback.value = SetupCommandFeedback(
+                SetupCommandOutcome.SUCCESS,
+                "Metode ${mode.label}",
+                "DEMO ACK • ${mode.desc}"
+            )
+            appendLog("Demo mode: ${mode.label} aktif ($mcuName, $cPin/$sPin)")
         }
     }
 
@@ -3065,6 +3169,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             "MODE" -> CdiProtocol.firmwareMode(value)?.let { status ->
                 _firmwareMode.value = status.mode
                 _isOemUnpluggedConfirmed.value = status.diyUnplugged
+                _installationConfirmed.value =
+                    status.mode == FirmwareRunMode.DIY && status.diyUnplugged
                 _isProVoltageConfigured.value = status.proEnabled
                 if (status.mode != FirmwareRunMode.OEM_LEARN) {
                     _isOemLearning.value = false
@@ -3203,8 +3309,35 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 if (_isOemLearning.value) startOemLearnPolling() else oemLearnPollJob?.cancel()
             }
             "ACK" -> {
-                clearSetupCommandPending()
                 val operation = f.getOrNull(1).orEmpty()
+                clearSetupCommandPending()
+                if (operation !in setOf("LIVE", "OFFSET") && !operation.startsWith("PONG")) {
+                    val action = setupOperationLabel(operation)
+                    _setupCommandFeedback.value = SetupCommandFeedback(
+                        outcome = SetupCommandOutcome.SUCCESS,
+                        action = action,
+                        detail = "DITERIMA MCU • $operation. Status firmware sedang disinkronkan.",
+                        rawResponse = value
+                    )
+                }
+                if (operation == "INSTALL_CORE" || operation == "INSTALL_DUAL") {
+                    _installationConfirmed.value = true
+                    _firmwareMode.value = FirmwareRunMode.DIY
+                    _isOemUnpluggedConfirmed.value = true
+                    val modules = _moduleStatus.value
+                    _moduleStatus.value = if (operation == "INSTALL_DUAL") {
+                        modules.copy(
+                            installedMask = modules.installedMask or HardwareModule.SIDE.bitMask,
+                            coreProfile = 2
+                        )
+                    } else {
+                        modules.copy(
+                            installedMask = modules.installedMask and HardwareModule.SIDE.bitMask.inv(),
+                            activeMask = modules.activeMask and HardwareModule.SIDE.bitMask.inv(),
+                            coreProfile = 0
+                        )
+                    }
+                }
                 if (operation.startsWith("PONG")) {
                     syncPongSeen = true
                     evaluateSessionPhaseAfterSync()
@@ -3316,6 +3449,11 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                             _quickSetupPage.value = SetupStage.BARU.code
                             _quickSetupUnlockedStage.value = SetupStage.BARU.code
                             _firmwareSetupStage.value = 0
+                            _installationConfirmed.value = false
+                        }
+                        if (operation == "INSTALL_CORE" || operation == "INSTALL_DUAL") {
+                            bleClient.send("GET,MODE")
+                            bleClient.send("GET,MODULES")
                         }
                         refreshSetupAfterAck()
                     }
@@ -3335,8 +3473,18 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 }
             }
             "ERR" -> {
+                val errorCode = f.getOrNull(1).orEmpty()
+                val detail = humanizeMcuError(errorCode)
                 clearSetupCommandPending()
-                Toast.makeText(context, "MCU menolak: ${f.drop(1).joinToString(",")}", Toast.LENGTH_LONG).show()
+                _setupCommandFeedback.value = SetupCommandFeedback(
+                    outcome = SetupCommandOutcome.REJECTED,
+                    action = pendingSetupAction,
+                    detail = "DITOLAK MCU • $detail Status sebelumnya tetap berlaku.",
+                    rawResponse = value
+                )
+                _quickSetupMessage.value = "GAGAL • $pendingSetupAction ditolak: $detail"
+                appendLog("MCU menolak $pendingSetupAction: $errorCode")
+                Toast.makeText(context, "Perintah ditolak: $detail", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -3422,10 +3570,23 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                             simRpm = (_softRevLimiterRpm.value - 150f) + flutter
                         }
                     } else if (demoStarterOn) {
-                        // Engine running at idle: throttle decays smoothly to idle position (0.02f)
+                        // Engine running at idle. Timing preset changes cadence and RPM,
+                        // so KUDA/DRUMBAND/FOMO are observable instead of cosmetic.
                         simTps += (0.02f - simTps) * 0.25f
-                        val idleTarget = 1420f + (sin(seq * 0.2) * 40f).toFloat()
-                        simRpm += (idleTarget - simRpm) * 0.25f
+                        val timing = _timingStatus.value
+                        val timingWindow = simRpm.toInt() in timing.minRpm..timing.maxRpm
+                        val intensityScale = timing.intensity.coerceIn(0, 10) / 10f
+                        val rumbleRpm = if (timingWindow) when (timing.mode) {
+                            TimingMode.STANDARD -> 0f
+                            TimingMode.SOFT -> (-kotlin.math.abs(sin(seq * 0.22)) * 35f * intensityScale).toFloat()
+                            TimingMode.RESPONSIVE -> (kotlin.math.abs(sin(seq * 0.28)) * 45f * intensityScale).toFloat()
+                            TimingMode.KUDA -> (sin(seq * 0.32) * 115f * intensityScale).toFloat()
+                            TimingMode.DRUMBAND -> (sin(seq * 0.78) * 90f * intensityScale).toFloat()
+                            TimingMode.FOMO -> ((sin(seq * 0.48) * 110f + sin(seq * 0.17) * 55f) * intensityScale).toFloat()
+                            TimingMode.CUSTOM -> (sin(seq * 0.40) * 125f * intensityScale).toFloat()
+                        } else 0f
+                        val idleTarget = 1420f + (sin(seq * 0.2) * 25f).toFloat() + rumbleRpm
+                        simRpm += (idleTarget - simRpm) * 0.32f
                         if (kotlin.math.abs(simRpm - idleTarget) < 25f) {
                             simRpm = idleTarget
                         }
@@ -3451,7 +3612,21 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                         simRpm < 9000 -> 31f + (simRpm - 6000f) * 0.0015f
                         else -> (activeMap.peakAdvance - ((simRpm - 9000f) * 0.004f)).coerceAtLeast(10f)
                     }
-                    val finalAdvance = baseAdvance + _pulserOffsetDeg.value
+                    val timing = _timingStatus.value
+                    val timingActive =
+                        simRpm.toInt() in timing.minRpm..timing.maxRpm &&
+                            timing.mode != TimingMode.STANDARD
+                    val timingAmplitude = timing.intensity.coerceIn(0, 10) * 0.8f
+                    val timingDelta = if (timingActive) when (timing.mode) {
+                        TimingMode.SOFT -> -kotlin.math.abs(sin(seq * 0.22)).toFloat() * minOf(2f, timingAmplitude)
+                        TimingMode.RESPONSIVE -> kotlin.math.abs(sin(seq * 0.28)).toFloat() * minOf(2f, timingAmplitude)
+                        TimingMode.KUDA -> sin(seq * 0.32).toFloat() * timingAmplitude
+                        TimingMode.DRUMBAND -> sin(seq * 0.78).toFloat() * timingAmplitude
+                        TimingMode.FOMO -> (sin(seq * 0.48) * 0.7f + sin(seq * 0.17) * 0.3f).toFloat() * timingAmplitude
+                        TimingMode.CUSTOM -> sin(seq * 0.40).toFloat() * timingAmplitude
+                        TimingMode.STANDARD -> 0f
+                    } else 0f
+                    val finalAdvance = baseAdvance + _pulserOffsetDeg.value + timingDelta
 
                     val limiterState = when {
                         simRpm >= _softRevLimiterRpm.value + 300 -> 2 // Hard
