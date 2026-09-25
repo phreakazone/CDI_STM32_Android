@@ -1109,7 +1109,10 @@ private fun LayarFirstStartReady(
     val isReady = commissionStatus.ready
 
     val isEngineStopped = telemetry.rpm == 0
-    val isHvDischarged = telemetry.hvCenter < 30 && telemetry.hvSide < 30
+    val isSidePresent = moduleStatus.isObserved(HardwareModule.SIDE) ||
+        moduleStatus.isInstalled(HardwareModule.SIDE)
+    val sideHvForSafety = if (isSidePresent) telemetry.hvSide else 0
+    val isHvDischarged = telemetry.hvCenter < 30 && sideHvForSafety < 30
     val canTriggerFirstStart = isEngineStopped && isHvDischarged && setupCanWrite
 
     Column(
@@ -1136,7 +1139,12 @@ private fun LayarFirstStartReady(
                 )
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     SafetyCheckBadge(Modifier.weight(1f), "MESIN MATI (RPM 0)", "${telemetry.rpm} RPM", isEngineStopped)
-                    SafetyCheckBadge(Modifier.weight(1f), "HV DISCHARGE (<30V)", "C:${telemetry.hvCenter}V S:${telemetry.hvSide}V", isHvDischarged)
+                    SafetyCheckBadge(
+                        Modifier.weight(1f),
+                        "HV DISCHARGE (<30V)",
+                        "C:${telemetry.hvCenter}V S:${if (isSidePresent) "${telemetry.hvSide}V" else "N/A"}",
+                        isHvDischarged
+                    )
                 }
             }
         }
