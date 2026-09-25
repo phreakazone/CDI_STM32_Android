@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.ns200.cdir7.CdiViewModel
+import id.ns200.cdir7.EnginePrimaryAction
 import id.ns200.cdir7.FirmwareRunMode
 import id.ns200.cdir7.HardwareModule
 import id.ns200.cdir7.McuPlatform
@@ -66,6 +67,8 @@ fun DashboardScreen(viewModel: CdiViewModel) {
     val sessionPhase by viewModel.sessionPhase.collectAsState()
     val bindingRecord by viewModel.bindingRecord.collectAsState()
     val firmwareIdentity by viewModel.firmwareIdentity.collectAsState()
+    val auxStatus by viewModel.auxStatus.collectAsState()
+    val engineAction by viewModel.enginePrimaryAction.collectAsState()
     val scrollState = rememberScrollState()
 
     val isSideInstalled = moduleStatus.isInstalled(HardwareModule.DUAL_COIL)
@@ -805,6 +808,54 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                             )
                         }
                     }
+                }
+            }
+        }
+
+        // Satu kontrol nyata; label mengikuti status kontak dan RPM firmware.
+        if (isBleConnected) {
+            val actionColor = when (engineAction) {
+                EnginePrimaryAction.STOP_ENGINE -> RaceRedline
+                EnginePrimaryAction.START_ENGINE -> RacingLime
+                EnginePrimaryAction.CONTACT_ON -> MotecOrange
+            }
+            Card(
+                modifier = Modifier.fillMaxWidth().border(1.dp, actionColor, RoundedCornerShape(10.dp)),
+                colors = CardDefaults.cardColors(containerColor = CardBackground),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = auxStatus.contactSource.label.uppercase(),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = actionColor,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = if (auxStatus.requestIoOk) "AUX interlock siap" else "Periksa U7 / konfigurasi AUX",
+                            fontSize = 8.5.sp,
+                            color = TextSecondary,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                    MotecButton(
+                        text = engineAction.label,
+                        onClick = viewModel::performPrimaryEngineAction,
+                        color = actionColor,
+                        icon = when (engineAction) {
+                            EnginePrimaryAction.STOP_ENGINE -> Icons.Default.Stop
+                            EnginePrimaryAction.START_ENGINE -> Icons.Default.PlayArrow
+                            EnginePrimaryAction.CONTACT_ON -> Icons.Default.PowerSettingsNew
+                        },
+                        height = 34.dp,
+                        modifier = Modifier.testTag("dashboard_primary_engine_action")
+                    )
                 }
             }
         }
