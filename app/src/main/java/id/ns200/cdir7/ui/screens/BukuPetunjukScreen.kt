@@ -59,6 +59,7 @@ fun BukuPetunjukScreen(
     var selectedChapter by remember { mutableStateOf(GuideChapter.STEP_BY_STEP) }
     val scrollState = rememberScrollState()
     val chapterScrollState = rememberScrollState()
+    val firmwareVersion by viewModel.firmwareVersionInfo.collectAsState()
 
     // Step-by-step checklist states
     val stepChecklist = remember { mutableStateMapOf<Int, Boolean>() }
@@ -111,7 +112,7 @@ fun BukuPetunjukScreen(
                                 color = TextPrimary
                             )
                             Text(
-                                text = "IgniTra R9 • Versi Firmware R9.2.0 (ESP32)",
+                                text = "Firmware ${firmwareVersion.release} v${firmwareVersion.semver} • Build ${firmwareVersion.buildId}",
                                 fontSize = 9.5.sp,
                                 fontFamily = FontFamily.Monospace,
                                 color = ElectricCyan
@@ -482,15 +483,15 @@ private fun HarnessJ1ChapterSection() {
         Spacer(modifier = Modifier.height(6.dp))
 
         val pinout = listOf(
-            Pair("J1.1", "GND_ANALOG • Ground referensi sensor (TPS, Suhu). Pisahkan dari ground koil!"),
+            Pair("J1.1", "KEYLESS_REQ • Pulsa +12V terproteksi untuk wake/kontak aplikasi. Pada harness NS200 standar tetap NC."),
             Pair("J1.2", "+5V_SENSOR • Catu daya referensi sensor (maks 100mA)."),
             Pair("J1.3", "TEMP_IN • Masukan sensor suhu mesin (NTC / sensor panas)."),
             Pair("J1.4", "TPS_IN • Masukan sinyal potensiometer bukaan gas (0..5V)."),
             Pair("J1.5", "+12V_IGN • Masukan catu daya +12V setelah kunci kontak (Switched 12V)."),
             Pair("J1.6", "COIL_SIDE • Output pemantik koil kedua (HANYA jika Modul SIDE aktif)."),
             Pair("J1.7", "FAN_RELAY • Output kendali relay kipas (Active-Low / pembumian relay)."),
-            Pair("J1.8", "TETAP KOSONG • Dilarang menghubungkan kabel apapun ke pin ini!"),
-            Pair("J1.9", "TETAP KOSONG • Dilarang menghubungkan kabel apapun ke pin ini!"),
+            Pair("J1.8", "START_REQ • Dry-contact/open-collector ke GND_LOGIC; tidak boleh diberi +12V."),
+            Pair("J1.9", "MODE_REQ / NEUTRAL_IN • Dry-contact ke GND_LOGIC. UNIVERSAL_MANUAL wajib netral; MATIC tidak."),
             Pair("J1.10", "PULSER_IN • Masukan sinyal pulser / pick-up coil dari kruk as."),
             Pair("J1.11", "POWER_GND • Ground utama daya tinggi ke rangka dan terminal negatif aki."),
             Pair("J1.12", "COIL_CENTER • Output pemantik koil utama (Paket Core 1-Coil).")
@@ -777,7 +778,10 @@ private fun DiagnosisChapterSection() {
             Pair("RPM Ada, Namun HV Core Nol", "Periksa input +12V kunci kontak pada J1.5 dan sekring jalur catu daya CDI."),
             Pair("Core Hidup, SIDE Belum Aktif", "Pastikan modul hardware SIDE terpasang dan ulangi uji First Start untuk mengaktifkan koil kedua."),
             Pair("TPS Nol / Angka Terbalik", "Tukar kabel positif dan ground pada soket sensor TPS, lalu ulangi kalibrasi gas tertutup dan terbuka."),
-            Pair("Suhu Menampilkan 'Invalid'", "Periksa kabel sensor NTC J1.3. Jika kabel terlepas, sistem otomatis mengaktifkan kipas demi proteksi.")
+            Pair("Suhu Menampilkan 'Invalid'", "Periksa kabel sensor NTC J1.3. Jika kabel terlepas, sistem otomatis mengaktifkan kipas demi proteksi."),
+            Pair("BLE Berhenti di 'Menghubungkan...'", "Aktifkan Bluetooth, kembali ke aplikasi dan tunggu watchdog 8 detik. Jika belum pulih, ketuk Putus lalu Hubungkan; jangan hapus binding firmware."),
+            Pair("Kontak Mekanis Tidak Terbaca", "Periksa J1.5 dan blok RIGN_IN/QIGN_SENSE ke U7 P3. K1 AUX wajib masuk ke VIN_PROT, bukan kembali ke J1.5."),
+            Pair("Starter Ditolak", "Pastikan AUX aktif, aki 9.5–16V, RPM <300, tidak ada fault, dan untuk UNIVERSAL_MANUAL J1.9/NEUTRAL_IN aktif.")
         )
 
         issues.forEach { (prob, sol) ->
@@ -836,8 +840,8 @@ private fun KeselamatanChapterSection() {
                     text = "• Kapasitor CDI menyimpan muatan DC hingga 345 Volt yang mematikan!\n" +
                             "• DILARANG MENYENTUH terminal koil (J1.12 dan J1.6) saat mesin menyala atau kontak ON.\n" +
                             "• Setelah kontak dimatikan, tunggu hingga tegangan HV Core dan HV Side turun di bawah 30V sebelum menyentuh konektor.\n" +
-                            "• DILARANG KERAS memasukkan tegangan 12V langsung ke pin pulser, sensor suhu, atau GPIO mikrokontroler ESP32!\n" +
-                            "• Jangan menyambungkan kabel apapun ke pin J1.8 dan J1.9 (Wajib dibiarkan kosong).",
+                            "• DILARANG KERAS memasukkan tegangan 12V langsung ke pulser, sensor suhu, J1.8, J1.9, atau GPIO logika!\n" +
+                            "• J1.8/J1.9 hanya dry-contact ke GND_LOGIC. J1.1 hanya melalui rangkaian KEYLESS_REQ terproteksi.",
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
                     color = TextPrimary,
