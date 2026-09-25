@@ -1,4 +1,4 @@
-# IgniTra CDI R9 — Aplikasi Android
+# IgniTra Universal CDI R9 — Aplikasi Android
 
 Aplikasi Android resmi untuk konfigurasi, commissioning, telemetry, diagnosis, tuning, BLE OTA, dan buku petunjuk IgniTra CDI ESP32 R9 Modular.
 
@@ -9,7 +9,7 @@ Dokumen ini adalah satu-satunya dokumentasi repository aplikasi. Spesifikasi fir
 | Item | Nilai |
 |---|---|
 | Target firmware | IgniTra R9 ESP32 |
-| Firmware acuan | 9.5.0, build 20260925 |
+| Firmware acuan | 9.6.0, build 20260925 |
 | Protocol | 5 |
 | Telemetry | v3, 20 byte |
 | Android minimum | sesuai `app/build.gradle.kts` |
@@ -31,6 +31,13 @@ Firmware lama tetap dapat masuk jalur read-only/legacy jika query tambahan tidak
 - BLE OTA dengan status transfer dan verifikasi firmware.
 - Suara mesin virtual berbasis RPM melalui receiver A2DP eksternal.
 - Buku Petunjuk di dalam aplikasi untuk pemasangan, setup dan troubleshooting.
+- User agreement tuning lanjutan bersifat peringatan dan pencatatan persetujuan; tidak mengunci map berdasarkan tipe motor.
+
+## Prinsip universal dan kebebasan tuning
+
+NS200 hanya preset instalasi. Nama kendaraan default adalah `UNIVERSAL`; pickup, PPR 1–12, gate 40–150 µs, TDC, limiter, map, live timing, dan profil idle harus mengikuti konfigurasi mesin nyata. Aplikasi tidak mengubah batas pengguna menjadi angka NS200 tersembunyi. Dashboard selalu menampilkan PPR dan gate yang benar-benar aktif.
+
+Pengguna tetap dapat memakai seluruh rentang yang diiklankan CAPS. Aplikasi hanya memberi peringatan knocking/panas/kickback sebelum tuning; penolakan otomatis dibatasi pada keadaan yang dapat merusak elektronik atau membuat transaksi tidak konsisten, seperti flash saat mesin hidup/HV aktif, FAULT_N, koneksi belum sinkron, dan starter tanpa interlock yang dikonfigurasi.
 
 ## Alur aplikasi
 
