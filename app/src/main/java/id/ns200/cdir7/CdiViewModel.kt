@@ -344,7 +344,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     private val _fanOffCdeg = MutableStateFlow(8500)
     val fanOffCdeg: StateFlow<Int> = _fanOffCdeg.asStateFlow()
 
-    private val _engineProfile = MutableStateFlow(EngineProfile.universal())
+    private val _engineProfile = MutableStateFlow(EngineProfile.ns200())
     val engineProfile: StateFlow<EngineProfile> = _engineProfile.asStateFlow()
 
     private val _dynoActive = MutableStateFlow(false)
@@ -459,7 +459,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             appInstanceId = appInstanceId,
             boundAtEpochMs = System.currentTimeMillis(),
             firmwareRelease = _firmwareVersionInfo.value.release,
-            vehicleName = vehicleName ?: "UNIVERSAL"
+            vehicleName = vehicleName ?: "NS200"
         )
         bindingPrefs.edit()
             .putLong(bindingKey(record.serial, "bound_at"), record.boundAtEpochMs)
@@ -476,7 +476,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun updateBoundVehicleName(newName: String) {
         val current = _bindingRecord.value ?: return
-        val cleanName = newName.trim().ifBlank { "UNIVERSAL" }
+        val cleanName = newName.trim().ifBlank { "NS200" }
         val updated = current.copy(vehicleName = cleanName)
         bindingPrefs.edit()
             .putString(bindingKey(current.serial, "vehicle"), updated.vehicleName)
@@ -1181,7 +1181,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     // Console logs
     private val _terminalLogs = MutableStateFlow<List<String>>(
         listOf(
-            "IgniTra Universal CDI System Initialized.",
+            "IgniTra CDI R9 System Initialized.",
             "MoTeC / AIM Telemetry Protocol Engine Ready.",
             "Firmware Engine: 32x16 3D Map, Dyno Live Trim, Dual-Core Safety.",
             "Hardware Target: ${_selectedPlatform.value.displayName}."
@@ -1365,7 +1365,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (_isSimulationMode.value) {
             if (bleClient.gattReady || bleClient.isBusy.value) bleClient.disconnect()
             _firmwareCapabilities.value = FirmwareCapabilities.demoR9()
-            _engineProfile.value = EngineProfile.universal()
+            _engineProfile.value = EngineProfile.ns200()
             _connectionStatus.value = "SIMULASI AKTIF • Telemetry 20Hz (MoTeC Mode)"
             _isConnected.value = true
             // Default simulasi: Mesin hidup stasioner idle ~1.420 RPM layaknya motor hidup normal
