@@ -381,7 +381,7 @@ private fun LayarPemasangan(
                     fontFamily = FontFamily.Monospace
                 )
                 Text(
-                    text = "Pilih konfigurasi instalasi fisik sesuai paket hardware yang terpasang pada motor NS200 / DTS-i.",
+                    text = "Pilih konfigurasi fisik sesuai mesin: Core satu koil atau Core + SIDE dua koil. NS200 hanyalah salah satu profil instalasi.",
                     fontSize = 9.5.sp,
                     color = TextSecondary,
                     lineHeight = 13.sp
