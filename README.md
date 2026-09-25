@@ -87,7 +87,7 @@ Query tambahan yang tidak didukung firmware lama ditandai unsupported, bukan dia
 
 ## Mode Demo realistis
 
-Demo dimulai dari Core baru dalam kondisi standby: mesin mati, aki 12,6 V, HV 0 V, optional module belum terpasang, dan Setup belum selesai. Pengguna dapat memasang modul secara virtual, menjalankan seluruh alur Setup, menyalakan/mematikan mesin, menguji throttle, suara, serta profil timing idle. STANDARD, SOFT, RESPONSIVE, KUDA, DRUMBAND, FOMO, dan CUSTOM benar-benar mengubah osilasi RPM dan advance simulasi sesuai intensitas/rentangnya; bukan hanya mengganti label. State Demo tidak pernah disalin menjadi status perangkat nyata.
+Demo dimulai dari Core baru dalam kondisi standby: mesin mati, aki 12,6 V, HV 0 V, optional module belum terpasang, dan Setup belum selesai. Pengguna dapat memasang modul secara virtual, menjalankan seluruh alur Setup, menyalakan/mematikan mesin, menguji throttle, suara, serta profil timing idle. Stage Demo memakai enum firmware yang sama (`NEW=0`, `PICKUP=1`, `TDC=2`, `FIRST_START=3`, `READY=4`). STANDARD, SOFT, RESPONSIVE, KUDA, DRUMBAND, FOMO, dan CUSTOM benar-benar mengubah osilasi RPM dan advance simulasi sesuai intensitas/rentangnya; bukan hanya mengganti label. State Demo tidak pernah disalin menjadi status perangkat nyata.
 
 ## Setup pertama
 
@@ -105,7 +105,7 @@ SETUP,INSTALL,CORE,OEM_REMOVED
 SETUP,INSTALL,DUAL,OEM_REMOVED
 ```
 
-Status Layar 1 tidak memakai stage pickup sebagai tanda pemasangan. Aplikasi hanya menghijaukan pemasangan setelah `ACK,INSTALL_CORE`/`ACK,INSTALL_DUAL` atau setelah `GET,MODE` mengonfirmasi mode Independen dengan OEM dilepas. `ERR` dan timeout tidak pernah menaikkan progres; alasan penolakan ditampilkan dalam bahasa pengguna.
+Status Layar 1 tidak memakai stage pickup sebagai tanda pemasangan. Aplikasi hanya menghijaukan pemasangan setelah `ACK,INSTALL_CORE`/`ACK,INSTALL_DUAL` atau setelah `GET,MODE` mengonfirmasi mode Independen dengan OEM dilepas. Pemilihan metode commissioning opsional sesudahnya tidak memalsukan seolah hardware kembali tercabut. `ERR` dan timeout tidak pernah menaikkan progres; alasan penolakan ditampilkan dalam bahasa pengguna.
 
 Metode commissioning bersifat opsional:
 
