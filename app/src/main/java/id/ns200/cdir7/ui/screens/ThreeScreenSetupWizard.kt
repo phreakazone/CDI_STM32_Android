@@ -45,6 +45,7 @@ fun ThreeScreenSetupWizard(viewModel: CdiViewModel) {
     val writeBlockReason by viewModel.setupWriteBlockReason.collectAsState()
     val sessionPhase by viewModel.sessionPhase.collectAsState()
     val isSimulationMode by viewModel.isSimulationMode.collectAsState()
+    val firmwareVersion by viewModel.firmwareVersionInfo.collectAsState()
 
     // Tab state: default matches commissionStatus stage if available
     var selectedTab by remember { mutableStateOf(SetupWizardTab.PEMASANGAN) }
@@ -64,6 +65,7 @@ fun ThreeScreenSetupWizard(viewModel: CdiViewModel) {
     ) {
         // Quick access thermal / fan header
         ThermalFanQuickAccess(viewModel)
+        AuxVehicleQuickAccess(viewModel)
 
         // Top Wizard Navigation Bar (3 Screens)
         ThreeScreenHeader(
@@ -71,6 +73,7 @@ fun ThreeScreenSetupWizard(viewModel: CdiViewModel) {
             commissionStage = commissionStatus.stage,
             isReady = commissionStatus.ready,
             isDemo = isSimulationMode,
+            firmwareLabel = "FW ${firmwareVersion.release} v${firmwareVersion.semver}",
             onResetDemo = viewModel::resetDemoCommissioning,
             onSelectTab = { selectedTab = it }
         )
@@ -149,6 +152,7 @@ private fun ThreeScreenHeader(
     commissionStage: Int,
     isReady: Boolean,
     isDemo: Boolean,
+    firmwareLabel: String,
     onResetDemo: () -> Unit,
     onSelectTab: (SetupWizardTab) -> Unit
 ) {
@@ -209,7 +213,7 @@ private fun ThreeScreenHeader(
                         border = BorderStroke(1.dp, BorderSubtle)
                     ) {
                         Text(
-                            text = if (isDemo) "MODE DEMO" else "FIRMWARE R9.2 (ESP32)",
+                            text = if (isDemo) "MODE DEMO" else firmwareLabel,
                             fontSize = 8.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
@@ -259,6 +263,41 @@ private fun ThreeScreenHeader(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AuxVehicleQuickAccess(viewModel: CdiViewModel) {
+    val aux by viewModel.auxStatus.collectAsState()
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 3.dp),
+        color = CardBackground,
+        border = BorderStroke(1.dp, if (aux.present) RacingLime else SensorAmber),
+        shape = RoundedCornerShape(6.dp)
+    ) {
+        Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text(
+                "KONTAK / STARTER • ${aux.contactSource.label}",
+                fontSize = 9.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (aux.present) RacingLime else SensorAmber,
+                fontFamily = FontFamily.Monospace
+            )
+            Text(
+                "Pilih profil: MANUAL wajib NEUTRAL_IN J1.9; MATIC tidak. NS200 mempertahankan interlock OEM.",
+                fontSize = 8.5.sp,
+                color = TextSecondary
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                listOf(0 to "NS200", 1 to "UNIVERSAL MANUAL", 2 to "UNIVERSAL MATIC").forEach { (id, label) ->
+                    FilterChip(
+                        selected = aux.vehicleProfile == id && aux.enabled,
+                        onClick = { viewModel.setAuxVehicleProfile(id) },
+                        label = { Text(label, fontSize = 8.sp) }
+                    )
                 }
             }
         }
@@ -405,7 +444,7 @@ private fun LayarPemasangan(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = if (moduleSafety.allowed) {
-                                "STATUS: AMAN • Terhubung & Sinkron • Binding ESP32 • RPM 0 • HV < 30V"
+                                "STATUS: AMAN • Firmware sinkron • Binding perangkat • RPM 0 • HV < 30V"
                             } else {
                                 "SYARAT BELUM TERPENUHI: ${moduleSafety.reason}"
                             },
@@ -1186,7 +1225,7 @@ private fun LayarFirstStartReady(
                         fontFamily = FontFamily.Monospace
                     )
                     Text(
-                        text = "Seluruh kalibrasi pulser, TDC, dan koil telah terkunci permanen di memori Flash ESP32.",
+                        text = "Seluruh kalibrasi pulser, TDC, dan koil telah terkunci permanen di memori firmware.",
                         fontSize = 9.sp,
                         color = TextPrimary,
                         fontFamily = FontFamily.Monospace

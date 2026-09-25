@@ -58,6 +58,12 @@ data class StatusBarAlert(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+enum class EnginePrimaryAction(val label: String) {
+    CONTACT_ON("KONTAK ON"),
+    START_ENGINE("START ENGINE"),
+    STOP_ENGINE("STOP ENGINE")
+}
+
 class CdiViewModel(application: Application) : AndroidViewModel(application), BleCdiClient.Listener {
 
     private val context: Context get() = getApplication<Application>().applicationContext
@@ -79,12 +85,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     fun showStatusBarNotification(message: String, isError: Boolean = false) {
         _statusBarAlert.value = StatusBarAlert(message, isError)
         appendLog("STATUS BAR [${if (isError) "ALERT" else "INFO"}]: $message")
-        CdiNotificationHelper.showNotification(
-            context = context,
-            title = if (isError) "Peringatan Keselamatan CDI" else "Status IgniTra CDI",
-            message = message,
-            isAlert = isError
-        )
+        /* Informasi rutin tetap berada di banner aplikasi. Status bar Android
+         * hanya dipakai untuk keselamatan dan perubahan hidup/mati mesin. */
+        if (isError) CdiNotificationHelper.showSafetyAlert(context, message)
         viewModelScope.launch {
             delay(7000)
             if (_statusBarAlert.value?.message == message) {
@@ -203,6 +206,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     private val rxSamples = ArrayDeque<RxSample>()
     private val RX_WINDOW_MS = 2_000L
     private var telemetryWatchdogJob: Job? = null
+    private var auxStatusPollJob: Job? = null
     private var demoOemPulseJob: Job? = null
 
     // Setup StateFlows (Synchronized from GET,SETUP)
@@ -493,9 +497,9 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     private val _firmwareVersionInfo = MutableStateFlow(
         FirmwareVersionInfo(
             schema = 1,
-            release = McuPlatform.CURRENT_FIRMWARE_RELEASE,
-            semver = McuPlatform.CURRENT_FIRMWARE_SEMVER,
-            buildId = "20260923",
+            release = "R9",
+            semver = "9.5.0",
+            buildId = "20260925",
             platform = "ESP32",
             protocolVersion = 5,
             telemetryVersion = 3
@@ -514,6 +518,81 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     private val _firmwareTempStatus = MutableStateFlow(FirmwareTempStatus())
     val firmwareTempStatus: StateFlow<FirmwareTempStatus> = _firmwareTempStatus.asStateFlow()
+
+    private val _auxStatus = MutableStateFlow(AuxStatus())
+    val auxStatus: StateFlow<AuxStatus> = _auxStatus.asStateFlow()
+
+    private val _timingStatus = MutableStateFlow(TimingStatus())
+    val timingStatus: StateFlow<TimingStatus> = _timingStatus.asStateFlow()
+
+    val enginePrimaryAction: StateFlow<EnginePrimaryAction> =
+        combine(_auxStatus, _telemetry) { aux, telemetry ->
+            when {
+                aux.engineRunning || telemetry.rpm >= 500 -> EnginePrimaryAction.STOP_ENGINE
+                aux.contactOn -> EnginePrimaryAction.START_ENGINE
+                else -> EnginePrimaryAction.CONTACT_ON
+            }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, EnginePrimaryAction.CONTACT_ON)
+
+    fun performPrimaryEngineAction() {
+        if (!bleClient.gattReady) {
+            Toast.makeText(context, "Hubungkan CDI terlebih dahulu.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!canWrite()) {
+            Toast.makeText(context, setupWriteBlockReason.value ?: "Binding diperlukan.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val aux = _auxStatus.value
+        if (!aux.present || !aux.enabled) {
+            Toast.makeText(context, "Aktifkan modul AUX dan profil kendaraan di Setup.", Toast.LENGTH_LONG).show()
+            return
+        }
+        when (enginePrimaryAction.value) {
+            EnginePrimaryAction.CONTACT_ON -> bleClient.send("AUX,KEYLESS,ON")
+            EnginePrimaryAction.START_ENGINE -> viewModelScope.launch {
+                if (!aux.ignitionAllowed) {
+                    bleClient.send("AUX,KEYLESS,ON")
+                    delay(150)
+                }
+                bleClient.send("AUX,START,PULSE,1500")
+            }
+            EnginePrimaryAction.STOP_ENGINE -> bleClient.send("AUX,ALL,OFF")
+        }
+        viewModelScope.launch {
+            delay(250)
+            bleClient.send("GET,AUX")
+            bleClient.send("GET,STATUS")
+        }
+    }
+
+    fun setTimingMode(mode: TimingMode, intensity: Int, minRpm: Int, maxRpm: Int) {
+        if (!requireCapability("TIMING_PRESETS", "mode timing idle")) return
+        if (!checkSetupWriteSafety("Ubah mode timing idle")) return
+        val safeMin = minRpm.coerceIn(500, 4000)
+        val safeMax = maxRpm.coerceIn(maxOf(600, safeMin + 100), 5000)
+        val safeIntensity = intensity.coerceIn(0, 10)
+        bleClient.send("SET,TIMING,${mode.code},$safeIntensity,$safeMin,$safeMax")
+        viewModelScope.launch {
+            delay(180)
+            bleClient.send("GET,TIMING")
+        }
+    }
+
+    fun setAuxVehicleProfile(profile: Int) {
+        if (!requireCapability("AUX_INPUTS_U7", "input keyless/starter")) return
+        if (!checkSetupWriteSafety("Konfigurasi profil AUX")) return
+        val name = when (profile) {
+            1 -> "MANUAL"
+            2 -> "MATIC"
+            else -> "NS200"
+        }
+        bleClient.send("AUX,CONFIG,$name,ON")
+        viewModelScope.launch {
+            delay(180)
+            bleClient.send("GET,AUX")
+        }
+    }
 
     private fun requireCapability(token: String, action: String): Boolean {
         if (_isSimulationMode.value) return true
@@ -575,14 +654,14 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         if (serial == "UNAVAILABLE" || serial == "IGT-ESP32-UNKNOWN" || serial.isBlank()) {
             return ModuleChangeSafetyResult(
                 allowed = false,
-                reason = "Nomor serial ESP32 belum terbaca dari firmware."
+                reason = "Nomor serial perangkat belum terbaca dari firmware."
             )
         }
         val bound = _bindingRecord.value
         if (bound == null || bound.serial != serial) {
             return ModuleChangeSafetyResult(
                 allowed = false,
-                reason = "Aplikasi belum binding dengan serial ESP32 [$serial]. Silakan lakukan binding di tab Perangkat."
+                reason = "Aplikasi belum binding dengan serial perangkat [$serial]. Silakan lakukan binding di tab Perangkat."
             )
         }
 
@@ -2599,6 +2678,15 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     }
                 }
             }
+            auxStatusPollJob?.cancel()
+            auxStatusPollJob = viewModelScope.launch {
+                while (_isConnected.value) {
+                    delay(1500)
+                    if (bleClient.gattReady && bleClient.pendingCommands.value < 3) {
+                        bleClient.send("GET,AUX")
+                    }
+                }
+            }
             _sessionPhase.value = SessionPhase.SYNCING
             viewModelScope.launch {
                 delay(80)
@@ -2606,7 +2694,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     "PING", "GET,INFO", "GET,VERSION", "GET,IDENTITY",
                     "GET,CAPS", "GET,HARDWARE", "GET,MODULES", "GET,COMMISSION",
                     "GET,SETUP", "GET,STATUS", "GET,META", "GET,PROFILE",
-                    "GET,TEMP", "GET,ADC", "GET,MODE", "GET,LEARN", "GET,OTA"
+                    "GET,TEMP", "GET,ADC", "GET,MODE", "GET,LEARN", "GET,OTA",
+                    "GET,AUX", "GET,TIMING"
                 )
                 for (q in handshakeQueries) {
                     if (!_isConnected.value) break
@@ -2624,6 +2713,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         } else {
             _sessionPhase.value = SessionPhase.DISCONNECTED
             telemetryWatchdogJob?.cancel()
+            auxStatusPollJob?.cancel()
             _isTelemetryStreaming.value = false
             _packetRateHz.value = 0
             rxSamples.clear()
@@ -2640,6 +2730,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             _firmwareIdentity.value = FirmwareIdentityInfo()
             _firmwareVersionInfo.value = FirmwareVersionInfo()
             _moduleStatus.value = ModuleStatus.defaultCore()
+            _auxStatus.value = AuxStatus()
             _bindingRecord.value = null
             oemLearnPollJob?.cancel()
             resetBleStatistics()
@@ -2673,7 +2764,12 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             setupStage = targetStage
         )
 
+        val wasRunning = current.rpm >= 500
+        val isRunningNow = merged.rpm >= 500
         _telemetry.value = merged
+        if (_isConnected.value && wasRunning != isRunningNow) {
+            CdiNotificationHelper.showEngineStatus(context, isRunningNow, merged.rpm)
+        }
         _selectedMapSlot.value = merged.slot.coerceIn(0, 3)
         _strobeActive.value = merged.strobeEnabled
 
@@ -2828,6 +2924,14 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                 _fanMode.value = tempStatus.fanMode
                 _fanOnCdeg.value = tempStatus.onX10 * 10
                 _fanOffCdeg.value = tempStatus.offX10 * 10
+            }
+            "AUX" -> CdiProtocol.parseAux(value)?.let {
+                _auxStatus.value = it
+                appendLog("AUX: ${it.contactSource.label}, ignition=${it.ignitionAllowed}, engine=${it.engineRunning}")
+            }
+            "TIMING" -> CdiProtocol.parseTiming(value)?.let {
+                _timingStatus.value = it
+                appendLog("Timing idle: ${it.mode.label}, intensitas ${it.intensity}, ${it.minRpm}-${it.maxRpm} RPM")
             }
             "HARDWARE", "HW" -> {
                 val hw = CdiProtocol.parseHardware(value)
@@ -3143,6 +3247,11 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                         bleClient.send("GET,META")
                         bleClient.send("GET,STATUS")
                     }
+                    operation in setOf("KEYLESS_ON", "KEYLESS_OFF", "AUX_ALL_OFF", "START_PULSE", "AUX_CONFIG") -> {
+                        bleClient.send("GET,AUX")
+                        bleClient.send("GET,STATUS")
+                    }
+                    operation == "TIMING" -> bleClient.send("GET,TIMING")
                     operation in setupChangingOperations -> {
                         if (operation == "SETUP_RESET") {
                             _quickSetupPage.value = SetupStage.BARU.code
@@ -3386,6 +3495,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     override fun onCleared() {
         super.onCleared()
         telemetryWatchdogJob?.cancel()
+        auxStatusPollJob?.cancel()
         simulationJob?.cancel()
         oemLearnPollJob?.cancel()
         demoOemPulseJob?.cancel()

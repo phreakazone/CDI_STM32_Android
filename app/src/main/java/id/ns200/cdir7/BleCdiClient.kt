@@ -103,6 +103,8 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
     private var phaseTimer: Runnable? = null
     private var reconnectTimer: Runnable? = null
     private var commandTimer: Runnable? = null
+    private var resumeRecoveryTimer: Runnable? = null
+    private var appPausedAtMs = 0L
 
     // OTA upload variables
     private val _otaState = MutableStateFlow<OtaState>(OtaState.Idle)
@@ -548,7 +550,7 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
                     listener.onResponse("OTA_STATUS_ESP32,${state.code},$error")
                     if (state == FirmwareOtaState.ERROR) {
                         otaAwaitingStatus = false
-                        _otaState.value = OtaState.Error("ESP32 menolak OTA (kode $error)")
+                        _otaState.value = OtaState.Error("Firmware menolak OTA (kode $error)")
                     }
                 }
                 else -> listener.onResponse("ERR,OTA_STATUS_CRC_OR_LENGTH_${bytes.size}")
@@ -868,6 +870,8 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
      * Mencegah aplikasi macet pada status "MENGHUBUNGKAN..." setelah diminimalkan beberapa saat.
      */
     fun onAppResume() {
+        resumeRecoveryTimer?.let(main::removeCallbacks)
+        resumeRecoveryTimer = null
         if (gattReady && gatt != null) {
             send("PING")
             return
@@ -889,19 +893,33 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             retryCount = 0
             open(lastDevice!!)
         }
+        /* Android kadang tidak mengirim callback GATT akhir setelah proses
+         * berada di background. Watchdog ini memutus attempt basi, lalu membuka
+         * satu koneksi baru sehingga UI tidak menetap di “Menghubungkan...”. */
+        if (!gattReady && lastDevice != null && autoReconnect && !manualStop) {
+            resumeRecoveryTimer = Runnable {
+                resumeRecoveryTimer = null
+                if (!gattReady && !_scanning.value && lastDevice != null && !manualStop) {
+                    cancelReconnect()
+                    cancelPhase()
+                    closeCurrent()
+                    _busy.value = false
+                    retryCount = 0
+                    listener.onState("Memulihkan BLE setelah aplikasi aktif kembali...", false)
+                    open(lastDevice!!)
+                }
+            }.also { main.postDelayed(it, 8_000L) }
+        }
     }
 
     /**
      * Dipanggil saat Activity masuk ke background (onPause/onStop).
      */
     fun onAppPause() {
-        if (_busy.value && !gattReady && retryCount > 0) {
-            cancelReconnect()
-            cancelPhase()
-            closeCurrent()
-            _busy.value = false
-            listener.onState("Koneksi dijeda saat aplikasi tidak aktif", false)
-        }
+        appPausedAtMs = SystemClock.elapsedRealtime()
+        /* Jangan membatalkan reconnect atau GATT sehat saat background.
+         * Pemutusan di sini adalah penyebab utama state “Menghubungkan...”
+         * tanpa callback ketika Activity dibuka kembali. */
     }
 
     private fun cancelReconnect() {
@@ -921,6 +939,8 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
     }
 
     private fun closeCurrent() {
+        resumeRecoveryTimer?.let(main::removeCallbacks)
+        resumeRecoveryTimer = null
         cancelPhase()
         commandTimer?.let(main::removeCallbacks)
         commandTimer = null
