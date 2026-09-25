@@ -185,8 +185,10 @@ Referensi baseline: [MaxxECU — Lumpy idle](https://www.maxxecu.com/webhelp/sol
 - Filter pertama memakai Service UUID; nama dipakai sebagai fallback.
 - Command queue hanya memiliki satu command in-flight.
 - CRC16 dan sequence diverifikasi sebelum respons diterima.
-- Saat aplikasi kembali dari background, koneksi sehat harus membalas PING atau mengirim telemetry dalam empat detik.
+- Saat aplikasi kembali dari background, koneksi sehat harus membalas PING atau mengirim telemetry dalam delapan detik.
 - Objek GATT `ready` yang tidak lagi menghasilkan paket dianggap basi, ditutup, diberi jeda pelepasan 600 ms, lalu dibuka ulang otomatis.
+- Reconnect otomatis mempertahankan snapshot binding, identitas, modul, dan commissioning; write tetap diblokir sampai GATT kembali siap.
+- Status recovery mencantumkan penyebab GATT dan command aktif terakhir, sehingga COMMAND GUARD tidak lagi berubah menjadi pesan binding yang tidak relevan.
 - Saat status masih MENGHUBUNGKAN, menekan tombol koneksi memaksa reset GATT dan reconnect; force-close aplikasi atau mematikan MCU tidak diperlukan.
 - Jika izin Nearby Devices dicabut saat background, recovery berhenti aman dan meminta izin kembali.
 
