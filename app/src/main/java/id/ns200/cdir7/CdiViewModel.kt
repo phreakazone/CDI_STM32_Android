@@ -922,7 +922,11 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         identity: FirmwareIdentityInfo
     ): String? {
         if (!connected && !isSim) {
-            return "CDI belum terhubung. Hubungkan BLE atau aktifkan Mode Simulasi."
+            return if (isBusy) {
+                "BLE sedang memulihkan sesi • tunggu status CONNECTED; jangan tekan ulang perintah."
+            } else {
+                "CDI belum terhubung. Hubungkan BLE atau aktifkan Mode Simulasi."
+            }
         }
         if (connected && !isSim) {
             if (phase == SessionPhase.SYNCING) {
@@ -2656,6 +2660,15 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     override fun onState(text: String, connected: Boolean) {
         _connectionStatus.value = text
         _isConnected.value = connected
+        val transientRecovery = !connected &&
+            !text.startsWith("Disconnected (Manual)", ignoreCase = true) &&
+            (bleClient.isBusy.value ||
+                text.contains("menghubung", ignoreCase = true) ||
+                text.contains("inisialisasi", ignoreCase = true) ||
+                text.contains("negosiasi", ignoreCase = true) ||
+                text.contains("mendaftarkan", ignoreCase = true) ||
+                text.contains("coba lagi", ignoreCase = true) ||
+                text.contains("memulihkan", ignoreCase = true))
         if (connected) {
             setupSyncedThisConnection = false
             syncPongSeen = false
@@ -2743,6 +2756,19 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
                     appendLog("Sesi DEGRADED: respons wajib handshake belum lengkap.")
                 }
             }
+        } else if (transientRecovery) {
+            /*
+             * Reconnect otomatis bukan perangkat baru. Pertahankan snapshot
+             * identitas, binding, modul dan commissioning agar COMMAND GUARD
+             * tidak melompat ke pesan Read-Only/Binding yang tidak relevan.
+             * Write tetap diblokir karena _isConnected=false.
+             */
+            telemetryWatchdogJob?.cancel()
+            auxStatusPollJob?.cancel()
+            _isTelemetryStreaming.value = false
+            _packetRateHz.value = 0
+            clearSetupCommandPending()
+            appendLog("BLE recovery sementara: $text • state perangkat dipertahankan")
         } else {
             _sessionPhase.value = SessionPhase.DISCONNECTED
             telemetryWatchdogJob?.cancel()
