@@ -940,7 +940,14 @@ private fun IdleTimingModeCard(viewModel: CdiViewModel) {
                 TimingMode.entries.forEach { mode ->
                     FilterChip(
                         selected = selected == mode,
-                        onClick = { selected = mode },
+                        onClick = {
+                            selected = mode
+                            if (mode != TimingMode.CUSTOM) {
+                                intensity = mode.defaultIntensity.toFloat()
+                                minRpm = mode.defaultMinRpm.toFloat()
+                                maxRpm = mode.defaultMaxRpm.toFloat()
+                            }
+                        },
                         label = { Text(mode.label, fontSize = 9.sp, fontFamily = FontFamily.Monospace) }
                     )
                 }
@@ -958,6 +965,16 @@ private fun IdleTimingModeCard(viewModel: CdiViewModel) {
                 onValueChange = { maxRpm = it.coerceAtLeast(minRpm + 100f) },
                 valueRange = 600f..5000f
             )
+            if (selected != TimingMode.CUSTOM) {
+                Text(
+                    "Bawaan ${selected.label}: intensitas ${selected.defaultIntensity}/10 • " +
+                        "${selected.defaultMinRpm}–${selected.defaultMaxRpm} RPM. " +
+                        "Menggeser nilai akan disimpan sebagai setelan profil ini.",
+                    fontSize = 8.5.sp,
+                    color = TextSecondary,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
             MotecButton(
                 text = "SIMPAN PRESET",
                 onClick = {

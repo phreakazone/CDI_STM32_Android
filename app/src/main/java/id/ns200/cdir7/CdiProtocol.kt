@@ -134,14 +134,21 @@ enum class ContactSource(val code: Int, val label: String) {
     }
 }
 
-enum class TimingMode(val code: Int, val label: String, val description: String) {
-    STANDARD(0, "STANDARD", "Idle normal tanpa pola tambahan"),
-    SOFT(1, "SOFT", "Idle lembut dengan variasi ringan"),
-    RESPONSIVE(2, "RESPONSIVE", "Respons gas lebih tegas"),
-    KUDA(3, "KUDA", "Pola idle rumble kuda"),
-    DRUMBAND(4, "DRUMBAND", "Pola ritmis drumband"),
-    FOMO(5, "FOMO", "Pola agresif terkontrol"),
-    CUSTOM(6, "CUSTOM", "Rentang dan intensitas pilihan pengguna");
+enum class TimingMode(
+    val code: Int,
+    val label: String,
+    val description: String,
+    val defaultIntensity: Int,
+    val defaultMinRpm: Int,
+    val defaultMaxRpm: Int
+) {
+    STANDARD(0, "STANDARD", "Idle normal tanpa pola tambahan", 0, 700, 1800),
+    SOFT(1, "SOFT", "Retard tetap ringan sampai 4° untuk idle lebih lembut", 3, 750, 1650),
+    RESPONSIVE(2, "RESPONSIVE", "Advance ringan sampai 2° pada rpm rendah", 4, 900, 2400),
+    KUDA(3, "KUDA", "Rumble 8 langkah; retard bertingkat tanpa skip pada setelan bawaan", 6, 850, 1650),
+    DRUMBAND(4, "DRUMBAND", "Ritme 12 langkah dengan aksen soft-cut terbatas", 7, 900, 1800),
+    FOMO(5, "FOMO", "Ritme 10 langkah agresif dengan soft-cut terbatas", 8, 950, 2000),
+    CUSTOM(6, "CUSTOM", "Pola 8 langkah dengan intensitas dan rentang pilihan pengguna", 5, 850, 1800);
 
     companion object {
         fun fromCode(code: Int) = entries.firstOrNull { it.code == code } ?: STANDARD

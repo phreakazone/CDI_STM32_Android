@@ -1234,11 +1234,21 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
     }
 
     fun toggleConnect() {
-        if (bleClient.gattReady || bleClient.isBusy.value || bleClient.isScanning.value) {
+        if (bleClient.gattReady) {
             bleClient.disconnect()
             _isConnected.value = false
             _connectionStatus.value = "Disconnected"
             appendLog("Manual BLE disconnect / cancel requested.")
+        } else if (bleClient.isBusy.value && !bleClient.isScanning.value) {
+            _isConnected.value = false
+            _connectionStatus.value = "Mereset sesi BLE..."
+            appendLog("Koneksi BLE tidak selesai; paksa tutup GATT lama dan hubungkan ulang.")
+            bleClient.restartConnection()
+        } else if (bleClient.isScanning.value) {
+            bleClient.disconnect()
+            _isConnected.value = false
+            _connectionStatus.value = "Disconnected"
+            appendLog("Pemindaian BLE dibatalkan.")
         } else {
             _isSimulationMode.value = false
             _isRevving.value = false
