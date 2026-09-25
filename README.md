@@ -1,4 +1,4 @@
-# IgniTra Universal CDI R9 — Aplikasi Android
+# IgniTra CDI R9 — Aplikasi Android
 
 Aplikasi Android resmi untuk konfigurasi, commissioning, telemetry, diagnosis, tuning, BLE OTA, dan buku petunjuk IgniTra CDI ESP32 R9 Modular.
 
@@ -33,9 +33,9 @@ Firmware lama tetap dapat masuk jalur read-only/legacy jika query tambahan tidak
 - Buku Petunjuk di dalam aplikasi untuk pemasangan, setup dan troubleshooting.
 - User agreement tuning lanjutan bersifat peringatan dan pencatatan persetujuan; tidak mengunci map berdasarkan tipe motor.
 
-## Prinsip universal dan kebebasan tuning
+## Prinsip lintas kendaraan dan kebebasan tuning
 
-NS200 hanya preset instalasi. Nama kendaraan default adalah `UNIVERSAL`; pickup, PPR 1–12, gate 40–150 µs, TDC, limiter, map, live timing, dan profil idle harus mengikuti konfigurasi mesin nyata. Aplikasi tidak mengubah batas pengguna menjadi angka NS200 tersembunyi. Dashboard selalu menampilkan PPR dan gate yang benar-benar aktif.
+Nama produk tetap **IgniTra CDI R9**. NS200 dipertahankan sebagai preset awal dan kendaraan uji, bukan batas arsitektur. Kendaraan lain memakai profil kendaraan tersendiri; transmisi MANUAL/MATIC dan siklus mesin 2T/4T adalah atribut terpisah. Pickup, PPR 1–12, gate 40–150 µs, TDC, limiter, map, live timing, dan profil idle wajib mengikuti mesin nyata. Dashboard selalu menampilkan PPR dan gate yang benar-benar aktif.
 
 Pengguna tetap dapat memakai seluruh rentang yang diiklankan CAPS. Aplikasi hanya memberi peringatan knocking/panas/kickback sebelum tuning; penolakan otomatis dibatasi pada keadaan yang dapat merusak elektronik atau membuat transaksi tidak konsisten, seperti flash saat mesin hidup/HV aktif, FAULT_N, koneksi belum sinkron, dan starter tanpa interlock yang dikonfigurasi.
 
@@ -135,6 +135,10 @@ Modul adalah lima bit independen dan dapat dipasang bersamaan.
 
 Perubahan modul hanya diizinkan saat RPM 0 dan HVC/HVS di bawah 30 V. Setelah perubahan, aplikasi membaca ulang MODULES, SETUP, TEMP dan STATUS.
 
+## Uji ESP32 tanpa Core
+
+Uji koneksi BLE dengan ESP32 saja diperbolehkan untuk memeriksa protokol dan tampilan. Nilai aki/HV/sensor dapat tidak valid karena pembagi tegangan dan pull-down berada pada Core; kondisi itu **bukan** alasan aplikasi memutus GATT. Konfirmasi `SETUP,INSTALL` diproses firmware di worker terpisah dari callback NimBLE agar commit NVS tidak memutus BLE. Untuk komisioning listrik, pengukuran HV, coil, fan, keyless, dan starter, Core/modul fisik tetap wajib terpasang.
+
 ## Kontak fisik, keyless dan starter
 
 ### Profil kendaraan
@@ -142,8 +146,8 @@ Perubahan modul hanya diizinkan saat RPM 0 dan HVC/HVS di bawah 30 V. Setelah pe
 | Profil | J1.9 | Aturan starter |
 |---|---|---|
 | NS200 | MODE_REQ/interlock OEM | Interlock OEM tetap dipakai |
-| UNIVERSAL_MANUAL | NEUTRAL_IN aktif-rendah | Netral wajib sebelum starter |
-| UNIVERSAL_MATIC | MODE_REQ/tidak dipakai | Netral tidak diwajibkan; interlock rem/standar OEM tetap dianjurkan |
+| MANUAL | NEUTRAL_IN aktif-rendah | Netral wajib sebelum starter |
+| MATIC | MODE_REQ/tidak dipakai | Netral tidak diwajibkan; interlock rem/standar OEM tetap dipertahankan |
 
 ### Tombol mesin tunggal
 
