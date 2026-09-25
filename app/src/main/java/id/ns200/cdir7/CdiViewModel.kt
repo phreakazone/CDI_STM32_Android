@@ -631,7 +631,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     fun setTimingMode(mode: TimingMode, intensity: Int, minRpm: Int, maxRpm: Int) {
         if (!requireCapability("TIMING_PRESETS", "mode timing idle")) return
-        if (!checkSetupWriteSafety("Ubah mode timing idle")) return
+        if (!_isSimulationMode.value && !checkSetupWriteSafety("Ubah mode timing idle")) return
         val safeMin = minRpm.coerceIn(500, 4000)
         val safeMax = maxRpm.coerceIn(maxOf(600, safeMin + 100), 5000)
         val safeIntensity = intensity.coerceIn(0, 10)
@@ -2894,6 +2894,8 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
             _firmwareVersionInfo.value = FirmwareVersionInfo()
             _moduleStatus.value = ModuleStatus.defaultCore()
             _auxStatus.value = AuxStatus()
+            _installationConfirmed.value = false
+            _setupCommandFeedback.value = SetupCommandFeedback()
             _bindingRecord.value = null
             oemLearnPollJob?.cancel()
             resetBleStatistics()
