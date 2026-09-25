@@ -885,9 +885,15 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
      * Dipanggil saat Activity kembali aktif dari background (onResume).
      * Mencegah aplikasi macet pada status "MENGHUBUNGKAN..." setelah diminimalkan beberapa saat.
      */
+    @SuppressLint("MissingPermission")
     fun onAppResume() {
         resumeRecoveryTimer?.let(main::removeCallbacks)
         resumeRecoveryTimer = null
+        if (!hasConnectPermission()) {
+            _busy.value = false
+            listener.onState("Izin BLUETOOTH_CONNECT belum diizinkan", false)
+            return
+        }
         if (gattReady && gatt != null) {
             send("PING")
             return
@@ -900,7 +906,12 @@ class BleCdiClient(private val context: Context, private val listener: Listener)
             retryCount = 0
             val dev = lastDevice
             if (dev != null && autoReconnect && !manualStop) {
-                listener.onState("Memulihkan koneksi ${dev.name ?: dev.address}...", false)
+                val displayName = try {
+                    dev.name ?: dev.address
+                } catch (_: SecurityException) {
+                    "IGNITRA CDI"
+                }
+                listener.onState("Memulihkan koneksi $displayName...", false)
                 open(dev)
             } else {
                 listener.onState("OFFLINE • BLE SIAP", false)
