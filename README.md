@@ -152,17 +152,17 @@ Kontak mekanis ON dilaporkan sebagai sumber MECHANICAL. Sesi keyless dilaporkan 
 
 ## Timing idle/show
 
-| Mode | Fungsi |
-|---|---|
-| STANDARD | Map utama tanpa pola tambahan |
-| SOFT | Retard ringan dalam jendela yang dipilih |
-| RESPONSIVE | Advance ringan, tetap dibatasi PROFILE |
-| KUDA | Pola idle deterministik |
-| DRUMBAND | Pola show alternatif |
-| FOMO | Pola show alternatif |
-| CUSTOM | Parameter kustom firmware |
+| Mode | Intensitas bawaan | Rentang bawaan | Fungsi firmware |
+|---|---:|---:|---|
+| STANDARD | 0/10 | 700–1800 RPM | Map utama tanpa pola tambahan |
+| SOFT | 3/10 | 750–1650 RPM | Retard tetap ringan |
+| RESPONSIVE | 4/10 | 900–2400 RPM | Advance ringan, tetap dibatasi PROFILE |
+| KUDA | 6/10 | 850–1650 RPM | Pola retard deterministik 8 langkah |
+| DRUMBAND | 7/10 | 900–1800 RPM | Pola 12 langkah dan aksen soft-cut terbatas |
+| FOMO | 8/10 | 950–2000 RPM | Pola 10 langkah agresif dan soft-cut terbatas |
+| CUSTOM | 5/10 | 850–1800 RPM | Pola 8 langkah dengan parameter pengguna |
 
-Intensitas 0–10 dan rentang aktif 500–5000 RPM. Efek hanya bekerja pada TPS rendah dan tetap dijepit oleh map/PROFILE. Mode ini bukan pengganti map daya yang benar.
+Memilih chip mode langsung memuat intensitas dan rentang bawaannya; nilai baru dikirim oleh `SET,TIMING` setelah tombol SIMPAN PRESET ditekan. Intensitas 0–10 dan rentang aktif 500–5000 RPM. Efek hanya bekerja pada TPS di bawah 20% dan tetap dijepit oleh map/PROFILE. Mode ini bukan pengganti map daya yang benar.
 
 ## BLE dan pemulihan setelah background
 
@@ -170,8 +170,9 @@ Intensitas 0–10 dan rentang aktif 500–5000 RPM. Efek hanya bekerja pada TPS 
 - Filter pertama memakai Service UUID; nama dipakai sebagai fallback.
 - Command queue hanya memiliki satu command in-flight.
 - CRC16 dan sequence diverifikasi sebelum respons diterima.
-- Saat aplikasi kembali dari background, koneksi sehat menerima PING.
-- Attempt GATT yang menggantung diputus dan dibuka ulang oleh watchdog delapan detik.
+- Saat aplikasi kembali dari background, koneksi sehat harus membalas PING atau mengirim telemetry dalam empat detik.
+- Objek GATT `ready` yang tidak lagi menghasilkan paket dianggap basi, ditutup, diberi jeda pelepasan 600 ms, lalu dibuka ulang otomatis.
+- Saat status masih MENGHUBUNGKAN, menekan tombol koneksi memaksa reset GATT dan reconnect; force-close aplikasi atau mematikan MCU tidak diperlukan.
 - Jika izin Nearby Devices dicabut saat background, recovery berhenti aman dan meminta izin kembali.
 
 ## Notifikasi Android
@@ -248,7 +249,7 @@ CI menjalankan unit test, lint, dan debug APK. Jangan merge bila job `Android R9
 
 | Gejala | Pemeriksaan |
 |---|---|
-| Menghubungkan terus setelah minimize | Tunggu watchdog 8 detik; cek Nearby Devices; Putus lalu Konek |
+| Menghubungkan terus setelah minimize | Tunggu health-check maksimum 4 detik; bila perlu ketuk MENGHUBUNGKAN untuk memaksa sesi GATT baru; cek izin Nearby Devices |
 | MODULES tidak sesuai | Pastikan resistor DET 1 kΩ modul ke GND_LOGIC dan baca present/configured mask |
 | Tombol START tidak muncul | Kontak belum aktif, AUX tidak present, atau status GET,AUX belum sinkron |
 | Starter ditolak motor manual | NEUTRAL_IN J1.9 belum aktif |
@@ -264,4 +265,3 @@ CI menjalankan unit test, lint, dan debug APK. Jangan merge bila job `Android R9
 3. Hardware/PCB tidak disimpan lagi di repository aplikasi.
 4. File hasil build, APK lokal, keystore dan konfigurasi rahasia tidak boleh di-commit.
 5. UI lama dipertahankan kecuali perubahan sudah diuji dan tidak menghilangkan fungsi ESP32.
-
