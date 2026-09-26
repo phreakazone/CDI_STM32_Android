@@ -2758,7 +2758,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
 
     private fun appendLog(line: String) {
         val list = _terminalLogs.value.toMutableList()
-        if (list.size > 80) list.removeAt(0)
+        if (list.size >= 80) list.removeAt(0)
         list.add(line)
         _terminalLogs.value = list
     }
@@ -2982,7 +2982,7 @@ class CdiViewModel(application: Application) : AndroidViewModel(application), Bl
         }
 
         _telemetryRxMessage.value = if (valid) {
-            "AKTIF • frame #${_telemetryPacketCount.value} dari Telemetry 1001"
+            "AKTIF • ${CdiProtocol.compactCounter(_telemetryPacketCount.value)} frame • Telemetry 1001"
         } else {
             "FRAME DITOLAK • panjang/versi/header/CRC tidak valid (${bytes.size} byte)"
         }
