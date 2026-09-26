@@ -319,6 +319,14 @@ object CdiProtocol {
     const val VERSION_4 = 4 // R8 / v4
     const val VERSION = VERSION_3
 
+    /** Fixed-width diagnostic counter; prevents long sessions widening the UI. */
+    fun compactCounter(value: Long): String = when {
+        value < 1_000L -> value.toString()
+        value < 1_000_000L -> "${value / 1_000L}K"
+        value < 1_000_000_000L -> "${value / 1_000_000L}M"
+        else -> "${value / 1_000_000_000L}B"
+    }
+
     const val KIND_CORE = 0
     const val KIND_DIAGNOSTIC = 1
 
