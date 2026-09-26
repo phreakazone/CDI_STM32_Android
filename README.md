@@ -250,6 +250,8 @@ J1 adalah 2×6 dengan kolom kiri 1–6 dan kanan 7–12.
 
 Pada harness NS200 asli J1.1, J1.8 dan J1.9 tetap kosong sampai terminal tambahan dipasang. Detail rangkaian, header modul, BOM dan zona PCB mengikuti README firmware, bukan file hardware lama aplikasi.
 
+Rev C Production Freeze 5 menempatkan JMOD pada rail mekanik enam zona global 1–60 dan mengulang semua zona 1:1 pada carrier modul. Nomor global hanya untuk fabrikasi; aplikasi tetap memakai lima bit presentMask dan nama net/pin lokal yang sama. Z1 SIDE memakai footprint split HV/power/control, sehingga perubahan rail tidak mengubah protokol, telemetry, deteksi modul, atau tampilan aplikasi.
+
 ## Struktur source aktif
 
 ```text
