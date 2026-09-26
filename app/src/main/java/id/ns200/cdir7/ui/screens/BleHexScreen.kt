@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -366,7 +367,7 @@ fun BleHexScreen(
                             Text("CMD: 7a8f1002... (Q: $pending)", fontSize = 9.sp, color = TextSecondary, fontFamily = FontFamily.Monospace)
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("TEL: 7a8f1001... ($telemetryPacketCount pkts)", fontSize = 9.sp, color = ElectricCyan, fontFamily = FontFamily.Monospace)
+                            Text("TEL: 7a8f1001... (${CdiProtocol.compactCounter(telemetryPacketCount)} pkts)", fontSize = 9.sp, color = ElectricCyan, fontFamily = FontFamily.Monospace)
                             Text("RSP: 7a8f1003... (ASCII)", fontSize = 9.sp, color = TechPurple, fontFamily = FontFamily.Monospace)
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -374,7 +375,14 @@ fun BleHexScreen(
                             Text("CRC: %.1f%% (%s)".format(crcPercent, linkQuality.label), fontSize = 9.sp, color = linkQuality.color, fontFamily = FontFamily.Monospace)
                         }
                         if (telemetryRxMessage.isNotBlank()) {
-                            Text("RX: $telemetryRxMessage", fontSize = 9.sp, color = TextPrimary, fontFamily = FontFamily.Monospace, maxLines = 1)
+                            Text(
+                                    "RX: $telemetryRxMessage",
+                                    fontSize = 9.sp,
+                                    color = TextPrimary,
+                                    fontFamily = FontFamily.Monospace,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                         }
                     }
                 }
