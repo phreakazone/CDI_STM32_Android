@@ -32,8 +32,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import id.ns200.cdir7.CdiProtocol
 import id.ns200.cdir7.CdiViewModel
 import id.ns200.cdir7.EnginePrimaryAction
 import id.ns200.cdir7.FirmwareRunMode
@@ -1237,7 +1239,7 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = "SEQ: #${telemetry.sequence}",
+                            text = "SEQ ${"%05d".format(telemetry.sequence and 0xffff)}",
                             fontSize = 9.sp,
                             color = TextMuted,
                             fontFamily = FontFamily.Monospace
@@ -1304,7 +1306,7 @@ fun DashboardScreen(viewModel: CdiViewModel) {
                                 !isConnected -> "OFFLINE"
                                 telemetryPacketCount == 0L -> "NO FRAME"
                                 packetRate == 0 -> "STOPPED"
-                                else -> "ACTIVE • #$telemetryPacketCount"
+                                else -> "ACTIVE • ${CdiProtocol.compactCounter(telemetryPacketCount)} FRAME"
                             },
                             when {
                                 !isConnected -> TextMuted
@@ -1344,8 +1346,26 @@ private fun TechDataRow(label: String, value: String, valueColor: Color) {
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(text = label, fontSize = 10.sp, color = TextMuted, fontFamily = FontFamily.Monospace)
-        Text(text = value, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = valueColor, fontFamily = FontFamily.Monospace)
+        Text(
+            text = label,
+            modifier = Modifier.weight(0.42f),
+            fontSize = 10.sp,
+            color = TextMuted,
+            fontFamily = FontFamily.Monospace,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = value,
+            modifier = Modifier.weight(0.58f),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            color = valueColor,
+            fontFamily = FontFamily.Monospace,
+            textAlign = TextAlign.End,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
